@@ -126,10 +126,14 @@ export default function Chat() {
       });
 
       if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
         if (response.status === 429) {
-          throw new Error('Too many requests. Please wait a moment.');
+          throw new Error(errorData.error || 'Rate limit reached. Please wait a moment and try again.');
         }
-        throw new Error('Failed to get response');
+        if (response.status === 402) {
+          throw new Error(errorData.error || 'Usage limit reached. Please add credits.');
+        }
+        throw new Error(errorData.error || 'Failed to get response');
       }
 
       const data = await response.json();
@@ -181,7 +185,16 @@ export default function Chat() {
         }),
       });
 
-      if (!response.ok) throw new Error('Failed to generate diary');
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        if (response.status === 429) {
+          throw new Error(errorData.error || 'Rate limit reached. Please wait a moment.');
+        }
+        if (response.status === 402) {
+          throw new Error(errorData.error || 'Usage limit reached. Please add credits.');
+        }
+        throw new Error(errorData.error || 'Failed to generate diary');
+      }
 
       const data = await response.json();
       const today = format(new Date(), 'yyyy-MM-dd');
