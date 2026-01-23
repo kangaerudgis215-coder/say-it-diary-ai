@@ -2,95 +2,105 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
-All colors MUST be HSL.
-*/
+/* VoiceDiary - Gentle Night Theme Design System
+   A calming, dark theme optimized for nighttime journaling */
+
+@import url('https://fonts.googleapis.com/css2?family=Quicksand:wght@300;400;500;600;700&family=Noto+Sans+JP:wght@300;400;500&display=swap');
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    /* Deep midnight blues for a cozy night feel */
+    --background: 222 47% 6%;
+    --foreground: 210 40% 96%;
 
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card: 222 47% 9%;
+    --card-foreground: 210 40% 96%;
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
+    --popover: 222 47% 8%;
+    --popover-foreground: 210 40% 96%;
 
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
+    /* Warm amber for encouragement and warmth */
+    --primary: 38 92% 60%;
+    --primary-foreground: 222 47% 6%;
 
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
+    /* Soft lavender for secondary elements */
+    --secondary: 260 30% 20%;
+    --secondary-foreground: 260 30% 85%;
 
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    /* Gentle muted tones */
+    --muted: 222 30% 14%;
+    --muted-foreground: 215 20% 55%;
 
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    /* Soft sage green for success/accent */
+    --accent: 160 40% 25%;
+    --accent-foreground: 160 40% 90%;
 
-    --destructive: 0 84.2% 60.2%;
+    /* Gentle coral for warnings */
+    --destructive: 0 60% 45%;
     --destructive-foreground: 210 40% 98%;
 
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
+    --border: 222 30% 18%;
+    --input: 222 30% 15%;
+    --ring: 38 92% 50%;
 
-    --radius: 0.5rem;
+    --radius: 1rem;
 
-    --sidebar-background: 0 0% 98%;
+    /* Custom semantic colors */
+    --success: 160 50% 40%;
+    --success-foreground: 160 50% 95%;
+    
+    --warning: 38 80% 50%;
+    --warning-foreground: 38 80% 10%;
 
-    --sidebar-foreground: 240 5.3% 26.1%;
+    /* Gradient tokens */
+    --gradient-warm: linear-gradient(135deg, hsl(38 92% 60% / 0.15), hsl(20 80% 50% / 0.1));
+    --gradient-calm: linear-gradient(180deg, hsl(222 47% 8%), hsl(222 47% 6%));
+    --gradient-glow: radial-gradient(ellipse at top, hsl(38 92% 60% / 0.08), transparent 60%);
 
-    --sidebar-primary: 240 5.9% 10%;
+    /* Shadow tokens */
+    --shadow-soft: 0 4px 20px -4px hsl(222 47% 0% / 0.4);
+    --shadow-glow: 0 0 30px -5px hsl(38 92% 60% / 0.2);
 
-    --sidebar-primary-foreground: 0 0% 98%;
-
-    --sidebar-accent: 240 4.8% 95.9%;
-
-    --sidebar-accent-foreground: 240 5.9% 10%;
-
-    --sidebar-border: 220 13% 91%;
-
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    /* Sidebar (inherit from main theme) */
+    --sidebar-background: 222 47% 8%;
+    --sidebar-foreground: 210 40% 90%;
+    --sidebar-primary: 38 92% 60%;
+    --sidebar-primary-foreground: 222 47% 6%;
+    --sidebar-accent: 222 30% 14%;
+    --sidebar-accent-foreground: 210 40% 90%;
+    --sidebar-border: 222 30% 18%;
+    --sidebar-ring: 38 92% 50%;
   }
 
-  .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
+  /* Light mode - still cozy but brighter */
+  .light {
+    --background: 40 30% 97%;
+    --foreground: 222 47% 11%;
 
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
 
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
 
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
+    --primary: 38 85% 45%;
+    --primary-foreground: 0 0% 100%;
 
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
+    --secondary: 260 20% 92%;
+    --secondary-foreground: 260 30% 25%;
 
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
+    --muted: 40 20% 93%;
+    --muted-foreground: 215 16% 40%;
 
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
+    --accent: 160 35% 90%;
+    --accent-foreground: 160 40% 25%;
 
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive: 0 70% 55%;
+    --destructive-foreground: 0 0% 100%;
 
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --border: 40 15% 88%;
+    --input: 40 15% 88%;
+    --ring: 38 85% 45%;
   }
 }
 
@@ -99,7 +109,159 @@ All colors MUST be HSL.
     @apply border-border;
   }
 
+  html {
+    scroll-behavior: smooth;
+  }
+
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground antialiased;
+    font-family: 'Quicksand', sans-serif;
+    background-image: var(--gradient-glow);
+    background-attachment: fixed;
+    min-height: 100vh;
+  }
+
+  /* Japanese text styling */
+  .font-japanese {
+    font-family: 'Noto Sans JP', sans-serif;
+  }
+}
+
+@layer components {
+  /* Glowing button effect */
+  .btn-glow {
+    @apply relative overflow-hidden;
+    box-shadow: var(--shadow-glow);
+    transition: all 0.3s ease;
+  }
+
+  .btn-glow:hover {
+    box-shadow: 0 0 40px -5px hsl(38 92% 60% / 0.35);
+    transform: translateY(-2px);
+  }
+
+  .btn-glow:active {
+    transform: translateY(0);
+  }
+
+  /* Card with soft glow */
+  .card-glow {
+    @apply relative;
+    box-shadow: var(--shadow-soft);
+    transition: all 0.3s ease;
+  }
+
+  .card-glow:hover {
+    box-shadow: var(--shadow-glow);
+  }
+
+  /* Gentle pulse animation for recording */
+  .pulse-gentle {
+    animation: pulse-gentle 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse-gentle {
+    0%, 100% {
+      opacity: 1;
+      transform: scale(1);
+    }
+    50% {
+      opacity: 0.7;
+      transform: scale(1.05);
+    }
+  }
+
+  /* Floating animation */
+  .float {
+    animation: float 3s ease-in-out infinite;
+  }
+
+  @keyframes float {
+    0%, 100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-10px);
+    }
+  }
+
+  /* Fade in animation */
+  .fade-in {
+    animation: fade-in 0.5s ease-out forwards;
+  }
+
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* Streak fire animation */
+  .streak-fire {
+    animation: streak-fire 0.6s ease-out;
+  }
+
+  @keyframes streak-fire {
+    0% {
+      transform: scale(0.8);
+      opacity: 0;
+    }
+    50% {
+      transform: scale(1.2);
+    }
+    100% {
+      transform: scale(1);
+      opacity: 1;
+    }
+  }
+
+  /* Smooth message appear */
+  .message-appear {
+    animation: message-appear 0.3s ease-out forwards;
+  }
+
+  @keyframes message-appear {
+    from {
+      opacity: 0;
+      transform: translateY(20px) scale(0.95);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  /* Glass morphism effect */
+  .glass {
+    @apply backdrop-blur-md;
+    background: hsl(var(--card) / 0.8);
+  }
+}
+
+@layer utilities {
+  /* Hide scrollbar but keep functionality */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Text gradient */
+  .text-gradient {
+    @apply bg-clip-text text-transparent;
+    background-image: linear-gradient(135deg, hsl(38 92% 60%), hsl(38 92% 75%));
+  }
+
+  /* Safe area padding for mobile */
+  .safe-bottom {
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
   }
 }
