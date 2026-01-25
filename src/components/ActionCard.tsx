@@ -9,6 +9,7 @@ interface ActionCardProps {
   variant?: 'primary' | 'secondary' | 'accent';
   disabled?: boolean;
   badge?: string;
+  statusMessage?: string | null;
   className?: string;
 }
 
@@ -20,6 +21,7 @@ export function ActionCard({
   variant = 'secondary',
   disabled = false,
   badge,
+  statusMessage,
   className,
 }: ActionCardProps) {
   return (
@@ -64,6 +66,11 @@ export function ActionCard({
         <p className="text-sm text-muted-foreground leading-relaxed">
           {description}
         </p>
+        {statusMessage && (
+          <p className="text-xs text-primary font-medium mt-2 animate-pulse">
+            {statusMessage}
+          </p>
+        )}
       </div>
     </button>
   );

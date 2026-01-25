@@ -53,11 +53,13 @@ export default function Home() {
 
     // Check if recall was done today for yesterday
     if (yesterdayEntry) {
+      const today = format(new Date(), 'yyyy-MM-dd');
       const { data: recallData } = await supabase
         .from('recall_sessions')
         .select('completed')
         .eq('diary_entry_id', yesterdayEntry.id)
         .eq('completed', true)
+        .gte('created_at', today)
         .single();
       
       setYesterdayRecalled(!!recallData);
@@ -70,6 +72,17 @@ export default function Home() {
     if (hour < 18) return 'Good afternoon';
     return 'Good evening';
   };
+
+  // Determine status message for recall
+  const getRecallStatusMessage = () => {
+    if (!hasYesterdayDiary) return null;
+    if (yesterdayRecalled) return null;
+    if (todayComplete) return "Next step: try recalling yesterday's diary!";
+    return null;
+  };
+
+  // Determine if both tasks are complete
+  const allDailyTasksDone = todayComplete && (!hasYesterdayDiary || yesterdayRecalled);
 
   return (
     <div className="min-h-screen flex flex-col p-6 safe-bottom">
@@ -95,9 +108,18 @@ export default function Home() {
         />
       </div>
 
+      {/* Completion message */}
+      {allDailyTasksDone && (
+        <div className="bg-primary/10 border border-primary/20 rounded-2xl p-4 mb-6 text-center">
+          <p className="text-sm text-primary font-medium">
+            🎉 Great job! You did both today's diary and recall.
+          </p>
+        </div>
+      )}
+
       {/* Main Actions */}
       <div className="space-y-4 flex-1">
-        {/* Today's Diary - Primary action */}
+        {/* 1. Today's Diary - Primary action */}
         <ActionCard
           icon={<Mic className="w-8 h-8" />}
           title={todayComplete ? "Today's diary ✓" : "Start today's diary"}
@@ -110,22 +132,25 @@ export default function Home() {
           badge={!todayComplete ? "MUST" : undefined}
         />
 
-        {/* Recall Yesterday - Secondary if available */}
-        {hasYesterdayDiary && (
-          <ActionCard
-            icon={<Brain className="w-8 h-8" />}
-            title={yesterdayRecalled ? "Yesterday recalled ✓" : "Recall yesterday"}
-            description={yesterdayRecalled
-              ? "Excellent memory work today!"
-              : "Quiz yourself on yesterday's diary"
-            }
-            onClick={() => navigate('/recall')}
-            variant={yesterdayRecalled ? "accent" : "secondary"}
-            badge={!yesterdayRecalled && !todayComplete ? "MUST" : undefined}
-          />
-        )}
+        {/* 2. Recall Yesterday - Secondary */}
+        <ActionCard
+          icon={<Brain className="w-8 h-8" />}
+          title={yesterdayRecalled ? "Yesterday recalled ✓" : "Recall yesterday (quiz)"}
+          description={
+            !hasYesterdayDiary
+              ? "No diary from yesterday yet"
+              : yesterdayRecalled
+                ? "Excellent memory work today!"
+                : "Try to say yesterday's diary from memory, with optional hints."
+          }
+          onClick={() => navigate('/recall')}
+          variant={yesterdayRecalled ? "accent" : hasYesterdayDiary ? "secondary" : "secondary"}
+          badge={hasYesterdayDiary && !yesterdayRecalled && todayComplete ? "NEXT" : undefined}
+          statusMessage={getRecallStatusMessage()}
+          disabled={!hasYesterdayDiary}
+        />
 
-        {/* Review Expressions */}
+        {/* 3. Review Expressions */}
         <ActionCard
           icon={<Sparkles className="w-8 h-8" />}
           title="Review expressions"
@@ -134,7 +159,7 @@ export default function Home() {
           variant="secondary"
         />
 
-        {/* Calendar View */}
+        {/* 4. Calendar View */}
         <ActionCard
           icon={<BookOpen className="w-8 h-8" />}
           title="My diary collection"
