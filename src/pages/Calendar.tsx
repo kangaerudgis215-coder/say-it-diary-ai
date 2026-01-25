@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, X } from 'lucide-react';
+import { ArrowLeft, X, Brain } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DiaryCalendar } from '@/components/DiaryCalendar';
 import { useAuth } from '@/hooks/useAuth';
@@ -101,6 +101,19 @@ export default function Calendar() {
             <span>{selectedEntry.word_count} words</span>
             <span>Reviewed {selectedEntry.review_count}x</span>
           </div>
+
+          {/* Recall Quiz Button */}
+          <Button
+            variant="secondary"
+            className="w-full mt-4 gap-2"
+            onClick={() => navigate(`/recall?diaryId=${selectedEntry.id}`)}
+          >
+            <Brain className="w-4 h-4" />
+            Use this diary for recall quiz
+          </Button>
+          <p className="text-xs text-muted-foreground text-center mt-2">
+            Start a recall quiz using this day's diary.
+          </p>
         </div>
       )}
 

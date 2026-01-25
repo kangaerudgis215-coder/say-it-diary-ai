@@ -1,18 +1,22 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Lightbulb, Languages, Check, Mic, MicOff, Loader2, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
 import { useSpeechRecognition } from '@/hooks/useSpeechRecognition';
-import { format, subDays } from 'date-fns';
+import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 
 export default function Recall() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { toast } = useToast();
+
+  // Get optional diaryId from URL params (from calendar)
+  const diaryIdFromUrl = searchParams.get('diaryId');
 
   const [diaryEntry, setDiaryEntry] = useState<any>(null);
   const [expressions, setExpressions] = useState<any[]>([]);
@@ -20,6 +24,7 @@ export default function Recall() {
   const [showExpressionHint, setShowExpressionHint] = useState(false);
   const [isCompleting, setIsCompleting] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [isFromCalendar, setIsFromCalendar] = useState(false);
 
   const {
     isListening,
@@ -32,26 +37,47 @@ export default function Recall() {
   } = useSpeechRecognition();
 
   useEffect(() => {
-    fetchYesterdayDiary();
-  }, [user]);
+    fetchDiaryForRecall();
+  }, [user, diaryIdFromUrl]);
 
-  const fetchYesterdayDiary = async () => {
+  const fetchDiaryForRecall = async () => {
     if (!user) return;
     setIsLoading(true);
+    setDiaryEntry(null);
+    setExpressions([]);
 
-    const yesterday = format(subDays(new Date(), 1), 'yyyy-MM-dd');
+    const today = format(new Date(), 'yyyy-MM-dd');
 
-    const { data: entry } = await supabase
-      .from('diary_entries')
-      .select('*')
-      .eq('user_id', user.id)
-      .eq('date', yesterday)
-      .single();
+    let entry = null;
+
+    if (diaryIdFromUrl) {
+      // Fetch specific diary entry from calendar selection
+      setIsFromCalendar(true);
+      const { data } = await supabase
+        .from('diary_entries')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('id', diaryIdFromUrl)
+        .single();
+      entry = data;
+    } else {
+      // Fetch the most recent past diary entry (before today)
+      setIsFromCalendar(false);
+      const { data } = await supabase
+        .from('diary_entries')
+        .select('*')
+        .eq('user_id', user.id)
+        .lt('date', today)
+        .order('date', { ascending: false })
+        .limit(1)
+        .single();
+      entry = data;
+    }
 
     if (entry) {
       setDiaryEntry(entry);
 
-      // Fetch expressions
+      // Fetch expressions for this diary
       const { data: exprs } = await supabase
         .from('expressions')
         .select('*')
@@ -133,31 +159,41 @@ export default function Recall() {
         <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-6">
           <AlertCircle className="w-8 h-8 text-muted-foreground" />
         </div>
-        <h2 className="text-xl font-bold mb-2">No diary from yesterday yet</h2>
+        <h2 className="text-xl font-bold mb-2">
+          {isFromCalendar ? "No diary for this date" : "No past diaries yet"}
+        </h2>
         <p className="text-muted-foreground mb-6 max-w-xs">
-          Please complete today's diary first! Once you do, you can recall it tomorrow. 💪
+          {isFromCalendar 
+            ? "There is no diary entry for this date. Try selecting a different day from your calendar."
+            : "You don't have any past diaries yet. Please complete today's diary first! 💪"
+          }
         </p>
-        <Button variant="glow" onClick={() => navigate('/chat')}>
-          Start today's diary
-        </Button>
-        <Button variant="ghost" onClick={() => navigate('/')} className="mt-3">
-          Go back home
+        {!isFromCalendar && (
+          <Button variant="glow" onClick={() => navigate('/chat')}>
+            Start today's diary
+          </Button>
+        )}
+        <Button variant="ghost" onClick={() => isFromCalendar ? navigate('/calendar') : navigate('/')} className="mt-3">
+          {isFromCalendar ? "Back to calendar" : "Go back home"}
         </Button>
       </div>
     );
   }
 
+  const recallingDateLabel = format(new Date(diaryEntry.date), 'MMMM d, yyyy');
+
   return (
     <div className="min-h-screen flex flex-col p-6 safe-bottom">
       {/* Header */}
       <header className="flex items-center gap-4 mb-6">
-        <Button variant="ghost" size="icon" onClick={() => navigate('/')}>
+        <Button variant="ghost" size="icon" onClick={() => isFromCalendar ? navigate('/calendar') : navigate('/')}>
           <ArrowLeft className="w-5 h-5" />
         </Button>
         <div>
-          <h1 className="font-bold text-xl">Recall Yesterday</h1>
+          <h1 className="font-bold text-xl">Recall Quiz</h1>
           <p className="text-sm text-muted-foreground">
-            Recalling: {format(subDays(new Date(), 1), 'MMMM d, yyyy')}
+            Recalling: {recallingDateLabel}
+            {!isFromCalendar && <span className="text-primary"> (most recent)</span>}
           </p>
         </div>
       </header>
