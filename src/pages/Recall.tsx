@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Lightbulb, Languages, Check, Mic, MicOff, Loader2 } from 'lucide-react';
+import { ArrowLeft, Lightbulb, Languages, Check, Mic, MicOff, Loader2, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
+import { useSpeechRecognition } from '@/hooks/useSpeechRecognition';
 import { format, subDays } from 'date-fns';
 import { cn } from '@/lib/utils';
 
@@ -17,9 +18,18 @@ export default function Recall() {
   const [expressions, setExpressions] = useState<any[]>([]);
   const [showJapaneseHint, setShowJapaneseHint] = useState(false);
   const [showExpressionHint, setShowExpressionHint] = useState(false);
-  const [isRecording, setIsRecording] = useState(false);
-  const [attempt, setAttempt] = useState('');
   const [isCompleting, setIsCompleting] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const {
+    isListening,
+    transcript,
+    interimTranscript,
+    isSupported,
+    startListening,
+    stopListening,
+    resetTranscript,
+  } = useSpeechRecognition();
 
   useEffect(() => {
     fetchYesterdayDiary();
@@ -27,6 +37,7 @@ export default function Recall() {
 
   const fetchYesterdayDiary = async () => {
     if (!user) return;
+    setIsLoading(true);
 
     const yesterday = format(subDays(new Date(), 1), 'yyyy-MM-dd');
 
@@ -48,6 +59,16 @@ export default function Recall() {
 
       setExpressions(exprs || []);
     }
+    
+    setIsLoading(false);
+  };
+
+  const handleMicClick = () => {
+    if (isListening) {
+      stopListening();
+    } else {
+      startListening();
+    }
   };
 
   const handleComplete = async () => {
@@ -60,7 +81,7 @@ export default function Recall() {
       await supabase.from('recall_sessions').insert({
         user_id: user.id,
         diary_entry_id: diaryEntry.id,
-        user_attempt: attempt,
+        user_attempt: transcript,
         hints_used: [
           ...(showJapaneseHint ? ['japanese'] : []),
           ...(showExpressionHint ? ['expressions'] : []),
@@ -72,7 +93,7 @@ export default function Recall() {
       await supabase
         .from('diary_entries')
         .update({
-          review_count: diaryEntry.review_count + 1,
+          review_count: (diaryEntry.review_count || 0) + 1,
           next_review_date: format(
             new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
             'yyyy-MM-dd'
@@ -97,13 +118,29 @@ export default function Recall() {
     }
   };
 
-  if (!diaryEntry) {
+  if (isLoading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-6">
-        <p className="text-muted-foreground text-center">
-          No diary entry from yesterday to recall.
+        <Loader2 className="w-8 h-8 animate-spin text-primary mb-4" />
+        <p className="text-muted-foreground">Loading yesterday's diary...</p>
+      </div>
+    );
+  }
+
+  if (!diaryEntry) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center">
+        <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-6">
+          <AlertCircle className="w-8 h-8 text-muted-foreground" />
+        </div>
+        <h2 className="text-xl font-bold mb-2">No diary from yesterday yet</h2>
+        <p className="text-muted-foreground mb-6 max-w-xs">
+          Please complete today's diary first! Once you do, you can recall it tomorrow. 💪
         </p>
-        <Button variant="soft" onClick={() => navigate('/')} className="mt-4">
+        <Button variant="glow" onClick={() => navigate('/chat')}>
+          Start today's diary
+        </Button>
+        <Button variant="ghost" onClick={() => navigate('/')} className="mt-3">
           Go back home
         </Button>
       </div>
@@ -120,7 +157,7 @@ export default function Recall() {
         <div>
           <h1 className="font-bold text-xl">Recall Yesterday</h1>
           <p className="text-sm text-muted-foreground">
-            {format(subDays(new Date(), 1), 'MMMM d, yyyy')}
+            Recalling: {format(subDays(new Date(), 1), 'MMMM d, yyyy')}
           </p>
         </div>
       </header>
@@ -128,51 +165,81 @@ export default function Recall() {
       {/* Instructions */}
       <div className="bg-card rounded-2xl p-4 border border-border mb-6">
         <p className="text-sm text-center text-muted-foreground">
-          Try to remember and speak yesterday's diary entry from memory.
-          Use hints if you get stuck! 💭
+          Try to say yesterday's diary in English, from memory.
+          If you get stuck, use the hint buttons below! 💭
         </p>
       </div>
 
       {/* Recording Area */}
       <div className="flex-1 flex flex-col items-center justify-center gap-6 mb-6">
-        <button
-          onClick={() => setIsRecording(!isRecording)}
-          className={cn(
-            "w-32 h-32 rounded-full flex items-center justify-center transition-all duration-300",
-            isRecording
-              ? "bg-destructive/20 pulse-gentle"
-              : "bg-primary/20 hover:bg-primary/30"
-          )}
-        >
-          {isRecording ? (
-            <MicOff className="w-12 h-12 text-destructive" />
+        {!isSupported ? (
+          <div className="text-center p-4 bg-destructive/10 rounded-xl">
+            <p className="text-sm text-destructive">
+              Speech recognition is not supported in your browser.
+              Please try Chrome or Edge.
+            </p>
+          </div>
+        ) : (
+          <>
+            <button
+              onClick={handleMicClick}
+              className={cn(
+                "w-32 h-32 rounded-full flex items-center justify-center transition-all duration-300",
+                isListening
+                  ? "bg-destructive/20 animate-pulse"
+                  : "bg-primary/20 hover:bg-primary/30"
+              )}
+            >
+              {isListening ? (
+                <MicOff className="w-12 h-12 text-destructive" />
+              ) : (
+                <Mic className="w-12 h-12 text-primary" />
+              )}
+            </button>
+
+            <p className="text-sm text-muted-foreground">
+              {isListening ? "Tap to stop recording" : "Tap to start speaking"}
+            </p>
+          </>
+        )}
+
+        {/* Live transcript display */}
+        <div className="w-full max-w-md min-h-32 p-4 rounded-xl bg-muted border border-border">
+          <p className="text-xs text-muted-foreground mb-2 uppercase tracking-wide">
+            Your spoken text:
+          </p>
+          {transcript || interimTranscript ? (
+            <p className="text-sm">
+              {transcript}
+              {interimTranscript && (
+                <span className="text-muted-foreground italic">
+                  {transcript ? ' ' : ''}{interimTranscript}
+                </span>
+              )}
+            </p>
           ) : (
-            <Mic className="w-12 h-12 text-primary" />
+            <p className="text-sm text-muted-foreground italic">
+              {isListening ? "Listening..." : "Start speaking to see your text here..."}
+            </p>
           )}
-        </button>
+        </div>
 
-        <p className="text-sm text-muted-foreground">
-          {isRecording ? "Tap to stop recording" : "Tap to start speaking"}
-        </p>
-
-        {/* Text input as fallback */}
-        <textarea
-          value={attempt}
-          onChange={(e) => setAttempt(e.target.value)}
-          placeholder="Or type your recall attempt here..."
-          className="w-full max-w-md h-32 p-4 rounded-xl bg-muted border-0 text-sm resize-none focus:ring-2 focus:ring-primary"
-        />
+        {transcript && (
+          <Button variant="ghost" size="sm" onClick={resetTranscript}>
+            Clear and try again
+          </Button>
+        )}
       </div>
 
       {/* Hint Buttons */}
-      <div className="grid grid-cols-2 gap-3 mb-6">
+      <div className="grid grid-cols-2 gap-3 mb-4">
         <Button
           variant={showJapaneseHint ? "secondary" : "outline"}
           onClick={() => setShowJapaneseHint(!showJapaneseHint)}
           className="h-auto py-3 flex flex-col gap-1"
         >
           <Languages className="w-5 h-5" />
-          <span className="text-xs">Japanese Hint</span>
+          <span className="text-xs">Show Japanese hint</span>
         </Button>
 
         <Button
@@ -181,28 +248,46 @@ export default function Recall() {
           className="h-auto py-3 flex flex-col gap-1"
         >
           <Lightbulb className="w-5 h-5" />
-          <span className="text-xs">Key Expressions</span>
+          <span className="text-xs">Show key English phrases</span>
         </Button>
       </div>
 
       {/* Hints Display */}
-      {showJapaneseHint && diaryEntry.japanese_summary && (
-        <div className="bg-secondary/50 rounded-xl p-4 mb-4 fade-in">
-          <p className="text-sm font-japanese text-secondary-foreground">
-            {diaryEntry.japanese_summary}
+      {showJapaneseHint && (
+        <div className="bg-secondary/50 rounded-xl p-4 mb-4 animate-in fade-in duration-300">
+          <p className="text-xs text-muted-foreground mb-2 uppercase tracking-wide">
+            Japanese Hint
           </p>
+          {diaryEntry.japanese_summary ? (
+            <p className="text-sm font-japanese text-secondary-foreground">
+              {diaryEntry.japanese_summary}
+            </p>
+          ) : (
+            <p className="text-sm text-muted-foreground italic">
+              No Japanese summary available for this entry.
+            </p>
+          )}
         </div>
       )}
 
-      {showExpressionHint && expressions.length > 0 && (
-        <div className="bg-accent/30 rounded-xl p-4 mb-4 fade-in">
-          <div className="space-y-2">
-            {expressions.slice(0, 5).map((exp) => (
-              <p key={exp.id} className="text-sm text-accent-foreground">
-                • {exp.expression}
-              </p>
-            ))}
-          </div>
+      {showExpressionHint && (
+        <div className="bg-accent/30 rounded-xl p-4 mb-4 animate-in fade-in duration-300">
+          <p className="text-xs text-muted-foreground mb-2 uppercase tracking-wide">
+            Key English Phrases
+          </p>
+          {expressions.length > 0 ? (
+            <div className="space-y-2">
+              {expressions.slice(0, 7).map((exp) => (
+                <p key={exp.id} className="text-sm text-accent-foreground">
+                  • {exp.expression}
+                </p>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground italic">
+              No expressions saved for this entry.
+            </p>
+          )}
         </div>
       )}
 
@@ -211,7 +296,7 @@ export default function Recall() {
         variant="glow"
         size="lg"
         onClick={handleComplete}
-        disabled={isCompleting}
+        disabled={isCompleting || !transcript}
         className="w-full"
       >
         {isCompleting ? (
@@ -223,6 +308,12 @@ export default function Recall() {
           </>
         )}
       </Button>
+
+      {!transcript && (
+        <p className="text-xs text-muted-foreground text-center mt-2">
+          Speak something to complete the recall
+        </p>
+      )}
     </div>
   );
 }
