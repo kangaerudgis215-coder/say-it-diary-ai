@@ -6,8 +6,16 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
 import { useSpeechRecognition } from '@/hooks/useSpeechRecognition';
+import { RecallResult } from '@/components/RecallResult';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
+
+interface EvaluationResult {
+  score: number;
+  feedback: string;
+  usedExpressions: string[];
+  missedExpressions: string[];
+}
 
 export default function Recall() {
   const { user } = useAuth();
@@ -15,8 +23,9 @@ export default function Recall() {
   const [searchParams] = useSearchParams();
   const { toast } = useToast();
 
-  // Get optional diaryId from URL params (from calendar)
+  // Get optional diaryId and mode from URL params
   const diaryIdFromUrl = searchParams.get('diaryId');
+  const modeFromUrl = searchParams.get('mode'); // 'random' or undefined
 
   const [diaryEntry, setDiaryEntry] = useState<any>(null);
   const [expressions, setExpressions] = useState<any[]>([]);
@@ -24,7 +33,8 @@ export default function Recall() {
   const [showExpressionHint, setShowExpressionHint] = useState(false);
   const [isCompleting, setIsCompleting] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [isFromCalendar, setIsFromCalendar] = useState(false);
+  const [sourceMode, setSourceMode] = useState<'latest' | 'calendar' | 'random'>('latest');
+  const [evaluationResult, setEvaluationResult] = useState<EvaluationResult | null>(null);
 
   const {
     isListening,
@@ -38,13 +48,14 @@ export default function Recall() {
 
   useEffect(() => {
     fetchDiaryForRecall();
-  }, [user, diaryIdFromUrl]);
+  }, [user, diaryIdFromUrl, modeFromUrl]);
 
   const fetchDiaryForRecall = async () => {
     if (!user) return;
     setIsLoading(true);
     setDiaryEntry(null);
     setExpressions([]);
+    setEvaluationResult(null);
 
     const today = format(new Date(), 'yyyy-MM-dd');
 
@@ -52,17 +63,17 @@ export default function Recall() {
 
     if (diaryIdFromUrl) {
       // Fetch specific diary entry from calendar selection
-      setIsFromCalendar(true);
+      setSourceMode(modeFromUrl === 'random' ? 'random' : 'calendar');
       const { data } = await supabase
         .from('diary_entries')
         .select('*')
         .eq('user_id', user.id)
         .eq('id', diaryIdFromUrl)
-        .single();
+        .maybeSingle();
       entry = data;
     } else {
       // Fetch the most recent past diary entry (before today)
-      setIsFromCalendar(false);
+      setSourceMode('latest');
       const { data } = await supabase
         .from('diary_entries')
         .select('*')
@@ -70,7 +81,7 @@ export default function Recall() {
         .lt('date', today)
         .order('date', { ascending: false })
         .limit(1)
-        .single();
+        .maybeSingle();
       entry = data;
     }
 
@@ -103,52 +114,121 @@ export default function Recall() {
     setIsCompleting(true);
 
     try {
-      // Save recall session
-      await supabase.from('recall_sessions').insert({
-        user_id: user.id,
-        diary_entry_id: diaryEntry.id,
-        user_attempt: transcript,
-        hints_used: [
-          ...(showJapaneseHint ? ['japanese'] : []),
-          ...(showExpressionHint ? ['expressions'] : []),
-        ],
-        completed: true,
+      // Call evaluation edge function
+      const expressionTexts = expressions.map(e => e.expression);
+      
+      const { data: evalData, error: evalError } = await supabase.functions.invoke('evaluate-recall', {
+        body: {
+          originalText: diaryEntry.content,
+          recallText: transcript,
+          expressions: expressionTexts,
+        },
       });
 
-      // Update diary entry review count
-      await supabase
-        .from('diary_entries')
-        .update({
-          review_count: (diaryEntry.review_count || 0) + 1,
-          next_review_date: format(
-            new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
-            'yyyy-MM-dd'
-          ),
-        })
-        .eq('id', diaryEntry.id);
+      if (evalError) {
+        console.error('Evaluation error:', evalError);
+        // Fallback to simple completion without score
+        await saveRecallSession(null, [], []);
+        toast({
+          title: "Recall saved! 🧠",
+          description: "Your session was recorded.",
+        });
+        navigate('/');
+        return;
+      }
 
-      toast({
-        title: "Great recall session! 🧠",
-        description: "Your memory is getting stronger!",
-      });
+      const result: EvaluationResult = {
+        score: evalData.score,
+        feedback: evalData.feedback,
+        usedExpressions: evalData.usedExpressions || [],
+        missedExpressions: evalData.missedExpressions || [],
+      };
 
-      navigate('/');
+      // Save recall session with score
+      await saveRecallSession(result.score, result.usedExpressions, result.missedExpressions);
+
+      // Show result screen
+      setEvaluationResult(result);
+
     } catch (error) {
+      console.error('Complete error:', error);
       toast({
         variant: 'destructive',
         title: 'Error',
-        description: 'Failed to save recall session',
+        description: 'Failed to evaluate recall',
       });
     } finally {
       setIsCompleting(false);
     }
   };
 
+  const saveRecallSession = async (score: number | null, usedExpressions: string[], missedExpressions: string[]) => {
+    if (!user || !diaryEntry) return;
+
+    await supabase.from('recall_sessions').insert({
+      user_id: user.id,
+      diary_entry_id: diaryEntry.id,
+      user_attempt: transcript,
+      hints_used: [
+        ...(showJapaneseHint ? ['japanese'] : []),
+        ...(showExpressionHint ? ['expressions'] : []),
+      ],
+      completed: true,
+      score,
+      used_expressions: usedExpressions,
+      missed_expressions: missedExpressions,
+    });
+
+    // Update diary entry review count
+    await supabase
+      .from('diary_entries')
+      .update({
+        review_count: (diaryEntry.review_count || 0) + 1,
+        next_review_date: format(
+          new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
+          'yyyy-MM-dd'
+        ),
+      })
+      .eq('id', diaryEntry.id);
+  };
+
+  const handleTryAgain = () => {
+    resetTranscript();
+    setEvaluationResult(null);
+    setShowJapaneseHint(false);
+    setShowExpressionHint(false);
+  };
+
+  const handleGoHome = () => navigate('/');
+  const handleGoBack = () => {
+    if (sourceMode === 'calendar' || sourceMode === 'random') {
+      navigate('/calendar');
+    } else {
+      navigate('/');
+    }
+  };
+
+  // Show result screen if evaluation is complete
+  if (evaluationResult) {
+    return (
+      <RecallResult
+        score={evaluationResult.score}
+        feedback={evaluationResult.feedback}
+        usedExpressions={evaluationResult.usedExpressions}
+        missedExpressions={evaluationResult.missedExpressions}
+        onTryAgain={handleTryAgain}
+        onGoHome={handleGoHome}
+        onGoBack={handleGoBack}
+        isFromCalendar={sourceMode === 'calendar' || sourceMode === 'random'}
+      />
+    );
+  }
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-6">
         <Loader2 className="w-8 h-8 animate-spin text-primary mb-4" />
-        <p className="text-muted-foreground">Loading yesterday's diary...</p>
+        <p className="text-muted-foreground">Loading diary for recall...</p>
       </div>
     );
   }
@@ -160,40 +240,47 @@ export default function Recall() {
           <AlertCircle className="w-8 h-8 text-muted-foreground" />
         </div>
         <h2 className="text-xl font-bold mb-2">
-          {isFromCalendar ? "No diary for this date" : "No past diaries yet"}
+          {sourceMode === 'calendar' ? "No diary for this date" : "No past diaries yet"}
         </h2>
         <p className="text-muted-foreground mb-6 max-w-xs">
-          {isFromCalendar 
+          {sourceMode === 'calendar' 
             ? "There is no diary entry for this date. Try selecting a different day from your calendar."
             : "You don't have any past diaries yet. Please complete today's diary first! 💪"
           }
         </p>
-        {!isFromCalendar && (
+        {sourceMode === 'latest' && (
           <Button variant="glow" onClick={() => navigate('/chat')}>
             Start today's diary
           </Button>
         )}
-        <Button variant="ghost" onClick={() => isFromCalendar ? navigate('/calendar') : navigate('/')} className="mt-3">
-          {isFromCalendar ? "Back to calendar" : "Go back home"}
+        <Button variant="ghost" onClick={handleGoBack} className="mt-3">
+          {sourceMode !== 'latest' ? "Back to calendar" : "Go back home"}
         </Button>
       </div>
     );
   }
 
   const recallingDateLabel = format(new Date(diaryEntry.date), 'MMMM d, yyyy');
+  const getModeLabel = () => {
+    switch (sourceMode) {
+      case 'random': return ' (random)';
+      case 'latest': return ' (most recent)';
+      default: return '';
+    }
+  };
 
   return (
     <div className="min-h-screen flex flex-col p-6 safe-bottom">
       {/* Header */}
       <header className="flex items-center gap-4 mb-6">
-        <Button variant="ghost" size="icon" onClick={() => isFromCalendar ? navigate('/calendar') : navigate('/')}>
+        <Button variant="ghost" size="icon" onClick={handleGoBack}>
           <ArrowLeft className="w-5 h-5" />
         </Button>
         <div>
           <h1 className="font-bold text-xl">Recall Quiz</h1>
           <p className="text-sm text-muted-foreground">
             Recalling: {recallingDateLabel}
-            {!isFromCalendar && <span className="text-primary"> (most recent)</span>}
+            <span className="text-primary">{getModeLabel()}</span>
           </p>
         </div>
       </header>
@@ -201,7 +288,7 @@ export default function Recall() {
       {/* Instructions */}
       <div className="bg-card rounded-2xl p-4 border border-border mb-6">
         <p className="text-sm text-center text-muted-foreground">
-          Try to say yesterday's diary in English, from memory.
+          Try to say this diary in English, from memory.
           If you get stuck, use the hint buttons below! 💭
         </p>
       </div>
