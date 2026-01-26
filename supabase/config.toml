@@ -1,1 +1,4 @@
 project_id = "torylicjxvaxudzhrbib"
+
+[functions.evaluate-recall]
+verify_jwt = false

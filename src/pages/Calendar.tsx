@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, X, Brain } from 'lucide-react';
+import { ArrowLeft, X, Brain, Shuffle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DiaryCalendar } from '@/components/DiaryCalendar';
+import { RecallHistory } from '@/components/RecallHistory';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
 import { format } from 'date-fns';
@@ -12,8 +13,10 @@ export default function Calendar() {
   const navigate = useNavigate();
 
   const [entries, setEntries] = useState<{ date: string; hasEntry: boolean }[]>([]);
+  const [allEntries, setAllEntries] = useState<any[]>([]);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>();
   const [selectedEntry, setSelectedEntry] = useState<any>(null);
+  const [recallHistory, setRecallHistory] = useState<any[]>([]);
 
   useEffect(() => {
     fetchEntries();
@@ -24,10 +27,12 @@ export default function Calendar() {
 
     const { data } = await supabase
       .from('diary_entries')
-      .select('date')
-      .eq('user_id', user.id);
+      .select('*')
+      .eq('user_id', user.id)
+      .order('date', { ascending: false });
 
     if (data) {
+      setAllEntries(data);
       setEntries(data.map(e => ({ date: e.date, hasEntry: true })));
     }
   };
@@ -43,10 +48,45 @@ export default function Calendar() {
       .select('*')
       .eq('user_id', user.id)
       .eq('date', dateStr)
-      .single();
+      .maybeSingle();
 
     setSelectedEntry(data);
+
+    // Fetch recall history for this entry
+    if (data) {
+      const { data: recalls } = await supabase
+        .from('recall_sessions')
+        .select('id, score, created_at')
+        .eq('diary_entry_id', data.id)
+        .eq('completed', true)
+        .order('created_at', { ascending: false });
+      
+      setRecallHistory(recalls || []);
+    } else {
+      setRecallHistory([]);
+    }
   };
+
+  const handleRandomQuiz = () => {
+    if (allEntries.length === 0) return;
+    
+    // Filter out today's entry
+    const today = format(new Date(), 'yyyy-MM-dd');
+    const pastEntries = allEntries.filter(e => e.date !== today);
+    
+    if (pastEntries.length === 0) {
+      // No past entries available
+      return;
+    }
+
+    // Pick a random entry
+    const randomIndex = Math.floor(Math.random() * pastEntries.length);
+    const randomEntry = pastEntries[randomIndex];
+    
+    navigate(`/recall?diaryId=${randomEntry.id}&mode=random`);
+  };
+
+  const hasPastEntries = allEntries.some(e => e.date !== format(new Date(), 'yyyy-MM-dd'));
 
   return (
     <div className="min-h-screen flex flex-col p-6 safe-bottom">
@@ -57,6 +97,25 @@ export default function Calendar() {
         </Button>
         <h1 className="font-bold text-xl">My Diary Collection</h1>
       </header>
+
+      {/* Random Quiz Button */}
+      <Button
+        variant="outline"
+        className="w-full mb-4 gap-2 h-auto py-3"
+        onClick={handleRandomQuiz}
+        disabled={!hasPastEntries}
+      >
+        <Shuffle className="w-5 h-5" />
+        <div className="text-left">
+          <p className="font-medium">Random past quiz</p>
+          <p className="text-xs text-muted-foreground">
+            {hasPastEntries 
+              ? "Start a recall quiz using a random past diary"
+              : "Complete some diaries first to unlock this"
+            }
+          </p>
+        </div>
+      </Button>
 
       {/* Calendar */}
       <DiaryCalendar
@@ -78,6 +137,7 @@ export default function Calendar() {
               onClick={() => {
                 setSelectedDate(undefined);
                 setSelectedEntry(null);
+                setRecallHistory([]);
               }}
             >
               <X className="w-4 h-4" />
@@ -114,6 +174,9 @@ export default function Calendar() {
           <p className="text-xs text-muted-foreground text-center mt-2">
             Start a recall quiz using this day's diary.
           </p>
+
+          {/* Recall History */}
+          <RecallHistory attempts={recallHistory} />
         </div>
       )}
 

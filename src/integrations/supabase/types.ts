@@ -210,6 +210,9 @@ export type Database = {
           diary_entry_id: string
           hints_used: string[] | null
           id: string
+          missed_expressions: string[] | null
+          score: number | null
+          used_expressions: string[] | null
           user_attempt: string | null
           user_id: string
         }
@@ -219,6 +222,9 @@ export type Database = {
           diary_entry_id: string
           hints_used?: string[] | null
           id?: string
+          missed_expressions?: string[] | null
+          score?: number | null
+          used_expressions?: string[] | null
           user_attempt?: string | null
           user_id: string
         }
@@ -228,6 +234,9 @@ export type Database = {
           diary_entry_id?: string
           hints_used?: string[] | null
           id?: string
+          missed_expressions?: string[] | null
+          score?: number | null
+          used_expressions?: string[] | null
           user_attempt?: string | null
           user_id?: string
         }

@@ -77,7 +77,7 @@ export default function Home() {
   const getRecallStatusMessage = () => {
     if (!hasYesterdayDiary) return null;
     if (yesterdayRecalled) return null;
-    if (todayComplete) return "Next step: try recalling yesterday's diary!";
+    if (todayComplete) return "Next step: try the latest recall quiz!";
     return null;
   };
 
@@ -132,16 +132,16 @@ export default function Home() {
           badge={!todayComplete ? "MUST" : undefined}
         />
 
-        {/* 2. Recall Yesterday - Secondary */}
+        {/* 2. Latest Recall Quiz - Secondary */}
         <ActionCard
           icon={<Brain className="w-8 h-8" />}
-          title={yesterdayRecalled ? "Yesterday recalled ✓" : "Recall yesterday (quiz)"}
+          title={yesterdayRecalled ? "Latest recalled ✓" : "Latest recall quiz"}
           description={
             !hasYesterdayDiary
-              ? "No diary from yesterday yet"
+              ? "No past diaries yet"
               : yesterdayRecalled
                 ? "Excellent memory work today!"
-                : "Try to say yesterday's diary from memory, with optional hints."
+                : "Practice recalling your most recent diary from memory."
           }
           onClick={() => navigate('/recall')}
           variant={yesterdayRecalled ? "accent" : hasYesterdayDiary ? "secondary" : "secondary"}
