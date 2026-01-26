@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Send, Loader2, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,7 +8,7 @@ import { VoiceRecordButton } from '@/components/VoiceRecordButton';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
-import { format } from 'date-fns';
+import { format, parseISO, isToday as isTodayFn } from 'date-fns';
 
 interface Message {
   id: string;
@@ -19,6 +19,7 @@ interface Message {
 export default function Chat() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { toast } = useToast();
   
   const [messages, setMessages] = useState<Message[]>([]);
@@ -26,13 +27,22 @@ export default function Chat() {
   const [isLoading, setIsLoading] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [isGeneratingDiary, setIsGeneratingDiary] = useState(false);
+  const [diaryDate, setDiaryDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
+    // Get the diary date from URL params or default to today
+    const dateParam = searchParams.get('date');
+    if (dateParam) {
+      setDiaryDate(dateParam);
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
     initConversation();
-  }, [user]);
+  }, [user, diaryDate]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -41,14 +51,12 @@ export default function Chat() {
   const initConversation = async () => {
     if (!user) return;
 
-    const today = format(new Date(), 'yyyy-MM-dd');
-
-    // Check for existing conversation today
+    // Check for existing conversation for this diary date
     const { data: existing } = await supabase
       .from('conversations')
       .select('*, messages(*)')
       .eq('user_id', user.id)
-      .eq('date', today)
+      .eq('date', diaryDate)
       .single();
 
     if (existing) {
@@ -59,20 +67,25 @@ export default function Chat() {
         content: m.content,
       })));
     } else {
-      // Create new conversation
+      // Create new conversation for this diary date
       const { data: newConv, error } = await supabase
         .from('conversations')
-        .insert({ user_id: user.id, date: today })
+        .insert({ user_id: user.id, date: diaryDate })
         .select()
         .single();
 
       if (newConv) {
         setConversationId(newConv.id);
+        const isToday = isTodayFn(parseISO(diaryDate));
+        const dateLabel = isToday ? 'today' : format(parseISO(diaryDate), 'MMMM d, yyyy');
+        
         // Add welcome message
         const welcomeMessage = {
           id: 'welcome',
           role: 'assistant' as const,
-          content: "Hi there! 🌙 How was your day today? Tell me about anything that happened - big or small. I'm here to listen and help you express it in English!",
+          content: isToday 
+            ? "Hi there! 🌙 How was your day today? Tell me about anything that happened - big or small. I'm here to listen and help you express it in English!"
+            : `Hi there! 🌙 Let's write about ${dateLabel}. What happened that day? Tell me anything you remember!`,
         };
         setMessages([welcomeMessage]);
         
@@ -197,15 +210,15 @@ export default function Chat() {
       }
 
       const data = await response.json();
-      const today = format(new Date(), 'yyyy-MM-dd');
 
-      // Save diary entry
+      // Save diary entry using the diaryDate (not necessarily today)
+      // next_review_date is based on when the diary was created (now), not diary_date
       const { error: diaryError } = await supabase
         .from('diary_entries')
         .upsert({
           user_id: user.id,
           conversation_id: conversationId,
-          date: today,
+          date: diaryDate,
           content: data.diary,
           japanese_summary: data.japaneseSummary,
           word_count: data.diary.split(/\s+/).length,
@@ -220,7 +233,7 @@ export default function Chat() {
           .from('diary_entries')
           .select('id')
           .eq('user_id', user.id)
-          .eq('date', today)
+          .eq('date', diaryDate)
           .single();
 
         if (diaryEntry) {
@@ -236,33 +249,7 @@ export default function Chat() {
         }
       }
 
-      // Update profile
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('user_id', user.id)
-        .single();
-
-      if (profile) {
-        const lastDate = profile.last_diary_date ? new Date(profile.last_diary_date) : null;
-        const yesterday = new Date();
-        yesterday.setDate(yesterday.getDate() - 1);
-        
-        let newStreak = 1;
-        if (lastDate && lastDate.toDateString() === yesterday.toDateString()) {
-          newStreak = profile.current_streak + 1;
-        }
-
-        await supabase
-          .from('profiles')
-          .update({
-            current_streak: newStreak,
-            longest_streak: Math.max(newStreak, profile.longest_streak),
-            total_diary_entries: profile.total_diary_entries + 1,
-            last_diary_date: today,
-          })
-          .eq('user_id', user.id);
-      }
+      // Profile streak is now auto-updated by database trigger on diary_entries changes
 
       // Update conversation status
       await supabase
@@ -297,11 +284,15 @@ export default function Chat() {
       {/* Header */}
       <header className="sticky top-0 z-10 glass border-b border-border p-4">
         <div className="flex items-center justify-between">
-          <Button variant="ghost" size="icon" onClick={() => navigate('/')}>
+          <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
             <ArrowLeft className="w-5 h-5" />
           </Button>
           
-          <h1 className="font-bold">Today's Diary</h1>
+          <div className="text-center">
+            <h1 className="font-bold">
+              {isTodayFn(parseISO(diaryDate)) ? "Today's Diary" : format(parseISO(diaryDate), 'MMM d, yyyy')}
+            </h1>
+          </div>
           
           <Button
             variant="success"
