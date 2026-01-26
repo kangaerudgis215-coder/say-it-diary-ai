@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, X, Brain, Shuffle } from 'lucide-react';
+import { ArrowLeft, X, Brain, Shuffle, Plus, Edit } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DiaryCalendar } from '@/components/DiaryCalendar';
 import { RecallHistory } from '@/components/RecallHistory';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
-import { format } from 'date-fns';
+import { format, isToday, isFuture } from 'date-fns';
 
 export default function Calendar() {
   const { user } = useAuth();
@@ -160,12 +160,23 @@ export default function Calendar() {
           <div className="mt-4 flex items-center gap-4 text-xs text-muted-foreground">
             <span>{selectedEntry.word_count} words</span>
             <span>Reviewed {selectedEntry.review_count}x</span>
+            <span>Created: {format(new Date(selectedEntry.created_at), 'MMM d, yyyy')}</span>
           </div>
+
+          {/* Edit Diary Button */}
+          <Button
+            variant="outline"
+            className="w-full mt-4 gap-2"
+            onClick={() => navigate(`/chat?date=${selectedEntry.date}`)}
+          >
+            <Edit className="w-4 h-4" />
+            Edit this diary
+          </Button>
 
           {/* Recall Quiz Button */}
           <Button
             variant="secondary"
-            className="w-full mt-4 gap-2"
+            className="w-full mt-2 gap-2"
             onClick={() => navigate(`/recall?diaryId=${selectedEntry.id}`)}
           >
             <Brain className="w-4 h-4" />
@@ -180,12 +191,25 @@ export default function Calendar() {
         </div>
       )}
 
-      {/* Empty state when no entry selected */}
+      {/* Empty state when date selected but no entry */}
       {!selectedEntry && selectedDate && (
-        <div className="mt-6 bg-muted/50 rounded-2xl p-6 text-center fade-in">
-          <p className="text-muted-foreground">
-            No diary entry for this day yet.
+        <div className="mt-6 bg-card rounded-2xl p-6 text-center fade-in border border-border">
+          <p className="text-muted-foreground mb-4">
+            {isFuture(selectedDate) 
+              ? "You can't write a diary for a future date."
+              : `No diary entry for ${format(selectedDate, 'MMMM d, yyyy')} yet.`
+            }
           </p>
+          {!isFuture(selectedDate) && (
+            <Button
+              variant="glow"
+              className="gap-2"
+              onClick={() => navigate(`/chat?date=${format(selectedDate, 'yyyy-MM-dd')}`)}
+            >
+              <Plus className="w-4 h-4" />
+              {isToday(selectedDate) ? "Start today's diary" : "Write diary for this day"}
+            </Button>
+          )}
         </div>
       )}
     </div>
