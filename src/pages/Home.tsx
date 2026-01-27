@@ -4,17 +4,18 @@ import { Mic, Brain, BookOpen, Sparkles, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { StreakBadge } from '@/components/StreakBadge';
 import { ActionCard } from '@/components/ActionCard';
+import { MasteredDiariesBadge } from '@/components/MasteredDiariesBadge';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
-import { format, subDays, isToday } from 'date-fns';
+import { format, isToday } from 'date-fns';
 
 export default function Home() {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const [profile, setProfile] = useState<any>(null);
   const [todayComplete, setTodayComplete] = useState(false);
-  const [yesterdayRecalled, setYesterdayRecalled] = useState(false);
-  const [hasYesterdayDiary, setHasYesterdayDiary] = useState(false);
+  const [hasPastDiaries, setHasPastDiaries] = useState(false);
+  const [latestPastDiaryRecalled, setLatestPastDiaryRecalled] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -25,12 +26,14 @@ export default function Home() {
   const fetchUserData = async () => {
     if (!user) return;
 
+    const today = format(new Date(), 'yyyy-MM-dd');
+
     // Fetch profile
     const { data: profileData } = await supabase
       .from('profiles')
       .select('*')
       .eq('user_id', user.id)
-      .single();
+      .maybeSingle();
     
     if (profileData) {
       setProfile(profileData);
@@ -40,29 +43,31 @@ export default function Home() {
       }
     }
 
-    // Check if yesterday has a diary entry
-    const yesterday = format(subDays(new Date(), 1), 'yyyy-MM-dd');
-    const { data: yesterdayEntry } = await supabase
+    // Check if there are any past diary entries (before today)
+    const { data: pastEntries } = await supabase
       .from('diary_entries')
-      .select('id')
+      .select('id, date')
       .eq('user_id', user.id)
-      .eq('date', yesterday)
-      .single();
+      .lt('date', today)
+      .order('date', { ascending: false })
+      .limit(1);
     
-    setHasYesterdayDiary(!!yesterdayEntry);
+    const latestPastEntry = pastEntries && pastEntries.length > 0 ? pastEntries[0] : null;
+    setHasPastDiaries(!!latestPastEntry);
 
-    // Check if recall was done today for yesterday
-    if (yesterdayEntry) {
-      const today = format(new Date(), 'yyyy-MM-dd');
+    // Check if the latest past diary has been recalled today
+    if (latestPastEntry) {
       const { data: recallData } = await supabase
         .from('recall_sessions')
         .select('completed')
-        .eq('diary_entry_id', yesterdayEntry.id)
+        .eq('diary_entry_id', latestPastEntry.id)
         .eq('completed', true)
         .gte('created_at', today)
-        .single();
+        .maybeSingle();
       
-      setYesterdayRecalled(!!recallData);
+      setLatestPastDiaryRecalled(!!recallData);
+    } else {
+      setLatestPastDiaryRecalled(false);
     }
   };
 
@@ -75,14 +80,14 @@ export default function Home() {
 
   // Determine status message for recall
   const getRecallStatusMessage = () => {
-    if (!hasYesterdayDiary) return null;
-    if (yesterdayRecalled) return null;
+    if (!hasPastDiaries) return null;
+    if (latestPastDiaryRecalled) return null;
     if (todayComplete) return "Next step: try the latest recall quiz!";
     return null;
   };
 
   // Determine if both tasks are complete
-  const allDailyTasksDone = todayComplete && (!hasYesterdayDiary || yesterdayRecalled);
+  const allDailyTasksDone = todayComplete && (!hasPastDiaries || latestPastDiaryRecalled);
 
   return (
     <div className="min-h-screen flex flex-col p-6 safe-bottom">
@@ -101,11 +106,16 @@ export default function Home() {
       </header>
 
       {/* Streak Badge */}
-      <div className="mb-8">
+      <div className="mb-4">
         <StreakBadge 
           streak={profile?.current_streak || 0} 
           showMessage={true}
         />
+      </div>
+
+      {/* Mastered Diaries Badge */}
+      <div className="mb-6">
+        <MasteredDiariesBadge />
       </div>
 
       {/* Completion message */}
@@ -135,19 +145,19 @@ export default function Home() {
         {/* 2. Latest Recall Quiz - Secondary */}
         <ActionCard
           icon={<Brain className="w-8 h-8" />}
-          title={yesterdayRecalled ? "Latest recalled ✓" : "Latest recall quiz"}
+          title={latestPastDiaryRecalled ? "Latest recalled ✓" : "Latest recall quiz"}
           description={
-            !hasYesterdayDiary
+            !hasPastDiaries
               ? "No past diaries yet"
-              : yesterdayRecalled
+              : latestPastDiaryRecalled
                 ? "Excellent memory work today!"
                 : "Practice recalling your most recent diary from memory."
           }
           onClick={() => navigate('/recall')}
-          variant={yesterdayRecalled ? "accent" : hasYesterdayDiary ? "secondary" : "secondary"}
-          badge={hasYesterdayDiary && !yesterdayRecalled && todayComplete ? "NEXT" : undefined}
+          variant={latestPastDiaryRecalled ? "accent" : hasPastDiaries ? "secondary" : "secondary"}
+          badge={hasPastDiaries && !latestPastDiaryRecalled && todayComplete ? "NEXT" : undefined}
           statusMessage={getRecallStatusMessage()}
-          disabled={!hasYesterdayDiary}
+          disabled={!hasPastDiaries}
         />
 
         {/* 3. Review Expressions */}

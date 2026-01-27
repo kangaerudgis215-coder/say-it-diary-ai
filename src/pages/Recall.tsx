@@ -286,12 +286,24 @@ export default function Recall() {
       </header>
 
       {/* Instructions */}
-      <div className="bg-card rounded-2xl p-4 border border-border mb-6">
+      <div className="bg-card rounded-2xl p-4 border border-border mb-4">
         <p className="text-sm text-center text-muted-foreground">
           Try to say this diary in English, from memory.
           If you get stuck, use the hint buttons below! 💭
         </p>
       </div>
+
+      {/* Japanese Summary for Random Quiz - always visible for context */}
+      {(sourceMode === 'random' || sourceMode === 'calendar') && diaryEntry.japanese_summary && (
+        <div className="bg-secondary/30 rounded-xl p-4 mb-4 border border-border">
+          <p className="text-xs text-muted-foreground mb-2 uppercase tracking-wide">
+            📖 What this diary was about (Japanese)
+          </p>
+          <p className="text-sm font-japanese text-secondary-foreground">
+            {diaryEntry.japanese_summary}
+          </p>
+        </div>
+      )}
 
       {/* Recording Area */}
       <div className="flex-1 flex flex-col items-center justify-center gap-6 mb-6">

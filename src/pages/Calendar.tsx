@@ -1,17 +1,19 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, X, Brain, Shuffle, Plus, Edit } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DiaryCalendar } from '@/components/DiaryCalendar';
 import { RecallHistory } from '@/components/RecallHistory';
+import { DiaryExpressions } from '@/components/DiaryExpressions';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
-import { format, isToday, isFuture } from 'date-fns';
+import { format, isToday, isFuture, parseISO } from 'date-fns';
 
 export default function Calendar() {
   const { user } = useAuth();
   const navigate = useNavigate();
 
+  const [searchParams] = useSearchParams();
   const [entries, setEntries] = useState<{ date: string; hasEntry: boolean }[]>([]);
   const [allEntries, setAllEntries] = useState<any[]>([]);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>();
@@ -21,6 +23,15 @@ export default function Calendar() {
   useEffect(() => {
     fetchEntries();
   }, [user]);
+
+  // Handle date parameter from URL (for navigation from expressions page)
+  useEffect(() => {
+    const dateParam = searchParams.get('date');
+    if (dateParam && user) {
+      const date = parseISO(dateParam);
+      handleDateSelect(date);
+    }
+  }, [searchParams, user]);
 
   const fetchEntries = async () => {
     if (!user) return;
@@ -162,6 +173,9 @@ export default function Calendar() {
             <span>Reviewed {selectedEntry.review_count}x</span>
             <span>Created: {format(new Date(selectedEntry.created_at), 'MMM d, yyyy')}</span>
           </div>
+
+          {/* Expressions from this diary */}
+          <DiaryExpressions diaryEntryId={selectedEntry.id} />
 
           {/* Edit Diary Button */}
           <Button
