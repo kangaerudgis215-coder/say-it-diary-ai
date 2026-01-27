@@ -1,16 +1,28 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Sparkles, ChevronRight } from 'lucide-react';
+import { ArrowLeft, Sparkles, ChevronRight, Calendar } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
 import { cn } from '@/lib/utils';
+import { format } from 'date-fns';
+
+interface ExpressionWithDiary {
+  id: string;
+  expression: string;
+  meaning: string | null;
+  example_sentence: string | null;
+  mastery_level: number;
+  diary_entry_id: string | null;
+  created_at: string;
+  diary_date?: string | null;
+}
 
 export default function Expressions() {
   const { user } = useAuth();
   const navigate = useNavigate();
 
-  const [expressions, setExpressions] = useState<any[]>([]);
+  const [expressions, setExpressions] = useState<ExpressionWithDiary[]>([]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -20,13 +32,30 @@ export default function Expressions() {
   const fetchExpressions = async () => {
     if (!user) return;
 
+    // Fetch expressions with their associated diary dates
     const { data } = await supabase
       .from('expressions')
-      .select('*')
+      .select(`
+        *,
+        diary_entries:diary_entry_id (
+          date
+        )
+      `)
       .eq('user_id', user.id)
       .order('created_at', { ascending: false });
 
-    setExpressions(data || []);
+    if (data) {
+      const expressionsWithDates = data.map((exp: any) => ({
+        ...exp,
+        diary_date: exp.diary_entries?.date || null,
+      }));
+      setExpressions(expressionsWithDates);
+    }
+  };
+
+  const formatDiaryDate = (dateStr: string | null) => {
+    if (!dateStr) return 'Unknown date';
+    return format(new Date(dateStr), 'MMMM d, yyyy');
   };
 
   return (
@@ -68,7 +97,15 @@ export default function Expressions() {
               )}
             >
               <div className="flex items-center justify-between">
-                <span className="font-medium text-primary">{exp.expression}</span>
+                <div className="flex-1">
+                  <span className="font-medium text-primary">{exp.expression}</span>
+                  {exp.diary_date && (
+                    <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
+                      <Calendar className="w-3 h-3" />
+                      <span>From: {formatDiaryDate(exp.diary_date)}</span>
+                    </div>
+                  )}
+                </div>
                 <ChevronRight 
                   className={cn(
                     "w-4 h-4 text-muted-foreground transition-transform",
@@ -100,6 +137,19 @@ export default function Expressions() {
                       />
                     </div>
                   </div>
+                  {exp.diary_entry_id && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="w-full mt-2 text-xs"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigate(`/calendar?date=${exp.diary_date}`);
+                      }}
+                    >
+                      View diary from this day
+                    </Button>
+                  )}
                 </div>
               )}
             </button>
