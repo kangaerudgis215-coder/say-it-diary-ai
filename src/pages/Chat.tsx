@@ -259,10 +259,22 @@ export default function Chat() {
 
       toast({
         title: "Diary saved! ✨",
-        description: "Great job documenting your day!",
+        description: "Now let's review and memorize it!",
       });
 
-      navigate('/calendar');
+      // Get the diary entry ID and navigate to review page
+      const { data: savedEntry } = await supabase
+        .from('diary_entries')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('date', diaryDate)
+        .single();
+
+      if (savedEntry) {
+        navigate(`/review?diaryId=${savedEntry.id}&date=${diaryDate}`);
+      } else {
+        navigate('/calendar');
+      }
     } catch (error: any) {
       toast({
         variant: 'destructive',
