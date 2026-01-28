@@ -244,6 +244,8 @@ export default function Chat() {
               expression: exp.expression,
               meaning: exp.meaning,
               example_sentence: exp.example,
+              scene_or_context: exp.scene_or_context || null,
+              pos_or_type: exp.pos_or_type || null,
             }))
           );
         }

@@ -64,6 +64,11 @@ Your task:
 6. Fix any grammar issues naturally without changing the essence
 7. Provide a Japanese translation that closely follows the English structure
 8. Extract 3-5 useful, general-purpose English expressions from the diary
+9. For each expression, also classify:
+   - scene_or_context: a short label (1-2 words) for when this expression is typically used
+     Examples: "daily life", "small talk", "school", "work", "feelings", "travel", "health", "hobbies", "food", "weather"
+   - pos_or_type: a simple grammatical/phrase type label
+     Examples: "verb phrase", "adjective phrase", "noun phrase", "fixed phrase", "adverb phrase", "idiom"
 
 JAPANESE TRANSLATION INSTRUCTIONS:
 - Translate the English diary into Japanese sentence-by-sentence
@@ -77,7 +82,7 @@ Respond in this exact JSON format:
   "diary": "The polished English diary entry here...",
   "japaneseSummary": "Japanese translation here (sentence-by-sentence, close to English)...",
   "expressions": [
-    {"expression": "phrase here", "meaning": "Japanese meaning", "example": "example sentence"},
+    {"expression": "phrase here", "meaning": "Japanese meaning", "example": "example sentence", "scene_or_context": "daily life", "pos_or_type": "verb phrase"},
     ...
   ]
 }`
