@@ -10,6 +10,7 @@ import Chat from "./pages/Chat";
 import Recall from "./pages/Recall";
 import Calendar from "./pages/Calendar";
 import Expressions from "./pages/Expressions";
+import DiaryReview from "./pages/DiaryReview";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -28,6 +29,7 @@ const App = () => (
             <Route path="/recall" element={<Recall />} />
             <Route path="/calendar" element={<Calendar />} />
             <Route path="/expressions" element={<Expressions />} />
+            <Route path="/review" element={<DiaryReview />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
