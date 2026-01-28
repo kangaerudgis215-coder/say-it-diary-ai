@@ -100,6 +100,8 @@ export type Database = {
           id: string
           mastery_level: number | null
           meaning: string | null
+          pos_or_type: string | null
+          scene_or_context: string | null
           user_id: string
         }
         Insert: {
@@ -110,6 +112,8 @@ export type Database = {
           id?: string
           mastery_level?: number | null
           meaning?: string | null
+          pos_or_type?: string | null
+          scene_or_context?: string | null
           user_id: string
         }
         Update: {
@@ -120,6 +124,8 @@ export type Database = {
           id?: string
           mastery_level?: number | null
           meaning?: string | null
+          pos_or_type?: string | null
+          scene_or_context?: string | null
           user_id?: string
         }
         Relationships: [
