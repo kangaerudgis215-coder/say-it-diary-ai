@@ -1,13 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Volume2, Check, Mic, MicOff, Loader2, Eye, EyeOff, RotateCcw } from 'lucide-react';
+import { ArrowLeft, Volume2, Check, Mic, MicOff, Loader2, Eye, RotateCcw, BookOpen, Target } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
 import { useSpeechRecognition } from '@/hooks/useSpeechRecognition';
-import { DiaryExpressions } from '@/components/DiaryExpressions';
+import { StepUpPractice } from '@/components/StepUpPractice';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 
@@ -18,7 +18,7 @@ interface EvaluationResult {
   missedExpressions: string[];
 }
 
-type ReviewPhase = 'review' | 'test' | 'result';
+type ReviewPhase = 'study' | 'practice' | 'test' | 'result';
 
 export default function DiaryReview() {
   const { user } = useAuth();
@@ -32,10 +32,11 @@ export default function DiaryReview() {
   const [diaryEntry, setDiaryEntry] = useState<any>(null);
   const [expressions, setExpressions] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [phase, setPhase] = useState<ReviewPhase>('review');
+  const [phase, setPhase] = useState<ReviewPhase>('study');
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const [isEvaluating, setIsEvaluating] = useState(false);
   const [evaluationResult, setEvaluationResult] = useState<EvaluationResult | null>(null);
+  const [finalTranscript, setFinalTranscript] = useState('');
 
   const {
     isListening,
@@ -84,7 +85,6 @@ export default function DiaryReview() {
     setIsPlayingAudio(true);
     
     try {
-      // Use browser's built-in TTS
       const utterance = new SpeechSynthesisUtterance(diaryEntry.content);
       utterance.lang = 'en-US';
       utterance.rate = 0.9;
@@ -108,11 +108,24 @@ export default function DiaryReview() {
     setIsPlayingAudio(false);
   };
 
-  const handleStartMemoryTest = () => {
+  const handleStartPractice = () => {
+    setPhase('practice');
+  };
+
+  const handleSkipToTest = () => {
     resetTranscript();
     setPhase('test');
-    setEvaluationResult(null);
   };
+
+  const handlePracticeComplete = useCallback((practiceTranscript: string) => {
+    setFinalTranscript(practiceTranscript);
+    if (practiceTranscript) {
+      // Auto-evaluate if we have transcript from practice
+      evaluateRecall(practiceTranscript);
+    } else {
+      setPhase('test');
+    }
+  }, []);
 
   const handleMicClick = () => {
     if (isListening) {
@@ -122,8 +135,8 @@ export default function DiaryReview() {
     }
   };
 
-  const handleSubmitTest = async () => {
-    if (!user || !diaryEntry || !transcript) return;
+  const evaluateRecall = async (recallText: string) => {
+    if (!user || !diaryEntry) return;
 
     setIsEvaluating(true);
 
@@ -133,7 +146,7 @@ export default function DiaryReview() {
       const { data: evalData, error: evalError } = await supabase.functions.invoke('evaluate-recall', {
         body: {
           originalText: diaryEntry.content,
-          recallText: transcript,
+          recallText: recallText,
           expressions: expressionTexts,
         },
       });
@@ -142,8 +155,13 @@ export default function DiaryReview() {
         throw evalError;
       }
 
+      // Apply a more generous scoring curve for step-up practice
+      // If user went through practice, boost score slightly
+      const rawScore = evalData.score;
+      const boostedScore = phase === 'practice' ? Math.min(100, rawScore + 5) : rawScore;
+
       const result: EvaluationResult = {
-        score: evalData.score,
+        score: boostedScore,
         feedback: evalData.feedback,
         usedExpressions: evalData.usedExpressions || [],
         missedExpressions: evalData.missedExpressions || [],
@@ -153,7 +171,7 @@ export default function DiaryReview() {
       await supabase.from('recall_sessions').insert({
         user_id: user.id,
         diary_entry_id: diaryEntry.id,
-        user_attempt: transcript,
+        user_attempt: recallText,
         hints_used: ['today_memory_test'],
         completed: true,
         score: result.score,
@@ -176,15 +194,22 @@ export default function DiaryReview() {
     }
   };
 
+  const handleSubmitTest = async () => {
+    if (!transcript) return;
+    await evaluateRecall(transcript);
+  };
+
   const handleTryAgain = () => {
     resetTranscript();
-    setPhase('test');
+    setFinalTranscript('');
+    setPhase('practice');
     setEvaluationResult(null);
   };
 
-  const handleBackToReview = () => {
+  const handleBackToStudy = () => {
     resetTranscript();
-    setPhase('review');
+    setFinalTranscript('');
+    setPhase('study');
     setEvaluationResult(null);
   };
 
@@ -221,7 +246,7 @@ export default function DiaryReview() {
     return (
       <div className="min-h-screen flex flex-col p-6 safe-bottom">
         <header className="flex items-center gap-4 mb-6">
-          <Button variant="ghost" size="icon" onClick={handleBackToReview}>
+          <Button variant="ghost" size="icon" onClick={handleBackToStudy}>
             <ArrowLeft className="w-5 h-5" />
           </Button>
           <h1 className="font-bold text-xl">Memory Test Result</h1>
@@ -261,7 +286,7 @@ export default function DiaryReview() {
                   {evaluationResult.feedback}
                 </p>
                 <p className="text-sm text-muted-foreground mt-2">
-                  You need 90% or higher to complete. Review the diary again and try once more!
+                  You've done great practice! Try the full recall again when you're ready.
                 </p>
               </>
             )}
@@ -306,9 +331,9 @@ export default function DiaryReview() {
             <>
               <Button variant="glow" size="lg" className="w-full" onClick={handleTryAgain}>
                 <RotateCcw className="w-5 h-5 mr-2" />
-                Try Again
+                Practice Again
               </Button>
-              <Button variant="outline" size="lg" className="w-full" onClick={handleBackToReview}>
+              <Button variant="outline" size="lg" className="w-full" onClick={handleBackToStudy}>
                 <Eye className="w-5 h-5 mr-2" />
                 Review Diary Again
               </Button>
@@ -319,12 +344,35 @@ export default function DiaryReview() {
     );
   }
 
-  // Test Phase
+  // Practice Phase (Step-up memorization)
+  if (phase === 'practice') {
+    return (
+      <div className="min-h-screen flex flex-col p-6 safe-bottom relative">
+        <header className="flex items-center gap-4 mb-4">
+          <Button variant="ghost" size="icon" onClick={handleBackToStudy}>
+            <ArrowLeft className="w-5 h-5" />
+          </Button>
+          <div>
+            <h1 className="font-bold text-xl">Step-by-Step Practice</h1>
+            <p className="text-sm text-muted-foreground">{dateLabel}</p>
+          </div>
+        </header>
+
+        <StepUpPractice 
+          diaryContent={diaryEntry.content}
+          onComplete={handlePracticeComplete}
+          onSkipToTest={handleSkipToTest}
+        />
+      </div>
+    );
+  }
+
+  // Test Phase (Direct recall without step-up)
   if (phase === 'test') {
     return (
       <div className="min-h-screen flex flex-col p-6 safe-bottom">
         <header className="flex items-center gap-4 mb-6">
-          <Button variant="ghost" size="icon" onClick={handleBackToReview}>
+          <Button variant="ghost" size="icon" onClick={handleBackToStudy}>
             <ArrowLeft className="w-5 h-5" />
           </Button>
           <div>
@@ -431,7 +479,7 @@ export default function DiaryReview() {
     );
   }
 
-  // Review Phase (default)
+  // Study Phase (default)
   return (
     <div className="min-h-screen flex flex-col p-6 safe-bottom">
       {/* Header */}
@@ -514,15 +562,19 @@ export default function DiaryReview() {
         )}
       </div>
 
-      {/* Memory Test Button */}
+      {/* Action Buttons */}
       <div className="mt-6 space-y-3">
         <p className="text-xs text-muted-foreground text-center">
           Read the diary, listen to the audio, and review the expressions.
-          When you feel ready, test your memory!
+          When ready, start the step-by-step practice!
         </p>
-        <Button variant="glow" size="lg" className="w-full" onClick={handleStartMemoryTest}>
-          <Check className="w-5 h-5 mr-2" />
-          I've Memorized This - Start Test
+        <Button variant="glow" size="lg" className="w-full" onClick={handleStartPractice}>
+          <BookOpen className="w-5 h-5 mr-2" />
+          Start Step-by-Step Practice
+        </Button>
+        <Button variant="outline" size="lg" className="w-full" onClick={handleSkipToTest}>
+          <Target className="w-5 h-5 mr-2" />
+          Skip to Memory Test
         </Button>
         <Button variant="ghost" size="sm" className="w-full" onClick={() => navigate('/')}>
           Skip for now

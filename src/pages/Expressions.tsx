@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Sparkles, Calendar, Filter, X } from 'lucide-react';
+import { ArrowLeft, Sparkles, Calendar, Filter, X, RefreshCw, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/hooks/useAuth';
@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabase';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { ExpressionDetail } from '@/components/ExpressionDetail';
+import { useToast } from '@/hooks/use-toast';
 
 interface ExpressionWithDiary {
   id: string;
@@ -22,19 +23,17 @@ interface ExpressionWithDiary {
   pos_or_type: string | null;
 }
 
-// Predefined filter options
-const SCENE_OPTIONS = ['All', 'daily life', 'small talk', 'school', 'work', 'feelings', 'travel', 'health', 'hobbies', 'food', 'weather'] as const;
-const TYPE_OPTIONS = ['All', 'verb phrase', 'adjective phrase', 'noun phrase', 'fixed phrase', 'adverb phrase', 'idiom'] as const;
-
 export default function Expressions() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { toast } = useToast();
 
   const [expressions, setExpressions] = useState<ExpressionWithDiary[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [sceneFilter, setSceneFilter] = useState<string>('All');
   const [typeFilter, setTypeFilter] = useState<string>('All');
   const [showFilters, setShowFilters] = useState(true);
+  const [isTagging, setIsTagging] = useState(false);
 
   useEffect(() => {
     fetchExpressions();
@@ -63,15 +62,20 @@ export default function Expressions() {
     }
   };
 
+  // Count untagged expressions
+  const untaggedCount = useMemo(() => {
+    return expressions.filter(e => !e.scene_or_context || !e.pos_or_type).length;
+  }, [expressions]);
+
   // Get unique scenes and types from data for dynamic filters
   const availableScenes = useMemo(() => {
     const scenes = new Set(expressions.map(e => e.scene_or_context).filter(Boolean));
-    return ['All', ...Array.from(scenes)] as string[];
+    return ['All', ...Array.from(scenes).sort()] as string[];
   }, [expressions]);
 
   const availableTypes = useMemo(() => {
     const types = new Set(expressions.map(e => e.pos_or_type).filter(Boolean));
-    return ['All', ...Array.from(types)] as string[];
+    return ['All', ...Array.from(types).sort()] as string[];
   }, [expressions]);
 
   // Filter expressions
@@ -95,6 +99,32 @@ export default function Expressions() {
   const clearFilters = () => {
     setSceneFilter('All');
     setTypeFilter('All');
+  };
+
+  const handleTagExpressions = async () => {
+    setIsTagging(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('tag-expressions');
+      
+      if (error) throw error;
+      
+      toast({
+        title: 'Expressions Tagged',
+        description: data.message || `Updated ${data.updated} expressions`,
+      });
+      
+      // Refresh the list
+      await fetchExpressions();
+    } catch (error) {
+      console.error('Error tagging expressions:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Failed to tag expressions. Please try again.',
+      });
+    } finally {
+      setIsTagging(false);
+    }
   };
 
   const hasActiveFilters = sceneFilter !== 'All' || typeFilter !== 'All';
@@ -125,6 +155,27 @@ export default function Expressions() {
       {/* Filters */}
       {showFilters && (
         <div className="mb-4 space-y-3 animate-in fade-in duration-200">
+          {/* Tag button for untagged expressions */}
+          {untaggedCount > 0 && (
+            <div className="flex items-center justify-between p-3 bg-primary/10 rounded-lg">
+              <span className="text-sm text-muted-foreground">
+                {untaggedCount} expression{untaggedCount > 1 ? 's' : ''} need tagging
+              </span>
+              <Button 
+                size="sm" 
+                onClick={handleTagExpressions}
+                disabled={isTagging}
+              >
+                {isTagging ? (
+                  <Loader2 className="w-4 h-4 animate-spin mr-1" />
+                ) : (
+                  <RefreshCw className="w-4 h-4 mr-1" />
+                )}
+                {isTagging ? 'Tagging...' : 'Auto-tag'}
+              </Button>
+            </div>
+          )}
+
           {/* Scene filters */}
           <div>
             <div className="flex items-center justify-between mb-2">
