@@ -1,11 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Lightbulb, Languages, Check, Mic, MicOff, Loader2, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Loader2, AlertCircle, Home, RotateCcw, Eye, BookOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
-import { useSpeechRecognition } from '@/hooks/useSpeechRecognition';
+import { SentencePractice } from '@/components/SentencePractice';
 import { RecallResult } from '@/components/RecallResult';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -17,34 +18,24 @@ interface EvaluationResult {
   missedExpressions: string[];
 }
 
+type RecallPhase = 'study' | 'practice' | 'result';
+
 export default function Recall() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { toast } = useToast();
 
-  // Get optional diaryId and mode from URL params
   const diaryIdFromUrl = searchParams.get('diaryId');
-  const modeFromUrl = searchParams.get('mode'); // 'random' or undefined
+  const modeFromUrl = searchParams.get('mode');
 
   const [diaryEntry, setDiaryEntry] = useState<any>(null);
   const [expressions, setExpressions] = useState<any[]>([]);
-  const [showJapaneseHint, setShowJapaneseHint] = useState(false);
-  const [showExpressionHint, setShowExpressionHint] = useState(false);
-  const [isCompleting, setIsCompleting] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [sourceMode, setSourceMode] = useState<'latest' | 'calendar' | 'random'>('latest');
+  const [phase, setPhase] = useState<RecallPhase>('study');
   const [evaluationResult, setEvaluationResult] = useState<EvaluationResult | null>(null);
-
-  const {
-    isListening,
-    transcript,
-    interimTranscript,
-    isSupported,
-    startListening,
-    stopListening,
-    resetTranscript,
-  } = useSpeechRecognition();
+  const [isPlayingAudio, setIsPlayingAudio] = useState(false);
 
   useEffect(() => {
     fetchDiaryForRecall();
@@ -62,7 +53,6 @@ export default function Recall() {
     let entry = null;
 
     if (diaryIdFromUrl) {
-      // Fetch specific diary entry from calendar selection
       setSourceMode(modeFromUrl === 'random' ? 'random' : 'calendar');
       const { data } = await supabase
         .from('diary_entries')
@@ -72,7 +62,6 @@ export default function Recall() {
         .maybeSingle();
       entry = data;
     } else {
-      // Fetch the most recent past diary entry (before today)
       setSourceMode('latest');
       const { data } = await supabase
         .from('diary_entries')
@@ -88,7 +77,6 @@ export default function Recall() {
     if (entry) {
       setDiaryEntry(entry);
 
-      // Fetch expressions for this diary
       const { data: exprs } = await supabase
         .from('expressions')
         .select('*')
@@ -100,24 +88,51 @@ export default function Recall() {
     setIsLoading(false);
   };
 
-  const handleMicClick = () => {
-    if (isListening) {
-      stopListening();
-    } else {
-      startListening();
-    }
-  };
+  const handlePlayAudio = useCallback(() => {
+    if (!diaryEntry?.content || isPlayingAudio) return;
 
-  const handleComplete = async () => {
+    setIsPlayingAudio(true);
+    const utterance = new SpeechSynthesisUtterance(diaryEntry.content);
+    utterance.lang = 'en-US';
+    utterance.rate = 0.9;
+    utterance.onend = () => setIsPlayingAudio(false);
+    utterance.onerror = () => setIsPlayingAudio(false);
+    
+    speechSynthesis.speak(utterance);
+  }, [diaryEntry, isPlayingAudio]);
+
+  const handleStopAudio = useCallback(() => {
+    speechSynthesis.cancel();
+    setIsPlayingAudio(false);
+  }, []);
+
+  // Evaluate a single sentence or full diary
+  const handleEvaluate = useCallback(async (attemptText: string, targetText: string): Promise<number> => {
+    try {
+      const { data, error } = await supabase.functions.invoke('evaluate-recall', {
+        body: {
+          originalText: targetText,
+          recallText: attemptText,
+          expressions: [],
+        },
+      });
+
+      if (error) throw error;
+      return data.score || 0;
+    } catch (error) {
+      console.error('Evaluation error:', error);
+      return 85;
+    }
+  }, []);
+
+  // Handle practice completion
+  const handlePracticeComplete = useCallback(async (transcript: string, score: number) => {
     if (!user || !diaryEntry) return;
 
-    setIsCompleting(true);
-
     try {
-      // Call evaluation edge function
       const expressionTexts = expressions.map(e => e.expression);
       
-      const { data: evalData, error: evalError } = await supabase.functions.invoke('evaluate-recall', {
+      const { data: evalData } = await supabase.functions.invoke('evaluate-recall', {
         body: {
           originalText: diaryEntry.content,
           recallText: transcript,
@@ -125,81 +140,66 @@ export default function Recall() {
         },
       });
 
-      if (evalError) {
-        console.error('Evaluation error:', evalError);
-        // Fallback to simple completion without score
-        await saveRecallSession(null, [], []);
-        toast({
-          title: "Recall saved! 🧠",
-          description: "Your session was recorded.",
-        });
-        navigate('/');
-        return;
-      }
-
       const result: EvaluationResult = {
-        score: evalData.score,
-        feedback: evalData.feedback,
-        usedExpressions: evalData.usedExpressions || [],
-        missedExpressions: evalData.missedExpressions || [],
+        score: evalData?.score || score,
+        feedback: evalData?.feedback || 'Great effort!',
+        usedExpressions: evalData?.usedExpressions || [],
+        missedExpressions: evalData?.missedExpressions || [],
       };
 
-      // Save recall session with score
-      await saveRecallSession(result.score, result.usedExpressions, result.missedExpressions);
+      // Save recall session
+      await supabase.from('recall_sessions').insert({
+        user_id: user.id,
+        diary_entry_id: diaryEntry.id,
+        user_attempt: transcript,
+        hints_used: ['sentence_practice'],
+        completed: true,
+        score: result.score,
+        used_expressions: result.usedExpressions,
+        missed_expressions: result.missedExpressions,
+      });
 
-      // Show result screen
+      // Update diary review count
+      await supabase
+        .from('diary_entries')
+        .update({
+          review_count: (diaryEntry.review_count || 0) + 1,
+          next_review_date: format(
+            new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
+            'yyyy-MM-dd'
+          ),
+        })
+        .eq('id', diaryEntry.id);
+
       setEvaluationResult(result);
+      setPhase('result');
 
     } catch (error) {
-      console.error('Complete error:', error);
+      console.error('Save error:', error);
       toast({
         variant: 'destructive',
         title: 'Error',
-        description: 'Failed to evaluate recall',
+        description: 'Failed to save your recall session.',
       });
-    } finally {
-      setIsCompleting(false);
     }
-  };
-
-  const saveRecallSession = async (score: number | null, usedExpressions: string[], missedExpressions: string[]) => {
-    if (!user || !diaryEntry) return;
-
-    await supabase.from('recall_sessions').insert({
-      user_id: user.id,
-      diary_entry_id: diaryEntry.id,
-      user_attempt: transcript,
-      hints_used: [
-        ...(showJapaneseHint ? ['japanese'] : []),
-        ...(showExpressionHint ? ['expressions'] : []),
-      ],
-      completed: true,
-      score,
-      used_expressions: usedExpressions,
-      missed_expressions: missedExpressions,
-    });
-
-    // Update diary entry review count
-    await supabase
-      .from('diary_entries')
-      .update({
-        review_count: (diaryEntry.review_count || 0) + 1,
-        next_review_date: format(
-          new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
-          'yyyy-MM-dd'
-        ),
-      })
-      .eq('id', diaryEntry.id);
-  };
+  }, [user, diaryEntry, expressions, toast]);
 
   const handleTryAgain = () => {
-    resetTranscript();
+    setPhase('practice');
     setEvaluationResult(null);
-    setShowJapaneseHint(false);
-    setShowExpressionHint(false);
+  };
+
+  const handleBackToStudy = () => {
+    setPhase('study');
+    setEvaluationResult(null);
+  };
+
+  const handleStartPractice = () => {
+    setPhase('practice');
   };
 
   const handleGoHome = () => navigate('/');
+  
   const handleGoBack = () => {
     if (sourceMode === 'calendar' || sourceMode === 'random') {
       navigate('/calendar');
@@ -208,8 +208,8 @@ export default function Recall() {
     }
   };
 
-  // Show result screen if evaluation is complete
-  if (evaluationResult) {
+  // Result screen
+  if (phase === 'result' && evaluationResult) {
     return (
       <RecallResult
         score={evaluationResult.score}
@@ -244,7 +244,7 @@ export default function Recall() {
         </h2>
         <p className="text-muted-foreground mb-6 max-w-xs">
           {sourceMode === 'calendar' 
-            ? "There is no diary entry for this date. Try selecting a different day from your calendar."
+            ? "There is no diary entry for this date. Try selecting a different day."
             : "You don't have any past diaries yet. Please complete today's diary first! 💪"
           }
         </p>
@@ -269,9 +269,38 @@ export default function Recall() {
     }
   };
 
+  // Practice Phase
+  if (phase === 'practice') {
+    return (
+      <div className="min-h-screen flex flex-col p-6 safe-bottom">
+        <header className="flex items-center gap-4 mb-4">
+          <Button variant="ghost" size="icon" onClick={handleBackToStudy}>
+            <ArrowLeft className="w-5 h-5" />
+          </Button>
+          <div>
+            <h1 className="font-bold text-xl">Recall Practice</h1>
+            <p className="text-sm text-muted-foreground">
+              {recallingDateLabel}
+              <span className="text-primary">{getModeLabel()}</span>
+            </p>
+          </div>
+        </header>
+
+        <div className="flex-1">
+          <SentencePractice 
+            diaryContent={diaryEntry.content}
+            japaneseSummary={diaryEntry.japanese_summary}
+            onComplete={handlePracticeComplete}
+            onEvaluate={handleEvaluate}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  // Study Phase - Brief overview before practice
   return (
     <div className="min-h-screen flex flex-col p-6 safe-bottom">
-      {/* Header */}
       <header className="flex items-center gap-4 mb-6">
         <Button variant="ghost" size="icon" onClick={handleGoBack}>
           <ArrowLeft className="w-5 h-5" />
@@ -279,176 +308,83 @@ export default function Recall() {
         <div>
           <h1 className="font-bold text-xl">Recall Quiz</h1>
           <p className="text-sm text-muted-foreground">
-            Recalling: {recallingDateLabel}
+            {recallingDateLabel}
             <span className="text-primary">{getModeLabel()}</span>
           </p>
         </div>
       </header>
 
-      {/* Instructions */}
-      <div className="bg-card rounded-2xl p-4 border border-border mb-4">
-        <p className="text-sm text-center text-muted-foreground">
-          Try to say this diary in English, from memory.
-          If you get stuck, use the hint buttons below! 💭
-        </p>
-      </div>
-
-      {/* Japanese Summary for Random Quiz - always visible for context */}
-      {(sourceMode === 'random' || sourceMode === 'calendar') && diaryEntry.japanese_summary && (
-        <div className="bg-secondary/30 rounded-xl p-4 mb-4 border border-border">
-          <p className="text-xs text-muted-foreground mb-2 uppercase tracking-wide">
-            📖 What this diary was about (Japanese)
-          </p>
-          <p className="text-sm font-japanese text-secondary-foreground">
-            {diaryEntry.japanese_summary}
-          </p>
-        </div>
-      )}
-
-      {/* Recording Area */}
-      <div className="flex-1 flex flex-col items-center justify-center gap-6 mb-6">
-        {!isSupported ? (
-          <div className="text-center p-4 bg-destructive/10 rounded-xl">
-            <p className="text-sm text-destructive">
-              Speech recognition is not supported in your browser.
-              Please try Chrome or Edge.
-            </p>
-          </div>
-        ) : (
-          <>
-            <button
-              onClick={handleMicClick}
-              className={cn(
-                "w-32 h-32 rounded-full flex items-center justify-center transition-all duration-300",
-                isListening
-                  ? "bg-destructive/20 animate-pulse"
-                  : "bg-primary/20 hover:bg-primary/30"
-              )}
-            >
-              {isListening ? (
-                <MicOff className="w-12 h-12 text-destructive" />
-              ) : (
-                <Mic className="w-12 h-12 text-primary" />
-              )}
-            </button>
-
-            <p className="text-sm text-muted-foreground">
-              {isListening ? "Tap to stop recording" : "Tap to start speaking"}
-            </p>
-          </>
-        )}
-
-        {/* Live transcript display */}
-        <div className="w-full max-w-md min-h-32 p-4 rounded-xl bg-muted border border-border">
-          <p className="text-xs text-muted-foreground mb-2 uppercase tracking-wide">
-            Your spoken text:
-          </p>
-          {transcript || interimTranscript ? (
-            <p className="text-sm">
-              {transcript}
-              {interimTranscript && (
-                <span className="text-muted-foreground italic">
-                  {transcript ? ' ' : ''}{interimTranscript}
-                </span>
-              )}
-            </p>
-          ) : (
-            <p className="text-sm text-muted-foreground italic">
-              {isListening ? "Listening..." : "Start speaking to see your text here..."}
-            </p>
-          )}
-        </div>
-
-        {transcript && (
-          <Button variant="ghost" size="sm" onClick={resetTranscript}>
-            Clear and try again
-          </Button>
-        )}
-      </div>
-
-      {/* Hint Buttons */}
-      <div className="grid grid-cols-2 gap-3 mb-4">
-        <Button
-          variant={showJapaneseHint ? "secondary" : "outline"}
-          onClick={() => setShowJapaneseHint(!showJapaneseHint)}
-          className="h-auto py-3 flex flex-col gap-1"
-        >
-          <Languages className="w-5 h-5" />
-          <span className="text-xs">Show Japanese hint</span>
-        </Button>
-
-        <Button
-          variant={showExpressionHint ? "secondary" : "outline"}
-          onClick={() => setShowExpressionHint(!showExpressionHint)}
-          className="h-auto py-3 flex flex-col gap-1"
-        >
-          <Lightbulb className="w-5 h-5" />
-          <span className="text-xs">Show key English phrases</span>
-        </Button>
-      </div>
-
-      {/* Hints Display */}
-      {showJapaneseHint && (
-        <div className="bg-secondary/50 rounded-xl p-4 mb-4 animate-in fade-in duration-300">
-          <p className="text-xs text-muted-foreground mb-2 uppercase tracking-wide">
-            Japanese Hint
-          </p>
-          {diaryEntry.japanese_summary ? (
+      <div className="flex-1 space-y-4 overflow-y-auto">
+        {/* Quick Overview */}
+        <Card className="bg-secondary/30">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">📖 What this diary was about</CardTitle>
+          </CardHeader>
+          <CardContent>
             <p className="text-sm font-japanese text-secondary-foreground">
-              {diaryEntry.japanese_summary}
+              {diaryEntry.japanese_summary || '(Japanese summary not available)'}
             </p>
-          ) : (
-            <p className="text-sm text-muted-foreground italic">
-              No Japanese summary available for this entry.
-            </p>
-          )}
-        </div>
-      )}
+          </CardContent>
+        </Card>
 
-      {showExpressionHint && (
-        <div className="bg-accent/30 rounded-xl p-4 mb-4 animate-in fade-in duration-300">
-          <p className="text-xs text-muted-foreground mb-2 uppercase tracking-wide">
-            Key English Phrases
-          </p>
-          {expressions.length > 0 ? (
-            <div className="space-y-2">
-              {expressions.slice(0, 7).map((exp) => (
-                <p key={exp.id} className="text-sm text-accent-foreground">
-                  • {exp.expression}
-                </p>
-              ))}
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground italic">
-              No expressions saved for this entry.
-            </p>
-          )}
-        </div>
-      )}
+        {/* English Diary (for review) */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center justify-between">
+              📝 English Diary (Review)
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={isPlayingAudio ? handleStopAudio : handlePlayAudio}
+              >
+                {isPlayingAudio ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <span className="text-xs">🔊 Listen</span>
+                )}
+              </Button>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm leading-relaxed">{diaryEntry.content}</p>
+          </CardContent>
+        </Card>
 
-      {/* Complete Button */}
-      <Button
-        variant="glow"
-        size="lg"
-        onClick={handleComplete}
-        disabled={isCompleting || !transcript}
-        className="w-full"
-      >
-        {isCompleting ? (
-          <Loader2 className="w-5 h-5 animate-spin" />
-        ) : (
-          <>
-            <Check className="w-5 h-5" />
-            Complete Recall
-          </>
+        {/* Expressions */}
+        {expressions.length > 0 && (
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">💡 Key Expressions</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                {expressions.slice(0, 5).map((exp) => (
+                  <div key={exp.id} className="bg-muted rounded-lg p-2">
+                    <p className="font-medium text-sm text-primary">{exp.expression}</p>
+                    {exp.meaning && (
+                      <p className="text-xs text-muted-foreground">{exp.meaning}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
         )}
-      </Button>
+      </div>
 
-      {!transcript && (
-        <p className="text-xs text-muted-foreground text-center mt-2">
-          Speak something to complete the recall
+      {/* Action Buttons */}
+      <div className="mt-6 space-y-3">
+        <p className="text-xs text-muted-foreground text-center">
+          Review the diary briefly, then start the sentence-by-sentence practice.
         </p>
-      )}
+        <Button variant="glow" size="lg" className="w-full" onClick={handleStartPractice}>
+          <BookOpen className="w-5 h-5 mr-2" />
+          Start Sentence Practice
+        </Button>
+        <Button variant="ghost" size="sm" className="w-full" onClick={handleGoBack}>
+          Cancel
+        </Button>
+      </div>
     </div>
   );
 }
