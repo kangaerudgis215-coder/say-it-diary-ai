@@ -44,7 +44,8 @@ function calculateSimilarity(originalText: string, recallText: string): number {
   const lengthRatio = Math.min(recallWords.length / originalWords.length, 1.5);
   
   // Weighted score: 70% content coverage, 30% effort (length)
-  const score = Math.round((coverage * 0.7 + (lengthRatio / 1.5) * 0.3) * 100);
+  // Made more generous for the new 3-axis system
+  const score = Math.round((coverage * 0.75 + (lengthRatio / 1.5) * 0.25) * 100);
   
   return Math.min(Math.max(score, 0), 100);
 }
@@ -63,11 +64,11 @@ function checkExpressions(recallText: string, expressions: string[]): { used: st
     // Check if the expression (or key words from it) appears in the recall
     const expressionWords = expression.toLowerCase().split(/\s+/).filter(w => w.length > 3);
     
-    // Expression is "used" if at least 60% of its significant words appear
+    // Expression is "used" if at least 50% of its significant words appear (more generous)
     const matchedWords = expressionWords.filter(word => normalizedRecall.includes(word));
     const matchRatio = expressionWords.length > 0 ? matchedWords.length / expressionWords.length : 0;
     
-    if (matchRatio >= 0.6 || normalizedRecall.includes(expression.toLowerCase())) {
+    if (matchRatio >= 0.5 || normalizedRecall.includes(expression.toLowerCase())) {
       used.push(expression);
     } else {
       missed.push(expression);
@@ -75,6 +76,48 @@ function checkExpressions(recallText: string, expressions: string[]): { used: st
   }
 
   return { used, missed };
+}
+
+// Map score to grade
+function mapToGrade(score: number): 'excellent' | 'good' | 'needs_work' {
+  if (score >= 85) return 'excellent';
+  if (score >= 60) return 'good';
+  return 'needs_work';
+}
+
+// Calculate three-axis scores
+function calculateThreeAxis(
+  originalText: string,
+  recallText: string,
+  baseScore: number
+): { meaning: string; structure: string; fluency: string } {
+  const originalWords = originalText.toLowerCase().split(/\s+/).filter(w => w.length > 0);
+  const recallWords = recallText.toLowerCase().split(/\s+/).filter(w => w.length > 0);
+  
+  // Meaning: based on overall similarity
+  const meaningScore = baseScore;
+  
+  // Structure: based on word count ratio and key structure words
+  const wordCountRatio = Math.min(recallWords.length / Math.max(originalWords.length, 1), 1.3);
+  const structureBase = baseScore * 0.7 + (wordCountRatio > 0.6 && wordCountRatio < 1.4 ? 30 : 10);
+  const structureScore = Math.min(structureBase, 100);
+  
+  // Fluency: based on common patterns, bonus for natural flow
+  const fluencyPenalty = recallText.includes('...') ? 10 : 0;
+  const fluencyScore = Math.max(0, baseScore - fluencyPenalty + 5); // Small bonus for completing
+
+  return {
+    meaning: mapToGrade(meaningScore),
+    structure: mapToGrade(structureScore),
+    fluency: mapToGrade(fluencyScore),
+  };
+}
+
+// Check if passed based on 70% rule
+function checkPassed(grades: { meaning: string; structure: string; fluency: string }): boolean {
+  const values = [grades.meaning, grades.structure, grades.fluency];
+  const goodCount = values.filter(v => v === 'excellent' || v === 'good').length;
+  return (goodCount / values.length) >= 0.7;
 }
 
 serve(async (req) => {
@@ -94,17 +137,23 @@ serve(async (req) => {
 
     const score = calculateSimilarity(originalText, recallText);
     const expressionCheck = checkExpressions(recallText, expressions || []);
+    const threeAxis = calculateThreeAxis(originalText, recallText, score);
+    const passed = checkPassed(threeAxis);
 
-    // Generate feedback message based on score
+    // Generate feedback message based on pass/fail and grades
     let feedback: string;
-    if (score >= 80) {
-      feedback = "Excellent! You recalled most of the diary brilliantly. Your memory is getting stronger! 🌟";
-    } else if (score >= 60) {
-      feedback = "Great job! You captured the main ideas well. Keep practicing for even more fluency! 💪";
-    } else if (score >= 40) {
-      feedback = "Good effort! You remembered some key parts. Review the hints and try again to improve. 📚";
+    if (passed) {
+      if (threeAxis.meaning === 'excellent' && threeAxis.structure === 'excellent') {
+        feedback = "Excellent! You captured the meaning and structure brilliantly. 🌟";
+      } else {
+        feedback = "Great job! You conveyed the main ideas well. Keep practicing! 💪";
+      }
     } else {
-      feedback = "Nice try! Every attempt strengthens your memory. Use the hints and give it another go! 🌱";
+      if (threeAxis.meaning === 'needs_work') {
+        feedback = "Try to include more of the key ideas. Review the original and try again! 📚";
+      } else {
+        feedback = "Good effort! Focus on the sentence structure and flow. You're getting there! 🌱";
+      }
     }
 
     return new Response(
@@ -113,6 +162,8 @@ serve(async (req) => {
         feedback,
         usedExpressions: expressionCheck.used,
         missedExpressions: expressionCheck.missed,
+        threeAxis,
+        passed,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

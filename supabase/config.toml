@@ -1,5 +1,8 @@
 project_id = "torylicjxvaxudzhrbib"
 
+[functions.chat]
+verify_jwt = false
+
 [functions.evaluate-recall]
 verify_jwt = false
 

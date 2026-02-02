@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Mic, Brain, BookOpen, Sparkles, LogOut } from 'lucide-react';
+import { Mic, Brain, BookOpen, Sparkles, LogOut, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { StreakBadge } from '@/components/StreakBadge';
 import { ActionCard } from '@/components/ActionCard';
@@ -160,16 +160,25 @@ export default function Home() {
           disabled={!hasPastDiaries}
         />
 
-        {/* 3. Review Expressions */}
+        {/* 3. Instant English Composition */}
+        <ActionCard
+          icon={<Zap className="w-8 h-8" />}
+          title="Instant English"
+          description="瞬間英作文 - Quick composition from Japanese"
+          onClick={() => navigate('/instant')}
+          variant="secondary"
+        />
+
+        {/* 4. Review Expressions */}
         <ActionCard
           icon={<Sparkles className="w-8 h-8" />}
-          title="Review expressions"
-          description="Practice useful phrases from your diaries"
+          title="My expressions"
+          description="Browse and review phrases from your diaries"
           onClick={() => navigate('/expressions')}
           variant="secondary"
         />
 
-        {/* 4. Calendar View */}
+        {/* 5. Calendar View */}
         <ActionCard
           icon={<BookOpen className="w-8 h-8" />}
           title="My diary collection"

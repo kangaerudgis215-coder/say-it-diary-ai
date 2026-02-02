@@ -57,7 +57,7 @@ IMPORTANT: Be natural and encouraging. The goal is a pleasant conversation that 
 
 Your task:
 1. Extract all the user's messages that describe their day
-2. Merge them into ONE coherent, natural-sounding English diary entry
+2. Merge them into ONE coherent, natural-sounding English diary entry (2-3 sentences)
 3. Write it in first person, as if the user wrote it themselves
 4. Use natural English that a native speaker would use
 5. Keep the user's original meaning and emotions
@@ -69,6 +69,10 @@ Your task:
      Examples: "daily life", "small talk", "school", "work", "feelings", "travel", "health", "hobbies", "food", "weather"
    - pos_or_type: a simple grammatical/phrase type label
      Examples: "verb phrase", "adjective phrase", "noun phrase", "fixed phrase", "adverb phrase", "idiom"
+10. Select 3-5 "important sentences" for focused practice:
+   - These are short, useful sentences from the diary that contain key expressions
+   - For EACH important sentence, provide both the English AND its Japanese translation
+   - These sentences will be used for instant English composition practice
 
 JAPANESE TRANSLATION INSTRUCTIONS:
 - Translate the English diary into Japanese sentence-by-sentence
@@ -83,6 +87,11 @@ Respond in this exact JSON format:
   "japaneseSummary": "Japanese translation here (sentence-by-sentence, close to English)...",
   "expressions": [
     {"expression": "phrase here", "meaning": "Japanese meaning", "example": "example sentence", "scene_or_context": "daily life", "pos_or_type": "verb phrase"},
+    ...
+  ],
+  "importantSentences": [
+    {"english": "One important sentence from the diary.", "japanese": "その文の日本語訳", "expressions": ["key phrase used"]},
+    {"english": "Another important sentence.", "japanese": "もう一つの日本語訳", "expressions": ["another phrase"]},
     ...
   ]
 }`

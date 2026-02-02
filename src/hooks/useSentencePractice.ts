@@ -34,9 +34,29 @@ function splitJapanese(text: string | null): string[] {
   return sentences;
 }
 
-export function useSentencePractice(diaryContent: string, japaneseSummary: string | null) {
-  // Parse the diary into sentences
+interface ImportantSentence {
+  english: string;
+  japanese: string;
+  expressions?: string[];
+}
+
+export function useSentencePractice(
+  diaryContent: string, 
+  japaneseSummary: string | null,
+  importantSentences?: ImportantSentence[]
+) {
+  // Parse the diary into sentences - use important sentences if provided
   const sentences: PracticeSentence[] = useMemo(() => {
+    // If important sentences are provided, use those
+    if (importantSentences && importantSentences.length > 0) {
+      return importantSentences.map((s, index) => ({
+        english: s.english,
+        japanese: s.japanese,
+        index,
+      }));
+    }
+    
+    // Otherwise, split diary content
     const englishSentences = splitIntoSentences(diaryContent);
     const japaneseSentences = splitJapanese(japaneseSummary);
     
@@ -45,7 +65,7 @@ export function useSentencePractice(diaryContent: string, japaneseSummary: strin
       japanese: japaneseSentences[index] || japaneseSummary || '',
       index
     }));
-  }, [diaryContent, japaneseSummary]);
+  }, [diaryContent, japaneseSummary, importantSentences]);
 
   const [currentSentenceIndex, setCurrentSentenceIndex] = useState(0);
   const [currentStep, setCurrentStep] = useState<SentenceStep>('repeat');
