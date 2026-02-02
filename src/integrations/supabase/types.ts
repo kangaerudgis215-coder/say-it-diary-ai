@@ -48,6 +48,7 @@ export type Database = {
           created_at: string
           date: string
           id: string
+          important_sentences: Json | null
           japanese_summary: string | null
           next_review_date: string | null
           review_count: number | null
@@ -61,6 +62,7 @@ export type Database = {
           created_at?: string
           date: string
           id?: string
+          important_sentences?: Json | null
           japanese_summary?: string | null
           next_review_date?: string | null
           review_count?: number | null
@@ -74,6 +76,7 @@ export type Database = {
           created_at?: string
           date?: string
           id?: string
+          important_sentences?: Json | null
           japanese_summary?: string | null
           next_review_date?: string | null
           review_count?: number | null
@@ -131,6 +134,53 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "expressions_diary_entry_id_fkey"
+            columns: ["diary_entry_id"]
+            isOneToOne: false
+            referencedRelation: "diary_entries"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      instant_composition_attempts: {
+        Row: {
+          created_at: string
+          diary_entry_id: string
+          fluency_grade: string | null
+          id: string
+          meaning_grade: string | null
+          passed: boolean | null
+          sentence_index: number
+          structure_grade: string | null
+          user_answer: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          diary_entry_id: string
+          fluency_grade?: string | null
+          id?: string
+          meaning_grade?: string | null
+          passed?: boolean | null
+          sentence_index: number
+          structure_grade?: string | null
+          user_answer?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          diary_entry_id?: string
+          fluency_grade?: string | null
+          id?: string
+          meaning_grade?: string | null
+          passed?: boolean | null
+          sentence_index?: number
+          structure_grade?: string | null
+          user_answer?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "instant_composition_attempts_diary_entry_id_fkey"
             columns: ["diary_entry_id"]
             isOneToOne: false
             referencedRelation: "diary_entries"

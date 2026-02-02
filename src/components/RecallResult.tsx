@@ -1,5 +1,6 @@
 import { CheckCircle, XCircle, Trophy, ArrowLeft, Home } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { ThreeAxisEvaluation, ThreeAxisScores } from '@/components/ThreeAxisEvaluation';
 import { cn } from '@/lib/utils';
 
 interface RecallResultProps {
@@ -7,6 +8,8 @@ interface RecallResultProps {
   feedback: string;
   usedExpressions: string[];
   missedExpressions: string[];
+  threeAxis?: ThreeAxisScores;
+  passed?: boolean;
   onTryAgain: () => void;
   onGoHome: () => void;
   onGoBack: () => void;
@@ -18,24 +21,14 @@ export function RecallResult({
   feedback,
   usedExpressions,
   missedExpressions,
+  threeAxis,
+  passed,
   onTryAgain,
   onGoHome,
   onGoBack,
   isFromCalendar,
 }: RecallResultProps) {
-  const getScoreColor = () => {
-    if (score >= 80) return 'text-green-400';
-    if (score >= 60) return 'text-primary';
-    if (score >= 40) return 'text-yellow-400';
-    return 'text-orange-400';
-  };
-
-  const getScoreEmoji = () => {
-    if (score >= 80) return '🌟';
-    if (score >= 60) return '💪';
-    if (score >= 40) return '📚';
-    return '🌱';
-  };
+  const isPassed = passed ?? score >= 70;
 
   return (
     <div className="min-h-screen flex flex-col p-6 safe-bottom animate-in fade-in duration-500">
@@ -49,20 +42,25 @@ export function RecallResult({
 
       {/* Score Display */}
       <div className="flex-1 flex flex-col items-center justify-center gap-6">
-        <div className="relative">
-          <div className="w-40 h-40 rounded-full bg-card border-4 border-border flex items-center justify-center">
-            <div className="text-center">
-              <Trophy className={cn("w-8 h-8 mx-auto mb-1", getScoreColor())} />
-              <span className={cn("text-5xl font-bold", getScoreColor())}>
-                {score}
-              </span>
-              <span className={cn("text-xl", getScoreColor())}>%</span>
+        {/* Three-axis evaluation */}
+        {threeAxis ? (
+          <ThreeAxisEvaluation scores={threeAxis} size="lg" />
+        ) : (
+          <div className="relative">
+            <div className="w-40 h-40 rounded-full bg-card border-4 border-border flex items-center justify-center">
+              <div className="text-center">
+                <Trophy className={cn("w-8 h-8 mx-auto mb-1", isPassed ? "text-green-400" : "text-primary")} />
+                <span className={cn("text-5xl font-bold", isPassed ? "text-green-400" : "text-primary")}>
+                  {score}
+                </span>
+                <span className={cn("text-xl", isPassed ? "text-green-400" : "text-primary")}>%</span>
+              </div>
             </div>
+            <span className="absolute -bottom-2 left-1/2 -translate-x-1/2 text-3xl">
+              {isPassed ? '🌟' : '💪'}
+            </span>
           </div>
-          <span className="absolute -bottom-2 left-1/2 -translate-x-1/2 text-3xl">
-            {getScoreEmoji()}
-          </span>
-        </div>
+        )}
 
         <p className="text-center text-muted-foreground max-w-xs leading-relaxed">
           {feedback}

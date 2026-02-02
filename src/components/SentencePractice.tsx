@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Textarea } from '@/components/ui/textarea';
+import { ThreeAxisEvaluation, ThreeAxisScores, calculatePassStatus } from '@/components/ThreeAxisEvaluation';
 import { useSpeechRecognition } from '@/hooks/useSpeechRecognition';
 import { useSentencePractice } from '@/hooks/useSentencePractice';
 import { useSuccessSound } from '@/hooks/useSuccessSound';
@@ -12,13 +13,15 @@ import { cn } from '@/lib/utils';
 interface SentencePracticeProps {
   diaryContent: string;
   japaneseSummary: string | null;
-  onComplete: (transcript: string, score: number) => void;
-  onEvaluate: (text: string, target: string) => Promise<number>;
+  importantSentences?: Array<{ english: string; japanese: string; expressions?: string[] }>;
+  onComplete: (transcript: string, score: number, passed: boolean) => void;
+  onEvaluate: (text: string, target: string) => Promise<{ score: number; threeAxis?: ThreeAxisScores; passed?: boolean }>;
 }
 
 export function SentencePractice({ 
   diaryContent, 
-  japaneseSummary, 
+  japaneseSummary,
+  importantSentences,
   onComplete,
   onEvaluate 
 }: SentencePracticeProps) {
@@ -38,7 +41,11 @@ export function SentencePractice({
     markComplete,
     getStepInstruction,
     isFinalQuiz
-  } = useSentencePractice(diaryContent, japaneseSummary);
+  } = useSentencePractice(
+    diaryContent, 
+    japaneseSummary,
+    importantSentences
+  );
 
   const {
     isListening,
@@ -56,7 +63,8 @@ export function SentencePractice({
   const [typedInput, setTypedInput] = useState('');
   const [showTyping, setShowTyping] = useState(false);
   const [isEvaluating, setIsEvaluating] = useState(false);
-  const [lastScore, setLastScore] = useState<number | null>(null);
+  const [lastScores, setLastScores] = useState<ThreeAxisScores | null>(null);
+  const [lastPassed, setLastPassed] = useState<boolean | null>(null);
   const [showLowScoreOption, setShowLowScoreOption] = useState(false);
   const [finalAttemptText, setFinalAttemptText] = useState('');
 
@@ -67,7 +75,8 @@ export function SentencePractice({
   useEffect(() => {
     resetTranscript();
     setTypedInput('');
-    setLastScore(null);
+    setLastScores(null);
+    setLastPassed(null);
     setShowLowScoreOption(false);
   }, [currentSentenceIndex, currentStep, resetTranscript]);
 
@@ -112,15 +121,25 @@ export function SentencePractice({
     
     setIsEvaluating(true);
     try {
-      const score = await onEvaluate(currentInput, currentSentence.english);
-      setLastScore(score);
+      const result = await onEvaluate(currentInput, currentSentence.english);
       
-      if (score >= 90) {
+      const threeAxis = result.threeAxis || {
+        meaning: result.score >= 85 ? 'excellent' : result.score >= 60 ? 'good' : 'needs_work',
+        structure: result.score >= 85 ? 'excellent' : result.score >= 60 ? 'good' : 'needs_work',
+        fluency: result.score >= 85 ? 'excellent' : result.score >= 60 ? 'good' : 'needs_work',
+      } as ThreeAxisScores;
+      
+      const passed = result.passed !== undefined ? result.passed : calculatePassStatus(threeAxis).passed;
+      
+      setLastScores(threeAxis);
+      setLastPassed(passed);
+      
+      if (passed) {
         playSuccess();
         // Small delay before moving on
         setTimeout(() => {
           markSentenceCleared();
-        }, 600);
+        }, 800);
       } else {
         setShowLowScoreOption(true);
       }
@@ -139,21 +158,31 @@ export function SentencePractice({
     setFinalAttemptText(attemptText);
     
     try {
-      const score = await onEvaluate(attemptText, diaryContent);
-      setLastScore(score);
+      const result = await onEvaluate(attemptText, diaryContent);
       
-      if (score >= 90) {
+      const threeAxis = result.threeAxis || {
+        meaning: result.score >= 85 ? 'excellent' : result.score >= 60 ? 'good' : 'needs_work',
+        structure: result.score >= 85 ? 'excellent' : result.score >= 60 ? 'good' : 'needs_work',
+        fluency: result.score >= 85 ? 'excellent' : result.score >= 60 ? 'good' : 'needs_work',
+      } as ThreeAxisScores;
+      
+      const passed = result.passed !== undefined ? result.passed : calculatePassStatus(threeAxis).passed;
+      
+      setLastScores(threeAxis);
+      setLastPassed(passed);
+      
+      if (passed) {
         playBigSuccess();
         setTimeout(() => {
           markComplete();
-          onComplete(attemptText, score);
+          onComplete(attemptText, result.score, true);
         }, 800);
       } else {
         setShowLowScoreOption(true);
       }
     } catch (error) {
       console.error('Evaluation error:', error);
-      onComplete(attemptText, 0);
+      onComplete(attemptText, 0, false);
     } finally {
       setIsEvaluating(false);
     }
@@ -162,13 +191,15 @@ export function SentencePractice({
   const handleRetryFromRepeat = useCallback(() => {
     retryCurrentSentence();
     setShowLowScoreOption(false);
-    setLastScore(null);
+    setLastScores(null);
+    setLastPassed(null);
   }, [retryCurrentSentence]);
 
   const handleTryFinalAgain = useCallback(() => {
     resetTranscript();
     setTypedInput('');
-    setLastScore(null);
+    setLastScores(null);
+    setLastPassed(null);
     setShowLowScoreOption(false);
   }, [resetTranscript]);
 
@@ -193,7 +224,7 @@ export function SentencePractice({
         <Card className="mb-4 bg-secondary/30">
           <CardContent className="p-4">
             <p className="text-xs text-muted-foreground mb-2 uppercase tracking-wide">
-              Say the entire diary in English:
+              Say the diary in English:
             </p>
             {sentences.map((s, i) => (
               <p key={i} className="text-sm font-japanese text-secondary-foreground mb-1">
@@ -203,25 +234,10 @@ export function SentencePractice({
           </CardContent>
         </Card>
 
-        {/* Score display if evaluated */}
-        {lastScore !== null && (
-          <div className={cn(
-            "mb-4 p-4 rounded-xl text-center",
-            lastScore >= 90 ? "bg-green-500/20" : "bg-primary/20"
-          )}>
-            <p className={cn(
-              "text-3xl font-bold mb-1",
-              lastScore >= 90 ? "text-green-500" : "text-primary"
-            )}>
-              {lastScore}%
-            </p>
-            {lastScore >= 90 ? (
-              <p className="text-sm text-green-400">🎉 Excellent! Quiz cleared!</p>
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                Great effort! Try again to reach 90%
-              </p>
-            )}
+        {/* Three-axis evaluation display */}
+        {lastScores && (
+          <div className="mb-4">
+            <ThreeAxisEvaluation scores={lastScores} size="md" />
           </div>
         )}
 
@@ -247,7 +263,7 @@ export function SentencePractice({
               <Textarea
                 value={typedInput}
                 onChange={(e) => setTypedInput(e.target.value)}
-                placeholder="Type the entire diary in English..."
+                placeholder="Type the diary in English..."
                 className="min-h-32 mb-4"
               />
             ) : (
@@ -310,9 +326,9 @@ export function SentencePractice({
                 variant="outline"
                 size="lg"
                 className="w-full"
-                onClick={() => onComplete(finalAttemptText, lastScore || 0)}
+                onClick={() => onComplete(finalAttemptText, 0, false)}
               >
-                Finish Anyway ({lastScore}%)
+                Finish Anyway
               </Button>
             </>
           ) : (
@@ -381,28 +397,15 @@ export function SentencePractice({
         </CardContent>
       </Card>
 
-      {/* Score display if evaluated */}
-      {lastScore !== null && (
-        <div className={cn(
-          "mb-4 p-3 rounded-xl text-center",
-          lastScore >= 90 ? "bg-green-500/20" : "bg-muted"
-        )}>
-          <p className={cn(
-            "text-2xl font-bold",
-            lastScore >= 90 ? "text-green-500" : "text-primary"
-          )}>
-            {lastScore}%
-          </p>
-          {lastScore >= 90 ? (
-            <p className="text-sm text-green-400">✓ Sentence cleared!</p>
-          ) : (
-            <p className="text-sm text-muted-foreground">Try again or review</p>
-          )}
+      {/* Three-axis evaluation display */}
+      {lastScores && (
+        <div className="mb-4">
+          <ThreeAxisEvaluation scores={lastScores} size="sm" />
         </div>
       )}
 
       {/* Audio button for repeat step */}
-      {currentStep === 'repeat' && !showLowScoreOption && (
+      {currentStep === 'repeat' && !showLowScoreOption && !lastScores && (
         <div className="flex justify-center mb-4">
           <Button
             variant="default"
@@ -422,7 +425,7 @@ export function SentencePractice({
       )}
 
       {/* Input toggle */}
-      {!showLowScoreOption && (
+      {!showLowScoreOption && !lastScores && (
         <div className="flex justify-end mb-2">
           <Button
             variant="ghost"
@@ -437,7 +440,7 @@ export function SentencePractice({
       )}
 
       {/* Input area */}
-      {!showLowScoreOption && (
+      {!showLowScoreOption && !lastScores && (
         showTyping ? (
           <Textarea
             value={typedInput}

@@ -7,6 +7,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
 import { SentencePractice } from '@/components/SentencePractice';
+import { ThreeAxisEvaluation, ThreeAxisScores } from '@/components/ThreeAxisEvaluation';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 
@@ -15,6 +16,8 @@ interface EvaluationResult {
   feedback: string;
   usedExpressions: string[];
   missedExpressions: string[];
+  threeAxis?: ThreeAxisScores;
+  passed?: boolean;
 }
 
 type ReviewPhase = 'study' | 'practice' | 'result';
@@ -99,8 +102,8 @@ export default function DiaryReview() {
     setPhase('practice');
   };
 
-  // Evaluate a single sentence or full diary
-  const handleEvaluate = useCallback(async (attemptText: string, targetText: string): Promise<number> => {
+  // Evaluate a single sentence or full diary - returns object for new 3-axis system
+  const handleEvaluate = useCallback(async (attemptText: string, targetText: string): Promise<{ score: number; threeAxis?: ThreeAxisScores; passed?: boolean }> => {
     try {
       const { data, error } = await supabase.functions.invoke('evaluate-recall', {
         body: {
@@ -111,16 +114,20 @@ export default function DiaryReview() {
       });
 
       if (error) throw error;
-      return data.score || 0;
+      return {
+        score: data.score || 0,
+        threeAxis: data.threeAxis as ThreeAxisScores | undefined,
+        passed: data.passed,
+      };
     } catch (error) {
       console.error('Evaluation error:', error);
       // Be generous on error
-      return 85;
+      return { score: 85, passed: true };
     }
   }, []);
 
   // Handle practice completion (final quiz done)
-  const handlePracticeComplete = useCallback(async (transcript: string, score: number) => {
+  const handlePracticeComplete = useCallback(async (transcript: string, score: number, passed: boolean) => {
     if (!user || !diaryEntry) return;
 
     try {
@@ -140,6 +147,8 @@ export default function DiaryReview() {
         feedback: evalData?.feedback || 'Great effort!',
         usedExpressions: evalData?.usedExpressions || [],
         missedExpressions: evalData?.missedExpressions || [],
+        threeAxis: evalData?.threeAxis,
+        passed: evalData?.passed ?? passed,
       };
 
       // Save the session
@@ -205,7 +214,7 @@ export default function DiaryReview() {
 
   // Result Phase
   if (phase === 'result' && evaluationResult) {
-    const isPassed = evaluationResult.score >= 90;
+    const isPassed = evaluationResult.passed ?? evaluationResult.score >= 70;
 
     return (
       <div className="min-h-screen flex flex-col p-6 safe-bottom">
@@ -217,18 +226,10 @@ export default function DiaryReview() {
         </header>
 
         <div className="flex-1 flex flex-col items-center justify-center gap-6">
-          {/* Score Circle */}
-          <div className={cn(
-            "w-32 h-32 rounded-full flex items-center justify-center",
-            isPassed ? "bg-green-500/20" : "bg-primary/20"
-          )}>
-            <span className={cn(
-              "text-4xl font-bold",
-              isPassed ? "text-green-500" : "text-primary"
-            )}>
-              {evaluationResult.score}%
-            </span>
-          </div>
+          {/* Three-axis evaluation */}
+          {evaluationResult.threeAxis && (
+            <ThreeAxisEvaluation scores={evaluationResult.threeAxis} size="lg" />
+          )}
 
           {/* Feedback */}
           <div className="text-center max-w-sm">

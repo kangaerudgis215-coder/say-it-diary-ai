@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
 import { SentencePractice } from '@/components/SentencePractice';
 import { RecallResult } from '@/components/RecallResult';
+import { ThreeAxisScores } from '@/components/ThreeAxisEvaluation';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 
@@ -16,6 +17,8 @@ interface EvaluationResult {
   feedback: string;
   usedExpressions: string[];
   missedExpressions: string[];
+  threeAxis?: ThreeAxisScores;
+  passed?: boolean;
 }
 
 type RecallPhase = 'study' | 'practice' | 'result';
@@ -106,8 +109,8 @@ export default function Recall() {
     setIsPlayingAudio(false);
   }, []);
 
-  // Evaluate a single sentence or full diary
-  const handleEvaluate = useCallback(async (attemptText: string, targetText: string): Promise<number> => {
+  // Evaluate a single sentence or full diary - returns object for new 3-axis system
+  const handleEvaluate = useCallback(async (attemptText: string, targetText: string): Promise<{ score: number; threeAxis?: ThreeAxisScores; passed?: boolean }> => {
     try {
       const { data, error } = await supabase.functions.invoke('evaluate-recall', {
         body: {
@@ -118,15 +121,19 @@ export default function Recall() {
       });
 
       if (error) throw error;
-      return data.score || 0;
+      return {
+        score: data.score || 0,
+        threeAxis: data.threeAxis as ThreeAxisScores | undefined,
+        passed: data.passed,
+      };
     } catch (error) {
       console.error('Evaluation error:', error);
-      return 85;
+      return { score: 85, passed: true };
     }
   }, []);
 
   // Handle practice completion
-  const handlePracticeComplete = useCallback(async (transcript: string, score: number) => {
+  const handlePracticeComplete = useCallback(async (transcript: string, score: number, passed: boolean) => {
     if (!user || !diaryEntry) return;
 
     try {
@@ -145,6 +152,8 @@ export default function Recall() {
         feedback: evalData?.feedback || 'Great effort!',
         usedExpressions: evalData?.usedExpressions || [],
         missedExpressions: evalData?.missedExpressions || [],
+        threeAxis: evalData?.threeAxis,
+        passed: evalData?.passed ?? passed,
       };
 
       // Save recall session
@@ -216,6 +225,8 @@ export default function Recall() {
         feedback={evaluationResult.feedback}
         usedExpressions={evaluationResult.usedExpressions}
         missedExpressions={evaluationResult.missedExpressions}
+        threeAxis={evaluationResult.threeAxis}
+        passed={evaluationResult.passed}
         onTryAgain={handleTryAgain}
         onGoHome={handleGoHome}
         onGoBack={handleGoBack}

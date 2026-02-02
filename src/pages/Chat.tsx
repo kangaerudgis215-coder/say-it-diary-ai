@@ -223,6 +223,7 @@ export default function Chat() {
           japanese_summary: data.japaneseSummary,
           word_count: data.diary.split(/\s+/).length,
           next_review_date: format(new Date(Date.now() + 24 * 60 * 60 * 1000), 'yyyy-MM-dd'),
+          important_sentences: data.importantSentences || [],
         }, { onConflict: 'user_id,date' });
 
       if (diaryError) throw diaryError;
