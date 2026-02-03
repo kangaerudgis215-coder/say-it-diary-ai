@@ -12,7 +12,6 @@ import Calendar from "./pages/Calendar";
 import Expressions from "./pages/Expressions";
 import DiaryReview from "./pages/DiaryReview";
 import InstantComposition from "./pages/InstantComposition";
-import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -33,7 +32,6 @@ const App = () => (
             <Route path="/expressions" element={<Expressions />} />
             <Route path="/review" element={<DiaryReview />} />
             <Route path="/instant" element={<InstantComposition />} />
-            <Route path="/settings" element={<Settings />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>

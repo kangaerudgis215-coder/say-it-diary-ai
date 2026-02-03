@@ -2,108 +2,105 @@
 @tailwind components;
 @tailwind utilities;
 
-/* VoiceDiary - Modern Night Theme Design System
-   Inspired by calm, dark UI with brighter card surfaces */
+/* VoiceDiary - Gentle Night Theme Design System
+   A calming, dark theme optimized for nighttime journaling */
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+JP:wght@300;400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Quicksand:wght@300;400;500;600;700&family=Noto+Sans+JP:wght@300;400;500&display=swap');
 
 @layer base {
   :root {
-    /* Deep dark background with subtle blue tint */
-    --background: 225 25% 8%;
-    --foreground: 210 40% 98%;
+    /* Deep midnight blues for a cozy night feel */
+    --background: 222 47% 6%;
+    --foreground: 210 40% 96%;
 
-    /* Brighter cards that pop on dark background */
-    --card: 225 20% 14%;
-    --card-foreground: 210 40% 98%;
+    --card: 222 47% 9%;
+    --card-foreground: 210 40% 96%;
 
-    --popover: 225 20% 16%;
-    --popover-foreground: 210 40% 98%;
+    --popover: 222 47% 8%;
+    --popover-foreground: 210 40% 96%;
 
-    /* Blue primary for buttons and actions */
-    --primary: 217 91% 60%;
-    --primary-foreground: 225 25% 8%;
+    /* Warm amber for encouragement and warmth */
+    --primary: 38 92% 60%;
+    --primary-foreground: 222 47% 6%;
 
-    /* Subtle purple-blue for secondary */
-    --secondary: 225 20% 20%;
-    --secondary-foreground: 210 40% 90%;
+    /* Soft lavender for secondary elements */
+    --secondary: 260 30% 20%;
+    --secondary-foreground: 260 30% 85%;
 
-    /* Muted tones for backgrounds */
-    --muted: 225 15% 18%;
+    /* Gentle muted tones */
+    --muted: 222 30% 14%;
     --muted-foreground: 215 20% 55%;
 
-    /* Teal accent */
-    --accent: 174 62% 47%;
-    --accent-foreground: 225 25% 8%;
+    /* Soft sage green for success/accent */
+    --accent: 160 40% 25%;
+    --accent-foreground: 160 40% 90%;
 
-    /* Red for destructive */
-    --destructive: 0 72% 51%;
+    /* Gentle coral for warnings */
+    --destructive: 0 60% 45%;
     --destructive-foreground: 210 40% 98%;
 
-    --border: 225 15% 22%;
-    --input: 225 15% 20%;
-    --ring: 217 91% 60%;
+    --border: 222 30% 18%;
+    --input: 222 30% 15%;
+    --ring: 38 92% 50%;
 
     --radius: 1rem;
 
-    /* Semantic colors */
-    --success: 142 76% 45%;
-    --success-foreground: 142 76% 98%;
+    /* Custom semantic colors */
+    --success: 160 50% 40%;
+    --success-foreground: 160 50% 95%;
     
-    --warning: 38 92% 50%;
-    --warning-foreground: 38 92% 10%;
+    --warning: 38 80% 50%;
+    --warning-foreground: 38 80% 10%;
 
     /* Gradient tokens */
-    --gradient-card: linear-gradient(145deg, hsl(225 20% 16%), hsl(225 20% 12%));
-    --gradient-glow: radial-gradient(ellipse at top center, hsl(217 91% 60% / 0.08), transparent 50%);
-    --gradient-surface: linear-gradient(180deg, hsl(225 25% 10%), hsl(225 25% 8%));
+    --gradient-warm: linear-gradient(135deg, hsl(38 92% 60% / 0.15), hsl(20 80% 50% / 0.1));
+    --gradient-calm: linear-gradient(180deg, hsl(222 47% 8%), hsl(222 47% 6%));
+    --gradient-glow: radial-gradient(ellipse at top, hsl(38 92% 60% / 0.08), transparent 60%);
 
     /* Shadow tokens */
-    --shadow-sm: 0 2px 8px -2px hsl(225 50% 0% / 0.5);
-    --shadow-md: 0 4px 16px -4px hsl(225 50% 0% / 0.6);
-    --shadow-lg: 0 8px 32px -8px hsl(225 50% 0% / 0.7);
-    --shadow-glow: 0 0 24px -4px hsl(217 91% 60% / 0.25);
-    --shadow-glow-accent: 0 0 24px -4px hsl(174 62% 47% / 0.25);
+    --shadow-soft: 0 4px 20px -4px hsl(222 47% 0% / 0.4);
+    --shadow-glow: 0 0 30px -5px hsl(38 92% 60% / 0.2);
 
-    /* Sidebar */
-    --sidebar-background: 225 25% 10%;
+    /* Sidebar (inherit from main theme) */
+    --sidebar-background: 222 47% 8%;
     --sidebar-foreground: 210 40% 90%;
-    --sidebar-primary: 217 91% 60%;
-    --sidebar-primary-foreground: 225 25% 8%;
-    --sidebar-accent: 225 20% 18%;
+    --sidebar-primary: 38 92% 60%;
+    --sidebar-primary-foreground: 222 47% 6%;
+    --sidebar-accent: 222 30% 14%;
     --sidebar-accent-foreground: 210 40% 90%;
-    --sidebar-border: 225 15% 22%;
-    --sidebar-ring: 217 91% 60%;
+    --sidebar-border: 222 30% 18%;
+    --sidebar-ring: 38 92% 50%;
   }
 
+  /* Light mode - still cozy but brighter */
   .light {
-    --background: 220 20% 97%;
-    --foreground: 225 25% 10%;
+    --background: 40 30% 97%;
+    --foreground: 222 47% 11%;
 
     --card: 0 0% 100%;
-    --card-foreground: 225 25% 10%;
+    --card-foreground: 222 47% 11%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 225 25% 10%;
+    --popover-foreground: 222 47% 11%;
 
-    --primary: 217 91% 55%;
+    --primary: 38 85% 45%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 220 14% 92%;
-    --secondary-foreground: 225 25% 20%;
+    --secondary: 260 20% 92%;
+    --secondary-foreground: 260 30% 25%;
 
-    --muted: 220 14% 94%;
-    --muted-foreground: 220 9% 46%;
+    --muted: 40 20% 93%;
+    --muted-foreground: 215 16% 40%;
 
-    --accent: 174 55% 42%;
-    --accent-foreground: 0 0% 100%;
+    --accent: 160 35% 90%;
+    --accent-foreground: 160 40% 25%;
 
-    --destructive: 0 72% 51%;
+    --destructive: 0 70% 55%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 220 13% 87%;
-    --input: 220 13% 87%;
-    --ring: 217 91% 55%;
+    --border: 40 15% 88%;
+    --input: 40 15% 88%;
+    --ring: 38 85% 45%;
   }
 }
 
@@ -118,19 +115,20 @@
 
   body {
     @apply bg-background text-foreground antialiased;
-    font-family: 'Inter', sans-serif;
+    font-family: 'Quicksand', sans-serif;
     background-image: var(--gradient-glow);
     background-attachment: fixed;
     min-height: 100vh;
   }
 
+  /* Japanese text styling */
   .font-japanese {
     font-family: 'Noto Sans JP', sans-serif;
   }
 }
 
 @layer components {
-  /* Primary action button with glow */
+  /* Glowing button effect */
   .btn-glow {
     @apply relative overflow-hidden;
     box-shadow: var(--shadow-glow);
@@ -138,7 +136,7 @@
   }
 
   .btn-glow:hover {
-    box-shadow: 0 0 36px -4px hsl(217 91% 60% / 0.4);
+    box-shadow: 0 0 40px -5px hsl(38 92% 60% / 0.35);
     transform: translateY(-2px);
   }
 
@@ -146,41 +144,18 @@
     transform: translateY(0);
   }
 
-  /* Large circular button - for mic */
-  .btn-circle-lg {
-    @apply w-24 h-24 rounded-full flex items-center justify-center;
-    @apply bg-primary text-primary-foreground;
-    box-shadow: var(--shadow-glow), var(--shadow-md);
+  /* Card with soft glow */
+  .card-glow {
+    @apply relative;
+    box-shadow: var(--shadow-soft);
     transition: all 0.3s ease;
   }
 
-  .btn-circle-lg:hover {
-    transform: scale(1.05);
-    box-shadow: 0 0 48px -4px hsl(217 91% 60% / 0.5), var(--shadow-lg);
+  .card-glow:hover {
+    box-shadow: var(--shadow-glow);
   }
 
-  .btn-circle-lg:active {
-    transform: scale(0.98);
-  }
-
-  /* Card with elevated surface */
-  .card-elevated {
-    @apply bg-card rounded-2xl border border-border;
-    box-shadow: var(--shadow-sm);
-    transition: all 0.3s ease;
-  }
-
-  .card-elevated:hover {
-    box-shadow: var(--shadow-md);
-    border-color: hsl(var(--border) / 0.8);
-  }
-
-  /* Subtle card for content sections */
-  .card-subtle {
-    @apply bg-muted/50 rounded-xl;
-  }
-
-  /* Pulse animation for recording */
+  /* Gentle pulse animation for recording */
   .pulse-gentle {
     animation: pulse-gentle 2s ease-in-out infinite;
   }
@@ -188,23 +163,37 @@
   @keyframes pulse-gentle {
     0%, 100% {
       opacity: 1;
-      box-shadow: var(--shadow-glow);
+      transform: scale(1);
     }
     50% {
-      opacity: 0.9;
-      box-shadow: 0 0 60px -4px hsl(217 91% 60% / 0.5);
+      opacity: 0.7;
+      transform: scale(1.05);
+    }
+  }
+
+  /* Floating animation */
+  .float {
+    animation: float 3s ease-in-out infinite;
+  }
+
+  @keyframes float {
+    0%, 100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-10px);
     }
   }
 
   /* Fade in animation */
   .fade-in {
-    animation: fade-in 0.4s ease-out forwards;
+    animation: fade-in 0.5s ease-out forwards;
   }
 
   @keyframes fade-in {
     from {
       opacity: 0;
-      transform: translateY(12px);
+      transform: translateY(10px);
     }
     to {
       opacity: 1;
@@ -212,7 +201,7 @@
     }
   }
 
-  /* Streak badge animation */
+  /* Streak fire animation */
   .streak-fire {
     animation: streak-fire 0.6s ease-out;
   }
@@ -223,7 +212,7 @@
       opacity: 0;
     }
     50% {
-      transform: scale(1.1);
+      transform: scale(1.2);
     }
     100% {
       transform: scale(1);
@@ -231,7 +220,7 @@
     }
   }
 
-  /* Message appear animation */
+  /* Smooth message appear */
   .message-appear {
     animation: message-appear 0.3s ease-out forwards;
   }
@@ -239,7 +228,7 @@
   @keyframes message-appear {
     from {
       opacity: 0;
-      transform: translateY(16px) scale(0.96);
+      transform: translateY(20px) scale(0.95);
     }
     to {
       opacity: 1;
@@ -247,36 +236,15 @@
     }
   }
 
-  /* Glass effect */
+  /* Glass morphism effect */
   .glass {
     @apply backdrop-blur-md;
-    background: hsl(var(--card) / 0.85);
-  }
-
-  /* Bottom navigation bar */
-  .bottom-nav {
-    @apply fixed bottom-0 left-0 right-0;
-    @apply bg-card/95 backdrop-blur-lg border-t border-border;
-    @apply flex items-center justify-around;
-    @apply h-16 safe-bottom;
-    box-shadow: 0 -4px 24px -4px hsl(225 50% 0% / 0.3);
-  }
-
-  .bottom-nav-item {
-    @apply flex flex-col items-center justify-center gap-1 px-4 py-2;
-    @apply text-muted-foreground transition-all;
-  }
-
-  .bottom-nav-item.active {
-    @apply text-primary;
-  }
-
-  .bottom-nav-item:hover {
-    @apply text-foreground;
+    background: hsl(var(--card) / 0.8);
   }
 }
 
 @layer utilities {
+  /* Hide scrollbar but keep functionality */
   .scrollbar-hide {
     -ms-overflow-style: none;
     scrollbar-width: none;
@@ -286,16 +254,14 @@
     display: none;
   }
 
+  /* Text gradient */
   .text-gradient {
     @apply bg-clip-text text-transparent;
-    background-image: linear-gradient(135deg, hsl(217 91% 60%), hsl(217 91% 75%));
+    background-image: linear-gradient(135deg, hsl(38 92% 60%), hsl(38 92% 75%));
   }
 
+  /* Safe area padding for mobile */
   .safe-bottom {
     padding-bottom: max(1rem, env(safe-area-inset-bottom));
-  }
-
-  .pb-nav {
-    padding-bottom: calc(4rem + max(1rem, env(safe-area-inset-bottom)));
   }
 }

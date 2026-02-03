@@ -17,6 +17,7 @@ export function DiaryCalendar({ entries, onDateSelect, selectedDate }: DiaryCale
   const monthEnd = endOfMonth(currentMonth);
   const days = eachDayOfInterval({ start: monthStart, end: monthEnd });
   
+  // Pad the start to align with the correct day of week
   const startPadding = monthStart.getDay();
   const paddedDays = [...Array(startPadding).fill(null), ...days];
   
@@ -26,7 +27,7 @@ export function DiaryCalendar({ entries, onDateSelect, selectedDate }: DiaryCale
   };
 
   return (
-    <div className="card-elevated p-4">
+    <div className="bg-card rounded-2xl p-4 border border-border">
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <Button
@@ -37,7 +38,7 @@ export function DiaryCalendar({ entries, onDateSelect, selectedDate }: DiaryCale
           <ChevronLeft className="w-5 h-5" />
         </Button>
         
-        <h3 className="font-semibold">
+        <h3 className="font-bold text-lg">
           {format(currentMonth, 'MMMM yyyy')}
         </h3>
         
@@ -75,7 +76,7 @@ export function DiaryCalendar({ entries, onDateSelect, selectedDate }: DiaryCale
               key={day.toISOString()}
               onClick={() => onDateSelect(day)}
               className={cn(
-                "aspect-square rounded-xl flex flex-col items-center justify-center gap-0.5 transition-all",
+                "aspect-square rounded-lg flex flex-col items-center justify-center gap-0.5 transition-all",
                 "hover:bg-muted text-sm font-medium",
                 !isSameMonth(day, currentMonth) && "text-muted-foreground/30",
                 isCurrentDay && "ring-2 ring-primary ring-offset-2 ring-offset-background",
@@ -85,9 +86,9 @@ export function DiaryCalendar({ entries, onDateSelect, selectedDate }: DiaryCale
             >
               <span>{format(day, 'd')}</span>
               {hasEntry && (
-                <div className={cn(
-                  "w-1.5 h-1.5 rounded-full",
-                  isSelected ? "bg-primary-foreground" : "bg-primary"
+                <BookOpen className={cn(
+                  "w-3 h-3",
+                  isSelected ? "text-primary-foreground" : "text-primary"
                 )} />
               )}
             </button>

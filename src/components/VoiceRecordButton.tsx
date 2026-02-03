@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Mic, MicOff, Loader2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 
@@ -7,7 +8,6 @@ interface VoiceRecordButtonProps {
   onTranscript: (text: string) => void;
   disabled?: boolean;
   className?: string;
-  size?: 'default' | 'large';
 }
 
 // Web Speech API type definitions
@@ -59,7 +59,7 @@ declare global {
   }
 }
 
-export function VoiceRecordButton({ onTranscript, disabled, className, size = 'default' }: VoiceRecordButtonProps) {
+export function VoiceRecordButton({ onTranscript, disabled, className }: VoiceRecordButtonProps) {
   const [isRecording, setIsRecording] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const recognitionRef = useRef<ISpeechRecognition | null>(null);
@@ -95,7 +95,7 @@ export function VoiceRecordButton({ onTranscript, disabled, className, size = 'd
       
       let message = 'Voice input failed. Please try again.';
       if (event.error === 'not-allowed') {
-        message = 'Microphone access denied. Please allow microphone access.';
+        message = 'Microphone access denied. Please allow microphone access in your browser settings.';
       } else if (event.error === 'no-speech') {
         message = 'No speech detected. Please try speaking again.';
       } else if (event.error === 'network') {
@@ -142,9 +142,12 @@ export function VoiceRecordButton({ onTranscript, disabled, className, size = 'd
     }
 
     if (isRecording) {
+      // Stop recording
       recognitionRef.current?.stop();
     } else {
+      // Start recording
       try {
+        // Request microphone permission first
         await navigator.mediaDevices.getUserMedia({ audio: true });
         setIsProcessing(true);
         recognitionRef.current?.start();
@@ -153,40 +156,35 @@ export function VoiceRecordButton({ onTranscript, disabled, className, size = 'd
         toast({
           variant: 'destructive',
           title: 'Microphone Access Denied',
-          description: 'Please allow microphone access to use voice input.',
+          description: 'Please allow microphone access in your browser settings to use voice input.',
         });
       }
     }
   }, [isRecording, isSupported, toast]);
 
-  const isLarge = size === 'large';
-
   return (
-    <button
+    <Button
+      variant={isRecording ? "destructive" : "glow"}
+      size="icon-lg"
       onClick={handleClick}
       disabled={disabled || isProcessing}
       className={cn(
-        "relative transition-all duration-300 flex items-center justify-center rounded-full",
-        isLarge ? "w-24 h-24" : "w-14 h-14",
-        isRecording 
-          ? "bg-destructive text-destructive-foreground pulse-gentle" 
-          : "bg-primary text-primary-foreground",
-        !isRecording && "shadow-glow hover:shadow-glow-lg hover:scale-105",
-        disabled && "opacity-50 cursor-not-allowed",
+        "relative transition-all duration-300",
+        isRecording && "pulse-gentle",
         className
       )}
     >
       {isProcessing ? (
-        <Loader2 className={cn("animate-spin", isLarge ? "w-10 h-10" : "w-6 h-6")} />
+        <Loader2 className="w-6 h-6 animate-spin" />
       ) : isRecording ? (
-        <MicOff className={cn(isLarge ? "w-10 h-10" : "w-6 h-6")} />
+        <MicOff className="w-6 h-6" />
       ) : (
-        <Mic className={cn(isLarge ? "w-10 h-10" : "w-6 h-6")} />
+        <Mic className="w-6 h-6" />
       )}
       
       {isRecording && (
         <span className="absolute -top-1 -right-1 w-3 h-3 bg-destructive rounded-full animate-pulse" />
       )}
-    </button>
+    </Button>
   );
 }
