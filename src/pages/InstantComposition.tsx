@@ -1,10 +1,9 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Zap, Mic, MicOff, Loader2, ChevronRight, Keyboard, Eye, EyeOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
-import { ThreeAxisEvaluation, ThreeAxisScores, calculatePassStatus } from '@/components/ThreeAxisEvaluation';
+import { ThreeAxisEvaluation, ThreeAxisScores } from '@/components/ThreeAxisEvaluation';
 import { useInstantComposition } from '@/hooks/useInstantComposition';
 import { useSpeechRecognition } from '@/hooks/useSpeechRecognition';
 import { useSuccessSound } from '@/hooks/useSuccessSound';
@@ -70,7 +69,6 @@ export default function InstantComposition() {
 
     setIsEvaluating(true);
     try {
-      // Call evaluate-recall for similarity score
       const { data } = await supabase.functions.invoke('evaluate-recall', {
         body: {
           originalText: currentSentence.sentence.english,
@@ -139,30 +137,30 @@ export default function InstantComposition() {
             <Zap className="w-10 h-10 text-primary" />
           </div>
 
-          <h2 className="text-xl font-bold mb-3">Quick Composition Practice</h2>
+          <h2 className="text-xl font-bold mb-3">Quick Composition</h2>
           <p className="text-muted-foreground mb-6 max-w-sm">
             See a Japanese sentence from your past diaries. 
-            Instantly compose the English version by speaking or typing.
+            Instantly compose the English version.
           </p>
 
           {hasAnySentences ? (
             <>
-              <div className="bg-muted rounded-xl p-4 mb-8 text-sm">
-                <p className="text-muted-foreground">
-                  Today: <span className="text-foreground font-medium">{stats.practiced}</span> practiced, 
-                  <span className="text-green-400 font-medium ml-1">{stats.passed}</span> passed
+              <div className="card-elevated p-4 mb-8">
+                <p className="text-sm text-muted-foreground">
+                  Today: <span className="text-foreground font-semibold">{stats.practiced}</span> practiced, 
+                  <span className="text-accent font-semibold ml-1">{stats.passed}</span> passed
                 </p>
               </div>
 
-              <Button variant="glow" size="lg" onClick={handleStartPractice}>
+              <Button className="btn-glow" size="lg" onClick={handleStartPractice}>
                 <Zap className="w-5 h-5 mr-2" />
                 Start Practice
               </Button>
             </>
           ) : (
-            <div className="bg-muted rounded-xl p-6 text-center">
+            <div className="card-elevated p-6 text-center">
               <p className="text-muted-foreground mb-4">
-                No past diaries yet. Complete a few daily diaries first to unlock this practice mode.
+                Complete a few daily diaries first to unlock this mode.
               </p>
               <Button variant="outline" onClick={() => navigate('/chat')}>
                 Start today's diary
@@ -186,49 +184,37 @@ export default function InstantComposition() {
         </header>
 
         <div className="flex-1 space-y-4">
-          {/* Three-axis evaluation */}
           <ThreeAxisEvaluation scores={evaluationResult.scores} size="lg" />
 
           {/* Your answer */}
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm">Your answer</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm">{currentInput}</p>
-            </CardContent>
-          </Card>
+          <div className="card-elevated p-4">
+            <p className="text-xs text-muted-foreground mb-2 uppercase">Your answer</p>
+            <p className="text-sm">{currentInput}</p>
+          </div>
 
           {/* Correct answer */}
-          <Card className="bg-green-500/10 border-green-500/30">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm flex items-center justify-between">
-                Correct answer
-                {currentSentence.sentence.expressions && currentSentence.sentence.expressions.length > 0 && (
-                  <span className="text-xs text-primary font-normal">
-                    Key: {currentSentence.sentence.expressions.join(', ')}
-                  </span>
-                )}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-green-300">{currentSentence.sentence.english}</p>
-            </CardContent>
-          </Card>
+          <div className="card-elevated p-4 bg-accent/10 border-accent/30">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs text-muted-foreground uppercase">Correct answer</p>
+              {currentSentence.sentence.expressions && currentSentence.sentence.expressions.length > 0 && (
+                <span className="text-xs text-primary">
+                  Key: {currentSentence.sentence.expressions.join(', ')}
+                </span>
+              )}
+            </div>
+            <p className="text-sm text-accent">{currentSentence.sentence.english}</p>
+          </div>
 
           {/* Japanese reference */}
-          <Card className="bg-muted/50">
-            <CardContent className="py-3">
-              <p className="text-sm font-japanese text-muted-foreground">
-                {currentSentence.sentence.japanese}
-              </p>
-            </CardContent>
-          </Card>
+          <div className="card-subtle p-4">
+            <p className="text-sm font-japanese text-muted-foreground">
+              {currentSentence.sentence.japanese}
+            </p>
+          </div>
         </div>
 
-        {/* Action buttons */}
         <div className="mt-6 space-y-3">
-          <Button variant="glow" size="lg" className="w-full" onClick={handleNextSentence}>
+          <Button className="w-full btn-glow" size="lg" onClick={handleNextSentence}>
             <ChevronRight className="w-5 h-5 mr-2" />
             Next Sentence
           </Button>
@@ -255,22 +241,20 @@ export default function InstantComposition() {
         <div>
           <h1 className="font-bold text-lg">Compose in English</h1>
           <p className="text-xs text-muted-foreground">
-            Practiced today: {stats.practiced}
+            Practiced: {stats.practiced}
           </p>
         </div>
       </header>
 
       {/* Japanese sentence to translate */}
-      <Card className="mb-6 bg-secondary/30">
-        <CardContent className="py-6">
-          <p className="text-xs text-muted-foreground mb-2 text-center uppercase tracking-wide">
-            Say this in English:
-          </p>
-          <p className="text-lg text-center font-japanese text-secondary-foreground leading-relaxed">
-            {currentSentence?.sentence.japanese || 'Loading...'}
-          </p>
-        </CardContent>
-      </Card>
+      <div className="card-elevated p-6 mb-6 bg-gradient-to-br from-primary/10 to-accent/10 border-primary/20">
+        <p className="text-xs text-muted-foreground mb-3 text-center uppercase tracking-wide">
+          Say this in English
+        </p>
+        <p className="text-lg text-center font-japanese leading-relaxed">
+          {currentSentence?.sentence.japanese || 'Loading...'}
+        </p>
+      </div>
 
       {/* Peek at answer button */}
       <div className="flex justify-center mb-4">
@@ -286,13 +270,11 @@ export default function InstantComposition() {
       </div>
 
       {showAnswer && currentSentence && (
-        <Card className="mb-4 bg-muted/30 border-dashed">
-          <CardContent className="py-3">
-            <p className="text-sm text-muted-foreground italic">
-              {currentSentence.sentence.english}
-            </p>
-          </CardContent>
-        </Card>
+        <div className="card-subtle p-4 mb-4 border border-dashed border-border">
+          <p className="text-sm text-muted-foreground italic text-center">
+            {currentSentence.sentence.english}
+          </p>
+        </div>
       )}
 
       {/* Input toggle */}
@@ -326,14 +308,14 @@ export default function InstantComposition() {
                   className={cn(
                     "w-20 h-20 rounded-full flex items-center justify-center transition-all duration-300",
                     isListening
-                      ? "bg-destructive/20 animate-pulse"
-                      : "bg-primary/20 hover:bg-primary/30"
+                      ? "bg-destructive text-destructive-foreground pulse-gentle"
+                      : "bg-primary text-primary-foreground shadow-glow hover:shadow-glow-lg hover:scale-105"
                   )}
                 >
                   {isListening ? (
-                    <MicOff className="w-8 h-8 text-destructive" />
+                    <MicOff className="w-8 h-8" />
                   ) : (
-                    <Mic className="w-8 h-8 text-primary" />
+                    <Mic className="w-8 h-8" />
                   )}
                 </button>
                 <p className="text-xs text-muted-foreground">
@@ -345,7 +327,7 @@ export default function InstantComposition() {
             )}
 
             {(transcript || interimTranscript) && (
-              <div className="w-full p-3 rounded-lg bg-muted/50 border border-border">
+              <div className="w-full card-elevated p-4">
                 <p className="text-xs text-muted-foreground mb-1">Your response:</p>
                 <p className="text-sm">
                   {transcript}
@@ -361,9 +343,8 @@ export default function InstantComposition() {
 
       {/* Check button */}
       <Button
-        variant="glow"
+        className="w-full btn-glow"
         size="lg"
-        className="w-full"
         onClick={handleCheckAnswer}
         disabled={!currentInput || isEvaluating}
       >

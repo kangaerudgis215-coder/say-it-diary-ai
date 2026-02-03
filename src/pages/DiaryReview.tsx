@@ -1,8 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Volume2, Check, Loader2, Eye, RotateCcw, BookOpen, Target, Home } from 'lucide-react';
+import { ArrowLeft, Volume2, Play, BookOpen, Check, Loader2, Home, RotateCcw, Eye, Award } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
@@ -85,11 +84,6 @@ export default function DiaryReview() {
     } catch (error) {
       console.error('TTS error:', error);
       setIsPlayingAudio(false);
-      toast({
-        variant: 'destructive',
-        title: 'Audio Error',
-        description: 'Could not play audio. Please try again.',
-      });
     }
   };
 
@@ -102,7 +96,6 @@ export default function DiaryReview() {
     setPhase('practice');
   };
 
-  // Evaluate a single sentence or full diary - returns object for new 3-axis system
   const handleEvaluate = useCallback(async (attemptText: string, targetText: string): Promise<{ score: number; threeAxis?: ThreeAxisScores; passed?: boolean }> => {
     try {
       const { data, error } = await supabase.functions.invoke('evaluate-recall', {
@@ -121,19 +114,16 @@ export default function DiaryReview() {
       };
     } catch (error) {
       console.error('Evaluation error:', error);
-      // Be generous on error
       return { score: 85, passed: true };
     }
   }, []);
 
-  // Handle practice completion (final quiz done)
   const handlePracticeComplete = useCallback(async (transcript: string, score: number, passed: boolean) => {
     if (!user || !diaryEntry) return;
 
     try {
       const expressionTexts = expressions.map(e => e.expression);
       
-      // Get detailed evaluation for the result screen
       const { data: evalData } = await supabase.functions.invoke('evaluate-recall', {
         body: {
           originalText: diaryEntry.content,
@@ -151,7 +141,6 @@ export default function DiaryReview() {
         passed: evalData?.passed ?? passed,
       };
 
-      // Save the session
       await supabase.from('recall_sessions').insert({
         user_id: user.id,
         diary_entry_id: diaryEntry.id,
@@ -222,24 +211,25 @@ export default function DiaryReview() {
           <Button variant="ghost" size="icon" onClick={handleBackToStudy}>
             <ArrowLeft className="w-5 h-5" />
           </Button>
-          <h1 className="font-bold text-xl">Memory Test Result</h1>
+          <h1 className="font-bold text-xl">Practice Complete</h1>
         </header>
 
         <div className="flex-1 flex flex-col items-center justify-center gap-6">
-          {/* Three-axis evaluation */}
           {evaluationResult.threeAxis && (
             <ThreeAxisEvaluation scores={evaluationResult.threeAxis} size="lg" />
           )}
 
-          {/* Feedback */}
           <div className="text-center max-w-sm">
             {isPassed ? (
               <>
-                <h2 className="text-xl font-bold text-green-500 mb-2">
-                  🎉 Great job!
+                <div className="w-16 h-16 rounded-full bg-accent/20 flex items-center justify-center mx-auto mb-4">
+                  <Award className="w-8 h-8 text-accent" />
+                </div>
+                <h2 className="text-xl font-bold mb-2">
+                  Great job today! 🎉
                 </h2>
                 <p className="text-muted-foreground">
-                  You remembered today's diary very well. Today's memorization is complete!
+                  You practiced {expressions.length} key expressions. Keep up the momentum!
                 </p>
               </>
             ) : (
@@ -250,20 +240,16 @@ export default function DiaryReview() {
                 <p className="text-muted-foreground">
                   {evaluationResult.feedback}
                 </p>
-                <p className="text-sm text-muted-foreground mt-2">
-                  You've done great practice! Try the full recall again when you're ready.
-                </p>
               </>
             )}
           </div>
 
-          {/* Expressions Used/Missed */}
           {evaluationResult.usedExpressions.length > 0 && (
-            <div className="w-full max-w-sm bg-green-500/10 rounded-xl p-4">
-              <p className="text-xs text-muted-foreground mb-2 uppercase">Expressions you used ✓</p>
+            <div className="w-full max-w-sm">
+              <p className="text-xs text-muted-foreground mb-2 uppercase">Expressions used ✓</p>
               <div className="flex flex-wrap gap-2">
                 {evaluationResult.usedExpressions.map((exp, i) => (
-                  <span key={i} className="text-xs bg-green-500/20 text-green-400 px-2 py-1 rounded">
+                  <span key={i} className="text-xs bg-accent/20 text-accent px-3 py-1.5 rounded-full">
                     {exp}
                   </span>
                 ))}
@@ -272,11 +258,11 @@ export default function DiaryReview() {
           )}
 
           {evaluationResult.missedExpressions.length > 0 && (
-            <div className="w-full max-w-sm bg-muted rounded-xl p-4">
+            <div className="w-full max-w-sm">
               <p className="text-xs text-muted-foreground mb-2 uppercase">Expressions to practice</p>
               <div className="flex flex-wrap gap-2">
                 {evaluationResult.missedExpressions.map((exp, i) => (
-                  <span key={i} className="text-xs bg-muted-foreground/20 text-muted-foreground px-2 py-1 rounded">
+                  <span key={i} className="text-xs bg-muted text-muted-foreground px-3 py-1.5 rounded-full">
                     {exp}
                   </span>
                 ))}
@@ -285,16 +271,15 @@ export default function DiaryReview() {
           )}
         </div>
 
-        {/* Action Buttons */}
         <div className="space-y-3 mt-6">
           {isPassed ? (
-            <Button variant="glow" size="lg" className="w-full" onClick={handleComplete}>
+            <Button className="w-full btn-glow" size="lg" onClick={handleComplete}>
               <Home className="w-5 h-5 mr-2" />
               Complete & Go Home
             </Button>
           ) : (
             <>
-              <Button variant="glow" size="lg" className="w-full" onClick={handleTryAgain}>
+              <Button className="w-full btn-glow" size="lg" onClick={handleTryAgain}>
                 <RotateCcw className="w-5 h-5 mr-2" />
                 Practice Again
               </Button>
@@ -344,87 +329,101 @@ export default function DiaryReview() {
           <ArrowLeft className="w-5 h-5" />
         </Button>
         <div>
-          <h1 className="font-bold text-xl">Review Today's Diary</h1>
+          <h1 className="font-bold text-xl">Today's Diary</h1>
           <p className="text-sm text-muted-foreground">{dateLabel}</p>
         </div>
       </header>
 
       <div className="flex-1 space-y-4 overflow-y-auto">
-        {/* English Diary */}
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base flex items-center justify-between">
-              📝 English Diary
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={isPlayingAudio ? handleStopAudio : handlePlayAudio}
-                disabled={!diaryEntry.content}
-              >
-                {isPlayingAudio ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Volume2 className="w-4 h-4" />
-                )}
-                <span className="ml-1 text-xs">
-                  {isPlayingAudio ? 'Stop' : 'Listen'}
-                </span>
-              </Button>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm leading-relaxed">{diaryEntry.content}</p>
-          </CardContent>
-        </Card>
+        {/* English Diary Card */}
+        <div className="card-elevated p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-semibold">📝 Your Diary</h2>
+          </div>
+          <p className="text-sm leading-relaxed text-foreground/90 mb-4">
+            {diaryEntry.content}
+          </p>
+          
+          {/* Action Buttons */}
+          <div className="flex gap-3">
+            <Button
+              variant="outline"
+              size="sm"
+              className="flex-1"
+              onClick={isPlayingAudio ? handleStopAudio : handlePlayAudio}
+            >
+              {isPlayingAudio ? (
+                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+              ) : (
+                <Volume2 className="w-4 h-4 mr-2" />
+              )}
+              {isPlayingAudio ? 'Stop' : 'Listen'}
+            </Button>
+            <Button
+              variant="default"
+              size="sm"
+              className="flex-1"
+              onClick={handleStartPractice}
+            >
+              <Play className="w-4 h-4 mr-2" />
+              Practice
+            </Button>
+          </div>
+        </div>
 
         {/* Japanese Translation */}
         {diaryEntry.japanese_summary && (
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base">🇯🇵 Japanese Translation</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm font-japanese leading-relaxed text-muted-foreground">
-                {diaryEntry.japanese_summary}
-              </p>
-            </CardContent>
-          </Card>
+          <div className="card-subtle p-4">
+            <p className="text-xs text-muted-foreground mb-2">🇯🇵 Japanese</p>
+            <p className="text-sm font-japanese leading-relaxed text-muted-foreground">
+              {diaryEntry.japanese_summary}
+            </p>
+          </div>
         )}
 
-        {/* Expressions */}
+        {/* Key Expressions */}
         {expressions.length > 0 && (
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base">💡 Key Expressions</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {expressions.map((exp) => (
-                  <div key={exp.id} className="bg-muted rounded-lg p-3">
-                    <p className="font-medium text-sm text-primary">{exp.expression}</p>
-                    {exp.meaning && (
-                      <p className="text-xs text-muted-foreground mt-1">{exp.meaning}</p>
-                    )}
-                    {exp.example_sentence && (
-                      <p className="text-xs text-muted-foreground/70 mt-1 italic">
-                        e.g. {exp.example_sentence}
-                      </p>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
+          <div className="space-y-3">
+            <h3 className="font-semibold text-sm flex items-center gap-2">
+              💡 Key Expressions
+            </h3>
+            <div className="grid gap-2">
+              {expressions.map((exp) => (
+                <div key={exp.id} className="card-elevated p-4">
+                  <p className="font-medium text-primary mb-1">{exp.expression}</p>
+                  {exp.meaning && (
+                    <p className="text-sm text-muted-foreground">{exp.meaning}</p>
+                  )}
+                  {exp.example_sentence && (
+                    <p className="text-xs text-muted-foreground/70 mt-2 italic">
+                      e.g. {exp.example_sentence}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
         )}
+
+        {/* Great job card */}
+        <div className="card-elevated p-5 bg-gradient-to-br from-primary/10 to-accent/10 border-primary/20">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
+              <Check className="w-5 h-5 text-primary" />
+            </div>
+            <div>
+              <p className="font-semibold">Great job today!</p>
+              <p className="text-xs text-muted-foreground">
+                You practiced {expressions.length} key expression{expressions.length !== 1 ? 's' : ''}.
+              </p>
+            </div>
+          </div>
+        </div>
       </div>
 
-      {/* Action Buttons */}
+      {/* Bottom Action */}
       <div className="mt-6 space-y-3">
-        <p className="text-xs text-muted-foreground text-center">
-          Read the diary, listen to the audio, and review the expressions.
-          When ready, start the sentence practice!
-        </p>
-        <Button variant="glow" size="lg" className="w-full" onClick={handleStartPractice}>
+        <Button className="w-full btn-glow" size="lg" onClick={handleStartPractice}>
           <BookOpen className="w-5 h-5 mr-2" />
           Start Sentence Practice
         </Button>
