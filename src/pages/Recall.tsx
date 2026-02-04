@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
-import { SentencePractice } from '@/components/SentencePractice';
+import { ClozeQuiz } from '@/components/ClozeQuiz';
 import { RecallResult } from '@/components/RecallResult';
 import { ThreeAxisScores } from '@/components/ThreeAxisEvaluation';
 import { format } from 'date-fns';
@@ -280,8 +280,22 @@ export default function Recall() {
     }
   };
 
-  // Practice Phase
+  // Practice Phase - use ClozeQuiz
   if (phase === 'practice') {
+    // Parse important_sentences if available
+    const importantSentences = diaryEntry.important_sentences 
+      ? (diaryEntry.important_sentences as Array<{ english: string; japanese: string; expressions?: string[] }>)
+      : null;
+
+    // Build sentences array for ClozeQuiz
+    const practiceSentences = importantSentences && importantSentences.length > 0
+      ? importantSentences
+      : diaryEntry.content.split(/[.!?]+/).filter((s: string) => s.trim()).map((s: string, i: number) => ({
+          english: s.trim() + '.',
+          japanese: diaryEntry.japanese_summary?.split(/[。！？]+/)[i]?.trim() || '',
+          expressions: expressions.filter(e => s.toLowerCase().includes(e.expression.toLowerCase())).map(e => e.expression),
+        }));
+
     return (
       <div className="min-h-screen flex flex-col p-6 safe-bottom">
         <header className="flex items-center gap-4 mb-4">
@@ -298,9 +312,8 @@ export default function Recall() {
         </header>
 
         <div className="flex-1">
-          <SentencePractice 
-            diaryContent={diaryEntry.content}
-            japaneseSummary={diaryEntry.japanese_summary}
+          <ClozeQuiz 
+            sentences={practiceSentences}
             onComplete={handlePracticeComplete}
             onEvaluate={handleEvaluate}
           />

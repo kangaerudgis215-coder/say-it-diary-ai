@@ -1,17 +1,19 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Zap, Mic, MicOff, Loader2, ChevronRight, Keyboard, Eye, EyeOff } from 'lucide-react';
+import { ArrowLeft, Zap, Mic, MicOff, Loader2, ChevronRight, Keyboard, Eye, EyeOff, GraduationCap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
-import { ThreeAxisEvaluation, ThreeAxisScores, calculatePassStatus } from '@/components/ThreeAxisEvaluation';
+import { QuizResultScreen } from '@/components/QuizResultScreen';
+import { FadingPractice } from '@/components/FadingPractice';
+import { ThreeAxisScores, calculatePassStatus } from '@/components/ThreeAxisEvaluation';
 import { useInstantComposition } from '@/hooks/useInstantComposition';
 import { useSpeechRecognition } from '@/hooks/useSpeechRecognition';
 import { useSuccessSound } from '@/hooks/useSuccessSound';
 import { supabase } from '@/lib/supabase';
 import { cn } from '@/lib/utils';
 
-type Phase = 'start' | 'practice' | 'result';
+type Phase = 'start' | 'test' | 'result' | 'practice';
 
 export default function InstantComposition() {
   const navigate = useNavigate();
@@ -42,15 +44,14 @@ export default function InstantComposition() {
   const [typedInput, setTypedInput] = useState('');
   const [isEvaluating, setIsEvaluating] = useState(false);
   const [evaluationResult, setEvaluationResult] = useState<{ scores: ThreeAxisScores; passed: boolean } | null>(null);
-  const [showAnswer, setShowAnswer] = useState(false);
+  const [lastUserAnswer, setLastUserAnswer] = useState('');
 
   const currentInput = showTyping ? typedInput : transcript;
 
   const handleStartPractice = useCallback(() => {
     pickRandomSentence();
-    setPhase('practice');
+    setPhase('test');
     setEvaluationResult(null);
-    setShowAnswer(false);
     resetTranscript();
     setTypedInput('');
   }, [pickRandomSentence, resetTranscript]);
@@ -69,6 +70,8 @@ export default function InstantComposition() {
     if (!currentSentence || !currentInput) return;
 
     setIsEvaluating(true);
+    setLastUserAnswer(currentInput);
+    
     try {
       // Call evaluate-recall for similarity score
       const { data } = await supabase.functions.invoke('evaluate-recall', {
@@ -97,19 +100,60 @@ export default function InstantComposition() {
 
   const handleNextSentence = useCallback(() => {
     nextSentence();
-    setPhase('practice');
+    setPhase('test');
     setEvaluationResult(null);
-    setShowAnswer(false);
     resetTranscript();
     setTypedInput('');
+    setLastUserAnswer('');
   }, [nextSentence, resetTranscript]);
 
   const handleTryAgain = useCallback(() => {
-    setPhase('practice');
+    setPhase('test');
     setEvaluationResult(null);
     resetTranscript();
     setTypedInput('');
   }, [resetTranscript]);
+
+  const handleEnterPracticeMode = useCallback(() => {
+    setPhase('practice');
+    resetTranscript();
+    setTypedInput('');
+  }, [resetTranscript]);
+
+  const handlePracticeComplete = useCallback((passed: boolean) => {
+    if (passed) {
+      handleNextSentence();
+    } else {
+      // Go back to test phase
+      setPhase('test');
+      setEvaluationResult(null);
+      resetTranscript();
+      setTypedInput('');
+    }
+  }, [handleNextSentence, resetTranscript]);
+
+  const handleEvaluateForPractice = useCallback(async (text: string, target: string) => {
+    const { data } = await supabase.functions.invoke('evaluate-recall', {
+      body: {
+        originalText: target,
+        recallText: text,
+        expressions: currentSentence?.sentence.expressions || [],
+      },
+    });
+
+    const score = data?.score || 50;
+    const threeAxis = data?.threeAxis || {
+      meaning: score >= 85 ? 'excellent' : score >= 60 ? 'good' : 'needs_work',
+      structure: score >= 85 ? 'excellent' : score >= 60 ? 'good' : 'needs_work',
+      fluency: score >= 85 ? 'excellent' : score >= 60 ? 'good' : 'needs_work',
+    } as ThreeAxisScores;
+
+    return {
+      score,
+      threeAxis,
+      passed: calculatePassStatus(threeAxis).passed,
+    };
+  }, [currentSentence]);
 
   if (isLoading) {
     return (
@@ -174,8 +218,40 @@ export default function InstantComposition() {
     );
   }
 
+  // Practice mode with fading English
+  if (phase === 'practice' && currentSentence) {
+    return (
+      <div className="min-h-screen flex flex-col p-6 safe-bottom">
+        <header className="flex items-center gap-4 mb-6">
+          <Button variant="ghost" size="icon" onClick={() => setPhase('start')}>
+            <ArrowLeft className="w-5 h-5" />
+          </Button>
+          <div>
+            <h1 className="font-bold text-lg flex items-center gap-2">
+              <GraduationCap className="w-5 h-5 text-primary" />
+              Practice Mode
+            </h1>
+            <p className="text-xs text-muted-foreground">
+              Master this sentence with fading support
+            </p>
+          </div>
+        </header>
+
+        <FadingPractice
+          englishSentence={currentSentence.sentence.english}
+          japaneseSentence={currentSentence.sentence.japanese}
+          keyExpressions={currentSentence.sentence.expressions}
+          onComplete={handlePracticeComplete}
+          onEvaluate={handleEvaluateForPractice}
+        />
+      </div>
+    );
+  }
+
   // Result screen
   if (phase === 'result' && evaluationResult && currentSentence) {
+    const { passed } = evaluationResult;
+    
     return (
       <div className="min-h-screen flex flex-col p-6 safe-bottom">
         <header className="flex items-center gap-4 mb-6">
@@ -185,67 +261,50 @@ export default function InstantComposition() {
           <h1 className="font-bold text-xl">Result</h1>
         </header>
 
-        <div className="flex-1 space-y-4">
-          {/* Three-axis evaluation */}
-          <ThreeAxisEvaluation scores={evaluationResult.scores} size="lg" />
-
-          {/* Your answer */}
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm">Your answer</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm">{currentInput}</p>
-            </CardContent>
-          </Card>
-
-          {/* Correct answer */}
-          <Card className="bg-green-500/10 border-green-500/30">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm flex items-center justify-between">
-                Correct answer
-                {currentSentence.sentence.expressions && currentSentence.sentence.expressions.length > 0 && (
-                  <span className="text-xs text-primary font-normal">
-                    Key: {currentSentence.sentence.expressions.join(', ')}
-                  </span>
-                )}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-green-300">{currentSentence.sentence.english}</p>
-            </CardContent>
-          </Card>
-
-          {/* Japanese reference */}
-          <Card className="bg-muted/50">
-            <CardContent className="py-3">
-              <p className="text-sm font-japanese text-muted-foreground">
-                {currentSentence.sentence.japanese}
-              </p>
-            </CardContent>
-          </Card>
+        <div className="flex-1">
+          <QuizResultScreen
+            userAnswer={lastUserAnswer}
+            correctAnswer={currentSentence.sentence.english}
+            scores={evaluationResult.scores}
+            keyExpressions={currentSentence.sentence.expressions}
+            onTryAgain={handleTryAgain}
+            onNext={handleNextSentence}
+            nextLabel="Next Sentence"
+            showTryAgain={!passed}
+          />
         </div>
 
-        {/* Action buttons */}
-        <div className="mt-6 space-y-3">
-          <Button variant="glow" size="lg" className="w-full" onClick={handleNextSentence}>
-            <ChevronRight className="w-5 h-5 mr-2" />
-            Next Sentence
-          </Button>
-          {!evaluationResult.passed && (
-            <Button variant="outline" size="lg" className="w-full" onClick={handleTryAgain}>
-              Try This One Again
+        {/* Practice mode option when failed */}
+        {!passed && (
+          <div className="mt-4">
+            <Button
+              variant="secondary"
+              size="lg"
+              className="w-full gap-2"
+              onClick={handleEnterPracticeMode}
+            >
+              <GraduationCap className="w-5 h-5" />
+              Enter Practice Mode
             </Button>
-          )}
-          <Button variant="ghost" size="sm" className="w-full" onClick={() => setPhase('start')}>
-            End Practice
-          </Button>
-        </div>
+            <p className="text-xs text-muted-foreground text-center mt-2">
+              Practice with gradually fading English text
+            </p>
+          </div>
+        )}
+
+        <Button 
+          variant="ghost" 
+          size="sm" 
+          className="w-full mt-4" 
+          onClick={() => setPhase('start')}
+        >
+          End Practice
+        </Button>
       </div>
     );
   }
 
-  // Practice screen
+  // Test screen (Japanese only, user tries to produce English)
   return (
     <div className="min-h-screen flex flex-col p-6 safe-bottom">
       <header className="flex items-center gap-4 mb-6">
@@ -272,27 +331,15 @@ export default function InstantComposition() {
         </CardContent>
       </Card>
 
-      {/* Peek at answer button */}
-      <div className="flex justify-center mb-4">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => setShowAnswer(!showAnswer)}
-          className="gap-2 text-muted-foreground"
-        >
-          {showAnswer ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-          {showAnswer ? 'Hide answer' : 'Peek at answer'}
-        </Button>
-      </div>
-
-      {showAnswer && currentSentence && (
-        <Card className="mb-4 bg-muted/30 border-dashed">
-          <CardContent className="py-3">
-            <p className="text-sm text-muted-foreground italic">
-              {currentSentence.sentence.english}
-            </p>
-          </CardContent>
-        </Card>
+      {/* Key expressions hint */}
+      {currentSentence?.sentence.expressions && currentSentence.sentence.expressions.length > 0 && (
+        <div className="flex flex-wrap gap-2 justify-center mb-4">
+          {currentSentence.sentence.expressions.map((expr, i) => (
+            <span key={i} className="px-2 py-1 bg-primary/20 rounded-full text-xs text-primary">
+              {expr}
+            </span>
+          ))}
+        </div>
       )}
 
       {/* Input toggle */}
