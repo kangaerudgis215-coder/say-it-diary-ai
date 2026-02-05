@@ -17,6 +17,24 @@
  }
  
  /**
+  * More aggressive normalization for expression matching:
+  * - Lowercase
+  * - Replace hyphens with spaces (part-time -> part time)
+  * - Remove possessives ('s)
+  * - Remove common punctuation
+  * - Collapse multiple spaces
+  */
+ export function normalizeForExpression(text: string): string {
+   return text
+     .toLowerCase()
+     .replace(/-/g, ' ')           // Replace hyphens with spaces
+     .replace(/'s\b/g, '')         // Remove possessives
+     .replace(/[.,!?;:'"()]/g, '') // Remove punctuation
+     .replace(/\s+/g, ' ')         // Collapse multiple spaces
+     .trim();
+ }
+ 
+ /**
   * Tokenize text into words after normalization
   */
  export function tokenize(text: string): string[] {
@@ -97,7 +115,7 @@
      
      if (partialMatchIndex !== -1) {
        targetMatched.add(partialMatchIndex);
-       return { word, status: 'correct' as const }; // Treat as correct for normalized matches
+       return { word, status: 'correct' as const };
      }
      
      // Check if it's a similar word (incorrect but close)
@@ -134,15 +152,28 @@
  }
  
  /**
-  * Check if all tokens of an expression are present in the user text
+  * Enhanced expression check that handles multi-word expressions better
+  * and supports both hyphenated and space-separated forms
   */
- export function checkExpressionPresent(userText: string, expression: string): {
+ export function checkExpressionPresentEnhanced(userText: string, expression: string): {
    present: boolean;
+   confidence: number;
    matchedTokens: string[];
    missingTokens: string[];
  } {
-   const userTokens = tokenize(userText);
-   const exprTokens = tokenize(expression);
+   // Normalize both for comparison
+   const userNorm = normalizeForExpression(userText);
+   const exprNorm = normalizeForExpression(expression);
+   
+   // Direct substring check first (most reliable)
+   if (userNorm.includes(exprNorm)) {
+     const exprTokens = exprNorm.split(' ').filter(t => t.length > 0);
+     return { present: true, confidence: 100, matchedTokens: exprTokens, missingTokens: [] };
+   }
+   
+   // Token-based check
+   const userTokens = userNorm.split(' ').filter(t => t.length > 0);
+   const exprTokens = exprNorm.split(' ').filter(t => t.length > 0);
    
    const matchedTokens: string[] = [];
    const missingTokens: string[] = [];
@@ -150,33 +181,47 @@
    
    for (const exprToken of exprTokens) {
      // Look for exact or close match
-     const matchIndex = userTokensCopy.findIndex(ut => 
-       ut === exprToken || 
-       (ut.length > 3 && exprToken.length > 3 && levenshteinDistance(ut, exprToken) <= 1)
-     );
+     const matchIndex = userTokensCopy.findIndex(ut => {
+       if (ut === exprToken) return true;
+       // Allow 1 char typo for words > 3 chars
+       if (ut.length > 3 && exprToken.length > 3 && levenshteinDistance(ut, exprToken) <= 1) return true;
+       // Allow partial match for longer words (e.g., "satisfy" matches "satisfied")
+       if (ut.length >= 4 && exprToken.length >= 4) {
+         const shorter = ut.length < exprToken.length ? ut : exprToken;
+         const longer = ut.length < exprToken.length ? exprToken : ut;
+         if (longer.startsWith(shorter.slice(0, -2)) || shorter.startsWith(longer.slice(0, -2))) return true;
+       }
+       return false;
+     });
      
      if (matchIndex !== -1) {
        matchedTokens.push(exprToken);
-       userTokensCopy.splice(matchIndex, 1); // Remove matched token
+       userTokensCopy.splice(matchIndex, 1);
      } else {
        missingTokens.push(exprToken);
      }
    }
    
-   // Expression is present if at least 70% of tokens are matched
-   const present = matchedTokens.length >= exprTokens.length * 0.7;
+   // Calculate confidence
+   const confidence = exprTokens.length > 0 
+     ? Math.round((matchedTokens.length / exprTokens.length) * 100) 
+     : 100;
    
-   return { present, matchedTokens, missingTokens };
+   // Expression is present if at least 70% of tokens are matched
+   const present = confidence >= 70;
+   
+   return { present, confidence, matchedTokens, missingTokens };
  }
  
  /**
-  * Check if user correctly produced all key expressions
+  * Check key expressions with enhanced matching
   */
- export function checkKeyExpressions(userText: string, expressions: string[]): {
+ export function checkKeyExpressionsEnhanced(userText: string, expressions: string[]): {
    allPresent: boolean;
    results: Array<{
      expression: string;
      present: boolean;
+     confidence: number;
      matchedTokens: string[];
      missingTokens: string[];
    }>;
@@ -187,7 +232,7 @@
    
    const results = expressions.map(expr => ({
      expression: expr,
-     ...checkExpressionPresent(userText, expr),
+     ...checkExpressionPresentEnhanced(userText, expr),
    }));
    
    const allPresent = results.every(r => r.present);
@@ -196,24 +241,104 @@
  }
  
  /**
+  * Evaluate answer for cloze mode: grade ONLY based on key expression presence
+  * Returns a score and pass status based solely on whether the key expression is correct
+  */
+ export function evaluateClozeAnswer(
+   userText: string, 
+   targetText: string, 
+   keyExpressions: string[]
+ ): {
+   passed: boolean;
+   expressionCheck: ReturnType<typeof checkKeyExpressionsEnhanced>;
+   meaning: 'excellent' | 'good' | 'needs_work';
+   structure: 'excellent' | 'good' | 'needs_work';
+   fluency: 'excellent' | 'good' | 'needs_work';
+ } {
+   const expressionCheck = checkKeyExpressionsEnhanced(userText, keyExpressions);
+   
+   // For cloze mode: PASS if all key expressions are present
+   // The rest of the sentence doesn't matter for pass/fail
+   const allExpressionsPresent = expressionCheck.allPresent;
+   
+   if (allExpressionsPresent) {
+     // User got the key expression(s) right - give full credit
+     return {
+       passed: true,
+       expressionCheck,
+       meaning: 'excellent',
+       structure: 'excellent', 
+       fluency: 'excellent',
+     };
+   }
+   
+   // Some expressions missing - calculate partial scores
+   const avgConfidence = expressionCheck.results.length > 0
+     ? expressionCheck.results.reduce((sum, r) => sum + r.confidence, 0) / expressionCheck.results.length
+     : 0;
+   
+   return {
+     passed: false,
+     expressionCheck,
+     meaning: avgConfidence >= 50 ? 'good' : 'needs_work',
+     structure: avgConfidence >= 50 ? 'good' : 'needs_work',
+     fluency: 'good', // Be generous on fluency
+   };
+ }
+ 
+ /**
+  * Check if all tokens of an expression are present in the user text
+  * @deprecated Use checkExpressionPresentEnhanced instead
+  */
+ export function checkExpressionPresent(userText: string, expression: string): {
+   present: boolean;
+   matchedTokens: string[];
+   missingTokens: string[];
+ } {
+   const result = checkExpressionPresentEnhanced(userText, expression);
+   return {
+     present: result.present,
+     matchedTokens: result.matchedTokens,
+     missingTokens: result.missingTokens,
+   };
+ }
+ 
+ /**
+  * Check if user correctly produced all key expressions
+  * @deprecated Use checkKeyExpressionsEnhanced instead
+  */
+ export function checkKeyExpressions(userText: string, expressions: string[]): {
+   allPresent: boolean;
+   results: Array<{
+     expression: string;
+     present: boolean;
+     matchedTokens: string[];
+     missingTokens: string[];
+   }>;
+ } {
+   const enhanced = checkKeyExpressionsEnhanced(userText, expressions);
+   return {
+     allPresent: enhanced.allPresent,
+     results: enhanced.results.map(r => ({
+       expression: r.expression,
+       present: r.present,
+       matchedTokens: r.matchedTokens,
+       missingTokens: r.missingTokens,
+     })),
+   };
+ }
+ 
+ /**
   * Check if user text contains the target expression (tolerant matching)
   */
  export function containsExpression(userText: string, targetExpression: string): boolean {
-   const userNorm = normalizeText(userText);
-   const targetNorm = normalizeText(targetExpression);
-   
-   // Direct containment
-   if (userNorm.includes(targetNorm) || targetNorm.includes(userNorm)) {
-     return true;
-   }
-   
-   // Token-level check: if most target tokens are present
-   const comparison = compareTokens(userText, targetExpression);
-   return comparison.accuracy >= 70;
+   const result = checkExpressionPresentEnhanced(userText, targetExpression);
+   return result.present;
  }
  
  /**
   * Calculate scores based on token-level comparison
+  * @deprecated For cloze questions, use evaluateClozeAnswer instead
   */
  export function calculateTokenScores(userText: string, targetText: string): {
    meaning: 'excellent' | 'good' | 'needs_work';
