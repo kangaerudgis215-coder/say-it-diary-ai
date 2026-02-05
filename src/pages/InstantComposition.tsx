@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Zap, Mic, MicOff, Loader2, ChevronRight, Keyboard, GraduationCap, MessageSquare, Sparkles } from 'lucide-react';
+import { ArrowLeft, Zap, Mic, MicOff, Loader2, ChevronRight, Keyboard, GraduationCap, MessageSquare, Sparkles, Lightbulb, Eye } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
@@ -56,6 +56,7 @@ export default function InstantComposition() {
   const [isEvaluating, setIsEvaluating] = useState(false);
   const [evaluationResult, setEvaluationResult] = useState<{ scores: ThreeAxisScores; passed: boolean } | null>(null);
   const [lastUserAnswer, setLastUserAnswer] = useState('');
+  const [showHint, setShowHint] = useState(false);
 
   const currentInput = showTyping ? typedInput : transcript;
 
@@ -472,6 +473,14 @@ export default function InstantComposition() {
   const japanesePrompt = mode === 'expressions' && currentExpr
     ? currentExpr.meaning || '(No meaning available)'
     : currentSentence?.sentence.japanese || 'Loading...';
+  
+  const currentEnglish = mode === 'expressions' && currentExpr
+    ? currentExpr.expression
+    : currentSentence?.sentence.english || '';
+  
+  const currentExpressions = mode === 'expressions'
+    ? []
+    : currentSentence?.sentence.expressions || [];
 
   return (
     <div className="min-h-screen flex flex-col p-6 safe-bottom">
@@ -501,15 +510,44 @@ export default function InstantComposition() {
         </CardContent>
       </Card>
 
-      {/* Key expressions hint */}
-      {mode === 'sentences' && currentSentence?.sentence.expressions && currentSentence.sentence.expressions.length > 0 && (
-        <div className="flex flex-wrap gap-2 justify-center mb-4">
-          {currentSentence.sentence.expressions.map((expr, i) => (
-            <span key={i} className="px-2 py-1 bg-primary/20 rounded-full text-xs text-primary">
-              {expr}
-            </span>
-          ))}
-        </div>
+      {/* Hint button */}
+      <div className="flex justify-center mb-4">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setShowHint(!showHint)}
+          className="gap-1"
+        >
+          {showHint ? <Eye className="w-4 h-4" /> : <Lightbulb className="w-4 h-4" />}
+          {showHint ? 'Hide hint' : 'Show hint'}
+        </Button>
+      </div>
+      
+      {/* Hint display */}
+      {showHint && (
+        <Card className="mb-4 bg-muted/30 border-dashed">
+          <CardContent className="py-3">
+            {mode === 'expressions' ? (
+              <p className="text-sm text-muted-foreground text-center">
+                First letters: <span className="text-foreground font-mono">
+                  {currentEnglish.split(' ').map(w => w.charAt(0).toUpperCase()).join(' ')}
+                </span>
+              </p>
+            ) : (
+              <p className="text-sm text-muted-foreground text-center">
+                First words: <span className="text-foreground">
+                  {currentEnglish.split(' ').slice(0, 3).join(' ')}...
+                </span>
+                {currentExpressions.length > 0 && (
+                  <>
+                    <br />
+                    <span className="text-xs">Key: {currentExpressions.join(', ')}</span>
+                  </>
+                )}
+              </p>
+            )}
+          </CardContent>
+        </Card>
       )}
 
       {/* Input toggle */}

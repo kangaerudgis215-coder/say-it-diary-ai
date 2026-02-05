@@ -5,6 +5,14 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ChatBubble } from '@/components/ChatBubble';
 import { VoiceRecordButton } from '@/components/VoiceRecordButton';
+import { HelpCircle } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
@@ -28,6 +36,7 @@ export default function Chat() {
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [isGeneratingDiary, setIsGeneratingDiary] = useState(false);
   const [diaryDate, setDiaryDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
+  const [showHelp, setShowHelp] = useState(false);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -294,14 +303,53 @@ export default function Chat() {
     inputRef.current?.focus();
   };
 
+  // Check if we have enough content for diary (at least 2 user messages)
+  const hasEnoughContent = messages.filter(m => m.role === 'user').length >= 2;
+
   return (
     <div className="min-h-screen flex flex-col">
       {/* Header */}
       <header className="sticky top-0 z-10 glass border-b border-border p-4">
         <div className="flex items-center justify-between">
-          <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
-            <ArrowLeft className="w-5 h-5" />
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
+              <ArrowLeft className="w-5 h-5" />
+            </Button>
+            
+            {/* Help button */}
+            <Dialog open={showHelp} onOpenChange={setShowHelp}>
+              <DialogTrigger asChild>
+                <Button variant="ghost" size="icon">
+                  <HelpCircle className="w-5 h-5" />
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-sm">
+                <DialogHeader>
+                  <DialogTitle className="font-japanese">使い方ガイド</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4 text-sm font-japanese">
+                  <div>
+                    <p className="font-medium mb-1">📝 日記の書き方</p>
+                    <p className="text-muted-foreground">
+                      今日あったことを英語で話してみましょう。日本語混じりでもOK！AIが自然な英語に直してくれます。
+                    </p>
+                  </div>
+                  <div>
+                    <p className="font-medium mb-1">🎤 音声入力</p>
+                    <p className="text-muted-foreground">
+                      左下のマイクボタンを押すと音声で入力できます。
+                    </p>
+                  </div>
+                  <div>
+                    <p className="font-medium mb-1">✅ 完了するタイミング</p>
+                    <p className="text-muted-foreground">
+                      2〜3個のトピックについて話したら「Done」ボタンを押して日記を完成させましょう。完璧でなくてOK！
+                    </p>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
+          </div>
           
           <div className="text-center">
             <h1 className="font-bold">
@@ -313,7 +361,8 @@ export default function Chat() {
             variant="success"
             size="sm"
             onClick={handleGenerateDiary}
-            disabled={messages.length < 3 || isGeneratingDiary}
+            disabled={!hasEnoughContent || isGeneratingDiary}
+            className={hasEnoughContent ? 'animate-pulse' : ''}
           >
             {isGeneratingDiary ? (
               <Loader2 className="w-4 h-4 animate-spin" />
@@ -325,6 +374,13 @@ export default function Chat() {
             )}
           </Button>
         </div>
+        
+        {/* Prompt to finish when ready */}
+        {hasEnoughContent && !isGeneratingDiary && (
+          <p className="text-xs text-center text-primary mt-2 animate-pulse">
+            Ready? Tap Done to create your diary! ✨
+          </p>
+        )}
       </header>
 
       {/* Messages */}

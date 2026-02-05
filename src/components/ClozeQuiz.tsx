@@ -119,8 +119,7 @@ export function ClozeQuiz({ sentences, onComplete, onEvaluate }: ClozeQuizProps)
     resetTranscript();
     setTypedInput('');
     setShowHint(false);
-    setLastScores(null);
-  }, [currentIndex, step, resetTranscript]);
+  }, [currentIndex, resetTranscript]);
 
   const handlePlayAudio = useCallback(() => {
     if (isPlayingAudio) {
@@ -214,6 +213,7 @@ export function ClozeQuiz({ sentences, onComplete, onEvaluate }: ClozeQuizProps)
       // Move to next sentence - reset state first, then advance
       const nextIndex = currentIndex + 1;
       setLastScores(null);
+      setLastUserAnswer('');
       setStep('show');
       setCurrentIndex(nextIndex);
     } else {
