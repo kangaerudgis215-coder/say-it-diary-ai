@@ -183,15 +183,14 @@ export function ClozeQuiz({ sentences, onComplete, onEvaluate }: ClozeQuizProps)
           }, 600);
         } else if (step === 'full_cloze') {
           playSuccess();
-          // Show result screen
+          // Show result screen with success
           setTimeout(() => {
             setStep('result');
           }, 400);
         }
-      } else {
-        // Show result for retry
-        setStep('result');
       }
+      // Always show result screen for feedback
+      setStep('result');
     } catch (error) {
       console.error('Evaluation error:', error);
     } finally {
@@ -212,10 +211,11 @@ export function ClozeQuiz({ sentences, onComplete, onEvaluate }: ClozeQuizProps)
     setCompletedSentences(prev => new Set([...prev, currentIndex]));
     
     if (currentIndex < sentences.length - 1) {
-      // Move to next sentence
-      setCurrentIndex(currentIndex + 1);
-      setStep('show');
+      // Move to next sentence - reset state first, then advance
+      const nextIndex = currentIndex + 1;
       setLastScores(null);
+      setStep('show');
+      setCurrentIndex(nextIndex);
     } else {
       // All sentences done
       playBigSuccess();
@@ -236,8 +236,23 @@ export function ClozeQuiz({ sentences, onComplete, onEvaluate }: ClozeQuizProps)
     return <div className="text-center text-muted-foreground">No sentences to practice</div>;
   }
 
-  // Result screen
-  if (step === 'result' && lastScores) {
+  // Result screen - always show when we have scores
+  if (step === 'result') {
+    const hasScores = lastScores !== null;
+    const passed = hasScores ? calculatePassStatus(lastScores).passed : false;
+    
+    if (!hasScores) {
+      // Safety fallback - should not happen but handle gracefully
+      return (
+        <div className="flex flex-col h-full items-center justify-center">
+          <p className="text-muted-foreground">Loading result...</p>
+          <Button variant="ghost" onClick={handleNext} className="mt-4">
+            Continue
+          </Button>
+        </div>
+      );
+    }
+    
     return (
       <div className="flex flex-col h-full">
         <div className="mb-4">
@@ -258,7 +273,7 @@ export function ClozeQuiz({ sentences, onComplete, onEvaluate }: ClozeQuizProps)
           onTryAgain={handleTryAgain}
           onNext={handleNext}
           nextLabel={currentIndex < sentences.length - 1 ? 'Next Sentence' : 'Complete!'}
-          showTryAgain={!calculatePassStatus(lastScores).passed}
+          showTryAgain={!passed}
         />
       </div>
     );

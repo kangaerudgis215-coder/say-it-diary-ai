@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Sparkles, Calendar, Filter, X, RefreshCw, Loader2 } from 'lucide-react';
+import { ArrowLeft, Sparkles, Calendar, Filter, X, RefreshCw, Loader2, Star, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/hooks/useAuth';
@@ -21,6 +21,7 @@ interface ExpressionWithDiary {
   diary_date?: string | null;
   scene_or_context: string | null;
   pos_or_type: string | null;
+  is_user_added?: boolean;
 }
 
 export default function Expressions() {
@@ -292,6 +293,12 @@ export default function Expressions() {
                             {exp.pos_or_type}
                           </Badge>
                         )}
+                        {exp.is_user_added && (
+                          <Badge variant="default" className="text-xs bg-amber-500/20 text-amber-500 border-amber-500/30">
+                            <Star className="w-3 h-3 mr-0.5" />
+                            User
+                          </Badge>
+                        )}
                       </div>
                     </div>
                     {exp.diary_date && (
@@ -308,6 +315,10 @@ export default function Expressions() {
                       <ExpressionDetail 
                         expression={exp} 
                         onNavigateToDiary={() => navigate(`/calendar?date=${exp.diary_date}`)}
+                        onDeleted={() => {
+                          setSelectedId(null);
+                          fetchExpressions();
+                        }}
                       />
                     </div>
                   )}
@@ -324,6 +335,10 @@ export default function Expressions() {
               <ExpressionDetail 
                 expression={selectedExpression} 
                 onNavigateToDiary={() => navigate(`/calendar?date=${selectedExpression.diary_date}`)}
+                onDeleted={() => {
+                  setSelectedId(null);
+                  fetchExpressions();
+                }}
               />
             </div>
           </div>

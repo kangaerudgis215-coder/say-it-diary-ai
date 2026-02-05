@@ -101,6 +101,7 @@ export type Database = {
           example_sentence: string | null
           expression: string
           id: string
+          is_user_added: boolean
           mastery_level: number | null
           meaning: string | null
           pos_or_type: string | null
@@ -113,6 +114,7 @@ export type Database = {
           example_sentence?: string | null
           expression: string
           id?: string
+          is_user_added?: boolean
           mastery_level?: number | null
           meaning?: string | null
           pos_or_type?: string | null
@@ -125,6 +127,7 @@ export type Database = {
           example_sentence?: string | null
           expression?: string
           id?: string
+          is_user_added?: boolean
           mastery_level?: number | null
           meaning?: string | null
           pos_or_type?: string | null

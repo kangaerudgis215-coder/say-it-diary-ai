@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Volume2, Check, Loader2, Eye, RotateCcw, BookOpen, Target, Home } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { SelectableText } from '@/components/SelectableText';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
@@ -386,7 +387,12 @@ export default function DiaryReview() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-sm leading-relaxed">{diaryEntry.content}</p>
+            <SelectableText 
+              text={diaryEntry.content}
+              diaryEntryId={diaryEntry.id}
+              className="text-sm leading-relaxed"
+              onExpressionSaved={fetchDiaryEntry}
+            />
           </CardContent>
         </Card>
 
