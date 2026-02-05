@@ -1,8 +1,8 @@
  import { useState, useEffect, useCallback } from 'react';
  import { Button } from '@/components/ui/button';
- import { Card } from '@/components/ui/card';
  import { Check, RotateCcw, Shuffle, Trophy } from 'lucide-react';
  import { cn } from '@/lib/utils';
+ import { supabase } from '@/lib/supabase';
  
  interface ExpressionPair {
    id: string;
@@ -32,6 +32,27 @@
    const [attempts, setAttempts] = useState(0);
    const [showResult, setShowResult] = useState(false);
    const [lastWrongPair, setLastWrongPair] = useState<string[] | null>(null);
+ 
+   // Update mastery level when a pair is matched
+   const updateMastery = useCallback(async (expressionId: string) => {
+     try {
+       // Get current mastery level and increment
+       const { data: currentExpr } = await supabase
+         .from('expressions')
+         .select('mastery_level')
+         .eq('id', expressionId)
+         .single();
+ 
+       const newLevel = (currentExpr?.mastery_level || 0) + 1;
+ 
+       await supabase
+         .from('expressions')
+         .update({ mastery_level: Math.min(newLevel, 5) }) // Cap at 5
+         .eq('id', expressionId);
+     } catch (error) {
+       console.error('Error updating mastery:', error);
+     }
+   }, []);
  
    // Initialize game with shuffled cards
    const initializeGame = useCallback(() => {
@@ -111,6 +132,9 @@
          const newMatched = new Set(matchedPairs);
          newMatched.add(newSelected[0].pairId);
          setMatchedPairs(newMatched);
+         
+         // Update mastery for this expression
+         updateMastery(newSelected[0].pairId);
          
          setCards(prev => prev.map(c => 
            c.pairId === newSelected[0].pairId 
