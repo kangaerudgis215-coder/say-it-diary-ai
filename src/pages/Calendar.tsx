@@ -187,17 +187,17 @@ export default function Calendar() {
             Edit this diary
           </Button>
 
-          {/* Recall Quiz Button */}
+          {/* Review Quiz Button */}
           <Button
-            variant="secondary"
+            variant="glow"
             className="w-full mt-2 gap-2"
-            onClick={() => navigate(`/recall?diaryId=${selectedEntry.id}`)}
+            onClick={() => navigate(`/review?diaryId=${selectedEntry.id}&date=${selectedEntry.date}`)}
           >
             <Brain className="w-4 h-4" />
-            Use this diary for recall quiz
+            Review this diary
           </Button>
           <p className="text-xs text-muted-foreground text-center mt-2">
-            Start a recall quiz using this day's diary.
+            Practice key expressions and full sentences.
           </p>
 
           {/* Recall History */}
