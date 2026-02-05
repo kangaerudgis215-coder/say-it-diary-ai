@@ -5,20 +5,24 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Normalize text for comparison (handle hyphens, spaces, punctuation)
+function normalizeText(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/-/g, ' ')       // Replace hyphens with spaces (e.g., "part-time" -> "part time")
+    .replace(/[.,!?;:'"()]/g, '') // Remove punctuation
+    .replace(/\s+/g, ' ')     // Collapse multiple spaces
+    .trim();
+}
+
 // Simple word-based similarity calculation
 function calculateSimilarity(originalText: string, recallText: string): number {
   if (!recallText || recallText.trim().length === 0) return 0;
   if (!originalText || originalText.trim().length === 0) return 0;
 
-  // Normalize texts: lowercase, remove punctuation, split into words
-  const normalize = (text: string) => 
-    text.toLowerCase()
-      .replace(/[^\w\s]/g, '')
-      .split(/\s+/)
-      .filter(word => word.length > 2); // Only words with 3+ chars
-
-  const originalWords = normalize(originalText);
-  const recallWords = normalize(recallText);
+  // Use improved normalization (handles hyphens vs spaces)
+  const originalWords = normalizeText(originalText).split(' ').filter(word => word.length > 2);
+  const recallWords = normalizeText(recallText).split(' ').filter(word => word.length > 2);
 
   if (originalWords.length === 0) return 0;
 
@@ -56,19 +60,19 @@ function checkExpressions(recallText: string, expressions: string[]): { used: st
     return { used: [], missed: expressions };
   }
 
-  const normalizedRecall = recallText.toLowerCase();
+  const normalizedRecall = normalizeText(recallText);
   const used: string[] = [];
   const missed: string[] = [];
 
   for (const expression of expressions) {
-    // Check if the expression (or key words from it) appears in the recall
-    const expressionWords = expression.toLowerCase().split(/\s+/).filter(w => w.length > 3);
+    const normalizedExpr = normalizeText(expression);
+    const expressionWords = normalizedExpr.split(' ').filter(w => w.length > 3);
     
     // Expression is "used" if at least 50% of its significant words appear (more generous)
     const matchedWords = expressionWords.filter(word => normalizedRecall.includes(word));
     const matchRatio = expressionWords.length > 0 ? matchedWords.length / expressionWords.length : 0;
     
-    if (matchRatio >= 0.5 || normalizedRecall.includes(expression.toLowerCase())) {
+    if (matchRatio >= 0.5 || normalizedRecall.includes(normalizedExpr)) {
       used.push(expression);
     } else {
       missed.push(expression);
@@ -91,8 +95,8 @@ function calculateThreeAxis(
   recallText: string,
   baseScore: number
 ): { meaning: string; structure: string; fluency: string } {
-  const originalWords = originalText.toLowerCase().split(/\s+/).filter(w => w.length > 0);
-  const recallWords = recallText.toLowerCase().split(/\s+/).filter(w => w.length > 0);
+  const originalWords = normalizeText(originalText).split(' ').filter(w => w.length > 0);
+  const recallWords = normalizeText(recallText).split(' ').filter(w => w.length > 0);
   
   // Meaning: based on overall similarity
   const meaningScore = baseScore;

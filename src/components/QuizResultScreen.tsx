@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { ThreeAxisEvaluation, ThreeAxisScores, calculatePassStatus } from '@/components/ThreeAxisEvaluation';
 import { RotateCcw, ChevronRight, Check, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { compareTokens, TokenComparisonResult } from '@/lib/textComparison';
 
 interface QuizResultScreenProps {
   userAnswer: string;
@@ -21,48 +22,28 @@ function computeDiff(userText: string, targetText: string): {
   userWords: Array<{ word: string; status: 'correct' | 'incorrect' | 'extra' }>;
   targetWords: Array<{ word: string; status: 'matched' | 'missing' }>;
 } {
+  // Use the improved token comparison with normalization
+  const comparison = compareTokens(userText, targetText);
+  
+  // Map back to original words for display (preserve case/punctuation)
   const userWords = userText.split(/\s+/).filter(w => w.length > 0);
   const targetWords = targetText.split(/\s+/).filter(w => w.length > 0);
   
-  // Normalize for comparison
-  const normalize = (w: string) => w.toLowerCase().replace(/[.,!?;:'"]/g, '');
-  
-  // Track which target words have been matched
-  const targetMatched = new Set<number>();
-  
-  // For each user word, find if it matches any target word
-  const userResult = userWords.map(word => {
-    const normalizedWord = normalize(word);
-    const matchIndex = targetWords.findIndex((tw, idx) => 
-      !targetMatched.has(idx) && normalize(tw) === normalizedWord
-    );
-    
-    if (matchIndex !== -1) {
-      targetMatched.add(matchIndex);
-      return { word, status: 'correct' as const };
-    }
-    
-    // Check if similar (partial match)
-    const partialMatch = targetWords.findIndex((tw, idx) => 
-      !targetMatched.has(idx) && (
-        normalize(tw).includes(normalizedWord) || 
-        normalizedWord.includes(normalize(tw))
-      )
-    );
-    
-    if (partialMatch !== -1 && normalizedWord.length > 2) {
-      targetMatched.add(partialMatch);
-      return { word, status: 'incorrect' as const };
-    }
-    
-    return { word, status: 'extra' as const };
+  const userResult = userWords.map((word, idx) => {
+    const tokenStatus = comparison.userTokens[idx];
+    return {
+      word,
+      status: tokenStatus?.status || 'extra' as const,
+    };
   });
   
-  // Mark target words as matched or missing
-  const targetResult = targetWords.map((word, idx) => ({
-    word,
-    status: targetMatched.has(idx) ? 'matched' as const : 'missing' as const,
-  }));
+  const targetResult = targetWords.map((word, idx) => {
+    const tokenStatus = comparison.targetTokens[idx];
+    return {
+      word,
+      status: tokenStatus?.status || 'missing' as const,
+    };
+  });
   
   return { userWords: userResult, targetWords: targetResult };
 }

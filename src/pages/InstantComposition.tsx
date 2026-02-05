@@ -1,20 +1,24 @@
 import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Zap, Mic, MicOff, Loader2, ChevronRight, Keyboard, GraduationCap, MessageSquare, Sparkles, Lightbulb, Eye } from 'lucide-react';
+import { ArrowLeft, Zap, Mic, MicOff, Loader2, ChevronRight, Keyboard, GraduationCap, MessageSquare, Sparkles, Lightbulb, Eye, Shuffle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { QuizResultScreen } from '@/components/QuizResultScreen';
 import { FadingPractice } from '@/components/FadingPractice';
+import { MatchingGame } from '@/components/MatchingGame';
 import { ThreeAxisScores, calculatePassStatus } from '@/components/ThreeAxisEvaluation';
 import { useInstantComposition } from '@/hooks/useInstantComposition';
 import { useSpeechRecognition } from '@/hooks/useSpeechRecognition';
 import { useSuccessSound } from '@/hooks/useSuccessSound';
+import { useVocabularyLog } from '@/hooks/useVocabularyLog';
 import { supabase } from '@/lib/supabase';
+import { containsExpression, calculateTokenScores } from '@/lib/textComparison';
 import { cn } from '@/lib/utils';
 
 type PracticeMode = 'expressions' | 'sentences';
-type Phase = 'mode_select' | 'start' | 'test' | 'result' | 'practice';
+type ExpressionSubMode = 'flashcard' | 'matching';
+type Phase = 'mode_select' | 'expression_submode' | 'start' | 'test' | 'result' | 'practice' | 'matching_game';
 
 export default function InstantComposition() {
   const navigate = useNavigate();
@@ -48,8 +52,10 @@ export default function InstantComposition() {
   } = useSpeechRecognition();
 
   const { playSuccess } = useSuccessSound();
+  const { logSpokenWords } = useVocabularyLog();
 
   const [mode, setMode] = useState<PracticeMode | null>(null);
+  const [expressionSubMode, setExpressionSubMode] = useState<ExpressionSubMode | null>(null);
   const [phase, setPhase] = useState<Phase>('mode_select');
   const [showTyping, setShowTyping] = useState(false);
   const [typedInput, setTypedInput] = useState('');
@@ -76,11 +82,22 @@ export default function InstantComposition() {
 
   const handleSelectMode = useCallback((selectedMode: PracticeMode) => {
     setMode(selectedMode);
-    setPhase('start');
     if (selectedMode === 'expressions') {
       fetchExpressions();
+      setPhase('expression_submode');
+    } else {
+      setPhase('start');
     }
   }, [fetchExpressions]);
+
+  const handleSelectExpressionSubMode = useCallback((subMode: ExpressionSubMode) => {
+    setExpressionSubMode(subMode);
+    if (subMode === 'matching') {
+      setPhase('matching_game');
+    } else {
+      setPhase('start');
+    }
+  }, []);
 
   const handleStartPractice = useCallback(() => {
     if (mode === 'expressions') {
@@ -118,21 +135,21 @@ export default function InstantComposition() {
     
     try {
       if (mode === 'expressions' && currentExpr) {
-        // Expression-level evaluation - simpler matching
-        const userLower = currentInput.toLowerCase().trim();
-        const targetLower = currentExpr.expression.toLowerCase().trim();
+        // Expression-level evaluation using improved token matching
+        const tokenScores = calculateTokenScores(currentInput, currentExpr.expression);
+        const hasExpression = containsExpression(currentInput, currentExpr.expression);
         
-        const containsExpression = userLower.includes(targetLower) || 
-          targetLower.includes(userLower) ||
-          userLower.split(/\s+/).filter(w => w.length > 2).some(word => 
-            targetLower.split(/\s+/).some(tw => tw.includes(word) || word.includes(tw))
-          );
+        // Log spoken vocabulary
+        logSpokenWords(currentInput);
         
-        const scores: ThreeAxisScores = {
-          meaning: containsExpression ? 'excellent' : 'needs_work',
-          structure: containsExpression ? 'good' : 'needs_work',
-          fluency: 'good',
-        };
+        // Be generous for expression-level: if they got the expression, it's good
+        const scores: ThreeAxisScores = hasExpression 
+          ? { meaning: 'excellent', structure: 'good', fluency: 'good' }
+          : { 
+              meaning: tokenScores.meaning, 
+              structure: tokenScores.structure, 
+              fluency: tokenScores.fluency 
+            };
         
         const passed = calculatePassStatus(scores).passed;
         setEvaluationResult({ scores, passed });
@@ -141,6 +158,9 @@ export default function InstantComposition() {
         if (passed) playSuccess();
       } else if (currentSentence) {
         // Sentence-level evaluation
+        // Log spoken vocabulary
+        logSpokenWords(currentInput);
+        
         const { data } = await supabase.functions.invoke('evaluate-recall', {
           body: {
             originalText: currentSentence.sentence.english,
@@ -315,6 +335,122 @@ export default function InstantComposition() {
     );
   }
 
+  // Expression submode selection
+  if (phase === 'expression_submode') {
+    return (
+      <div className="min-h-screen flex flex-col p-6 safe-bottom">
+        <header className="flex items-center gap-4 mb-8">
+          <Button variant="ghost" size="icon" onClick={() => setPhase('mode_select')}>
+            <ArrowLeft className="w-5 h-5" />
+          </Button>
+          <div>
+            <h1 className="font-bold text-xl">Key Expressions</h1>
+            <p className="text-sm text-muted-foreground">Choose practice style</p>
+          </div>
+        </header>
+
+        <div className="flex-1 flex flex-col items-center justify-center text-center">
+          <h2 className="text-xl font-bold mb-3">How would you like to practice?</h2>
+          <p className="text-muted-foreground mb-6 max-w-sm">
+            Choose between flashcard-style recall or a matching game.
+          </p>
+
+          <div className="w-full max-w-sm space-y-4">
+            {/* Flashcard mode */}
+            <button
+              onClick={() => handleSelectExpressionSubMode('flashcard')}
+              className="w-full text-left bg-card rounded-xl p-5 border border-border transition-all hover:border-primary/50 hover:shadow-md"
+            >
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
+                  <Sparkles className="w-6 h-6 text-primary" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base">Flashcard Quiz</h3>
+                  <p className="text-sm text-muted-foreground">
+                    See Japanese → recall English expression
+                  </p>
+                </div>
+              </div>
+            </button>
+
+            {/* Matching game */}
+            <button
+              onClick={() => handleSelectExpressionSubMode('matching')}
+              className="w-full text-left bg-card rounded-xl p-5 border border-border transition-all hover:border-primary/50 hover:shadow-md"
+            >
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-full bg-secondary/50 flex items-center justify-center shrink-0">
+                  <Shuffle className="w-6 h-6 text-secondary-foreground" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base">Matching Game</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Match Japanese meanings to English expressions
+                  </p>
+                </div>
+              </div>
+            </button>
+          </div>
+
+          {expressionsList.length === 0 && (
+            <div className="bg-muted rounded-xl p-4 mt-6 text-sm text-muted-foreground max-w-sm">
+              Loading expressions...
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // Matching game phase
+  if (phase === 'matching_game') {
+    const validExpressions = expressionsList
+      .filter(e => e.meaning && e.meaning.trim().length > 0)
+      .map(e => ({
+        id: e.id,
+        expression: e.expression,
+        meaning: e.meaning!,
+      }));
+
+    return (
+      <div className="min-h-screen flex flex-col p-6 safe-bottom">
+        <header className="flex items-center gap-4 mb-6">
+          <Button variant="ghost" size="icon" onClick={() => setPhase('expression_submode')}>
+            <ArrowLeft className="w-5 h-5" />
+          </Button>
+          <div>
+            <h1 className="font-bold text-lg flex items-center gap-2">
+              <Shuffle className="w-5 h-5 text-primary" />
+              Matching Game
+            </h1>
+            <p className="text-xs text-muted-foreground">
+              Match Japanese to English
+            </p>
+          </div>
+        </header>
+
+        {validExpressions.length >= 2 ? (
+          <MatchingGame
+            expressions={validExpressions}
+            onComplete={() => setPhase('expression_submode')}
+            onBack={() => setPhase('expression_submode')}
+          />
+        ) : (
+          <div className="flex-1 flex flex-col items-center justify-center text-center">
+            <p className="text-muted-foreground mb-4">
+              Not enough expressions with Japanese meanings for the matching game.
+              Add more expressions first!
+            </p>
+            <Button variant="outline" onClick={() => setPhase('expression_submode')}>
+              Back
+            </Button>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   // Start screen for chosen mode
   if (phase === 'start') {
     const noContent = mode === 'expressions' 
@@ -324,7 +460,7 @@ export default function InstantComposition() {
     return (
       <div className="min-h-screen flex flex-col p-6 safe-bottom">
         <header className="flex items-center gap-4 mb-8">
-          <Button variant="ghost" size="icon" onClick={() => setPhase('mode_select')}>
+          <Button variant="ghost" size="icon" onClick={() => mode === 'expressions' ? setPhase('expression_submode') : setPhase('mode_select')}>
             <ArrowLeft className="w-5 h-5" />
           </Button>
           <div>

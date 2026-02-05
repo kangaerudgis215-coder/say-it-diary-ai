@@ -8,6 +8,7 @@ import { QuizResultScreen } from '@/components/QuizResultScreen';
 import { ThreeAxisScores, calculatePassStatus } from '@/components/ThreeAxisEvaluation';
 import { useSpeechRecognition } from '@/hooks/useSpeechRecognition';
 import { useSuccessSound } from '@/hooks/useSuccessSound';
+import { useVocabularyLog } from '@/hooks/useVocabularyLog';
 import { cn } from '@/lib/utils';
 
 interface PracticeSentence {
@@ -98,6 +99,7 @@ export function ClozeQuiz({ sentences, onComplete, onEvaluate }: ClozeQuizProps)
   } = useSpeechRecognition();
 
   const { playSuccess, playBigSuccess } = useSuccessSound();
+  const { logSpokenWords } = useVocabularyLog();
 
   const currentSentence = sentences[currentIndex];
   const currentInput = showTyping ? typedInput : transcript;
@@ -161,6 +163,9 @@ export function ClozeQuiz({ sentences, onComplete, onEvaluate }: ClozeQuizProps)
     try {
       const result = await onEvaluate(currentInput, currentSentence.english);
       
+      // Log spoken vocabulary
+      logSpokenWords(currentInput);
+      
       const threeAxis = result.threeAxis || {
         meaning: result.score >= 85 ? 'excellent' : result.score >= 60 ? 'good' : 'needs_work',
         structure: result.score >= 85 ? 'excellent' : result.score >= 60 ? 'good' : 'needs_work',
@@ -171,24 +176,11 @@ export function ClozeQuiz({ sentences, onComplete, onEvaluate }: ClozeQuizProps)
       
       setLastScores(threeAxis);
       
-      if (passed) {
-        if (step === 'partial_cloze') {
-          playSuccess();
-          // Move to full cloze
-          setTimeout(() => {
-            setStep('full_cloze');
-            resetTranscript();
-            setTypedInput('');
-          }, 600);
-        } else if (step === 'full_cloze') {
-          playSuccess();
-          // Show result screen with success
-          setTimeout(() => {
-            setStep('result');
-          }, 400);
-        }
+      if (passed) { 
+        playSuccess();
       }
-      // Always show result screen for feedback
+      
+      // Always show result screen for feedback - user controls when to advance
       setStep('result');
     } catch (error) {
       console.error('Evaluation error:', error);
@@ -198,11 +190,12 @@ export function ClozeQuiz({ sentences, onComplete, onEvaluate }: ClozeQuizProps)
   }, [currentSentence, currentInput, step, onEvaluate, playSuccess, resetTranscript]);
 
   const handleTryAgain = useCallback(() => {
-    // Go back to partial cloze for this sentence
-    setStep('partial_cloze');
+    // Go back to the previous cloze step for this sentence
+    setStep(lastScores && calculatePassStatus(lastScores).passed ? 'full_cloze' : 'partial_cloze');
     setLastScores(null);
     resetTranscript();
     setTypedInput('');
+    setLastUserAnswer('');
   }, [resetTranscript]);
 
   const handleNext = useCallback(() => {
