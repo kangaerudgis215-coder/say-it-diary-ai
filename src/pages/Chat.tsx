@@ -17,6 +17,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
 import { useVocabularyLog } from '@/hooks/useVocabularyLog';
+import { normalizeForExpression } from '@/lib/textComparison';
 import { format, parseISO, isToday as isTodayFn } from 'date-fns';
 
 interface Message {
@@ -225,24 +226,45 @@ export default function Chat() {
 
       const data = await response.json();
 
+      // Sanitize important sentences: keep only expressions that actually appear in that sentence.
+      const importantSentences = Array.isArray(data.importantSentences)
+        ? data.importantSentences.map((s: any) => {
+            const sentNorm = normalizeForExpression(String(s?.english ?? ''));
+            const exprs = Array.isArray(s?.expressions)
+              ? s.expressions
+                  .map((x: any) => String(x ?? '').trim())
+                  .filter(Boolean)
+                  .filter((x: string) => sentNorm.includes(normalizeForExpression(x)))
+              : [];
+            return {
+              english: String(s?.english ?? '').trim(),
+              japanese: String(s?.japanese ?? '').trim(),
+              expressions: exprs,
+            };
+          })
+        : [];
+
       // Save diary entry using the diaryDate (not necessarily today)
       // next_review_date is based on when the diary was created (now), not diary_date
       const { error: diaryError } = await supabase
         .from('diary_entries')
-        .upsert({
-          user_id: user.id,
-          conversation_id: conversationId,
-          date: diaryDate,
-          content: data.diary,
-          japanese_summary: data.japaneseSummary,
-          word_count: data.diary.split(/\s+/).length,
-          next_review_date: format(new Date(Date.now() + 24 * 60 * 60 * 1000), 'yyyy-MM-dd'),
-          important_sentences: data.importantSentences || [],
-        }, { onConflict: 'user_id,date' });
+        .upsert(
+          {
+            user_id: user.id,
+            conversation_id: conversationId,
+            date: diaryDate,
+            content: data.diary,
+            japanese_summary: data.japaneseSummary,
+            word_count: data.diary.split(/\s+/).length,
+            next_review_date: format(new Date(Date.now() + 24 * 60 * 60 * 1000), 'yyyy-MM-dd'),
+            important_sentences: importantSentences,
+          },
+          { onConflict: 'user_id,date' }
+        );
 
       if (diaryError) throw diaryError;
 
-      // Save expressions
+      // Save expressions (STRICT): only store expressions that appear in the diary English text.
       if (data.expressions && data.expressions.length > 0) {
         const { data: diaryEntry } = await supabase
           .from('diary_entries')
@@ -252,20 +274,50 @@ export default function Chat() {
           .single();
 
         if (diaryEntry) {
-          await supabase.from('expressions').insert(
-            data.expressions.map((exp: any) => ({
-              user_id: user.id,
-              diary_entry_id: diaryEntry.id,
-              expression: exp.expression,
-              meaning: exp.meaning,
-              example_sentence: exp.example,
-              scene_or_context: exp.scene_or_context || null,
-              pos_or_type: exp.pos_or_type || null,
+          const diaryNorm = normalizeForExpression(String(data.diary ?? ''));
+
+          const candidates = Array.isArray(data.expressions) ? data.expressions : [];
+          const valid = candidates
+            .map((exp: any) => ({
+              expression: String(exp?.expression ?? '').trim(),
+              meaning: exp?.meaning ?? null,
+              example: exp?.example ?? null,
+              scene_or_context: exp?.scene_or_context ?? null,
+              pos_or_type: exp?.pos_or_type ?? null,
             }))
-          );
+            .filter((exp: any) => exp.expression.length > 0)
+            .filter((exp: any) => diaryNorm.includes(normalizeForExpression(exp.expression)));
+
+          const rejectedCount = candidates.length - valid.length;
+          if (rejectedCount > 0) {
+            console.warn(
+              `[expression-validation] Dropped ${rejectedCount} expression(s) because they do not appear in the diary text.`
+            );
+          }
+
+          // Remove old AI-extracted expressions for this diary (keep user-added ones)
+          await supabase
+            .from('expressions')
+            .delete()
+            .eq('user_id', user.id)
+            .eq('diary_entry_id', diaryEntry.id)
+            .eq('is_user_added', false);
+
+          if (valid.length > 0) {
+            await supabase.from('expressions').insert(
+              valid.map((exp: any) => ({
+                user_id: user.id,
+                diary_entry_id: diaryEntry.id,
+                expression: exp.expression,
+                meaning: exp.meaning,
+                example_sentence: exp.example,
+                scene_or_context: exp.scene_or_context,
+                pos_or_type: exp.pos_or_type,
+              }))
+            );
+          }
         }
       }
-
       // Profile streak is now auto-updated by database trigger on diary_entries changes
 
       // Update conversation status

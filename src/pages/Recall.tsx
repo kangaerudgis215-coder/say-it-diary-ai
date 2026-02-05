@@ -17,6 +17,10 @@ import {
   loadDiarySentences,
   PracticeSentence,
 } from '@/lib/practiceBuilder';
+import {
+  cleanupInvalidDiaryLinkedExpressions,
+  partitionExpressionsForText,
+} from '@/lib/expressionValidation';
 
 interface EvaluationResult {
   score: number;
@@ -46,6 +50,7 @@ export default function Recall() {
   const [phase, setPhase] = useState<RecallPhase>('study');
   const [evaluationResult, setEvaluationResult] = useState<EvaluationResult | null>(null);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
+  const [didGlobalCleanup, setDidGlobalCleanup] = useState(false);
 
   useEffect(() => {
     fetchDiaryForRecall();
@@ -58,6 +63,12 @@ export default function Recall() {
     setExpressions([]);
     setPracticeSentences([]);
     setEvaluationResult(null);
+
+    // One-time global cleanup: unlink any expression that is not actually present in its diary text.
+    if (!didGlobalCleanup) {
+      await cleanupInvalidDiaryLinkedExpressions(supabase, user.id);
+      setDidGlobalCleanup(true);
+    }
 
     const today = format(new Date(), 'yyyy-MM-dd');
 
@@ -92,23 +103,36 @@ export default function Recall() {
         .eq('diary_entry_id', entry.id);
 
       const exprList = exprs || [];
-      setDiaryEntry(entry);
-      setExpressions(exprList);
 
-      // Try to load canonical sentences from DB
-      let sentences = await loadDiarySentences(supabase, user.id, entry.id);
-
-      if (!sentences || sentences.length === 0) {
-        // Build from scratch and persist
-        const exprStrings = exprList.map((e) => e.expression);
-        const important = entry.important_sentences as any[] | null;
-        sentences = buildPracticeSentences(
-          entry.content,
-          entry.japanese_summary,
-          exprStrings,
-          important
+      // Strict validation: show/use only expressions that actually exist in the diary English text.
+      const { valid, invalid } = partitionExpressionsForText(exprList, entry.content || '');
+      if (invalid.length > 0) {
+        console.warn(
+          `[expression-validation] Found ${invalid.length} invalid expression(s) for diary ${entry.id}. Unlinking them.`
         );
-        await persistDiarySentences(supabase, user.id, entry.id, sentences);
+        await supabase
+          .from('expressions')
+          .update({ diary_entry_id: null })
+          .in(
+            'id',
+            invalid.map((x: any) => x.id)
+          )
+          .eq('user_id', user.id);
+      }
+
+      setDiaryEntry(entry);
+      setExpressions(valid);
+
+      const exprStrings = valid.map((e: any) => e.expression);
+      const important = entry.important_sentences as any[] | null;
+      const rebuilt = buildPracticeSentences(entry.content, entry.japanese_summary, exprStrings, important);
+
+      // Canonical sentences: load if present, but repair/rebuild if needed.
+      let sentences = await loadDiarySentences(supabase, user.id, entry.id);
+      const needsPersist = !sentences || JSON.stringify(sentences) !== JSON.stringify(rebuilt);
+      if (needsPersist) {
+        await persistDiarySentences(supabase, user.id, entry.id, rebuilt);
+        sentences = rebuilt;
       }
 
       setPracticeSentences(sentences);
