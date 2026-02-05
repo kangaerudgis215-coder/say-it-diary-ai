@@ -1,4 +1,4 @@
- import { useCallback } from 'react';
+ import { useCallback, useState } from 'react';
  import { useAuth } from '@/hooks/useAuth';
  import { supabase } from '@/lib/supabase';
  import { format } from 'date-fns';
@@ -37,20 +37,32 @@
    return [...new Set(words)];
  }
  
+ /**
+  * Hook to log spoken vocabulary words
+  */
  export function useVocabularyLog() {
    const { user } = useAuth();
+   const [isLogging, setIsLogging] = useState(false);
  
    /**
     * Log spoken words for today
     * This upserts the vocabulary log for today, adding new words to the existing list
     */
-   const logSpokenWords = useCallback(async (spokenText: string) => {
-     if (!user || !spokenText.trim()) return;
+   const logSpokenWords = useCallback(async (spokenText: string): Promise<boolean> => {
+     if (!user || !spokenText.trim()) return false;
+ 
+     if (isLogging) return false; // Prevent concurrent logging
+     setIsLogging(true);
  
      const today = format(new Date(), 'yyyy-MM-dd');
      const newWords = extractMeaningfulWords(spokenText);
      
-     if (newWords.length === 0) return;
+     if (newWords.length === 0) {
+       setIsLogging(false);
+       return false;
+     }
+ 
+     console.log('[VocabLog] Logging', newWords.length, 'new words for', today);
  
      try {
        // First, try to get existing log for today
@@ -75,9 +87,11 @@
              updated_at: new Date().toISOString(),
            })
            .eq('id', existingLog.id);
+ 
+         console.log('[VocabLog] Updated log, total words:', allWords.length);
        } else {
          // Create new log for today
-         await supabase
+         const { error } = await supabase
            .from('spoken_vocabulary_logs')
            .insert({
              user_id: user.id,
@@ -85,11 +99,22 @@
              unique_words: newWords,
              word_count: newWords.length,
            });
+ 
+         if (error) {
+           console.error('[VocabLog] Insert error:', error);
+         } else {
+           console.log('[VocabLog] Created new log with', newWords.length, 'words');
+         }
        }
+ 
+       setIsLogging(false);
+       return true;
      } catch (error) {
        console.error('Failed to log vocabulary:', error);
+       setIsLogging(false);
+       return false;
      }
-   }, [user]);
+   }, [user, isLogging]);
  
-   return { logSpokenWords };
+   return { logSpokenWords, isLogging };
  }

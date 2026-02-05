@@ -1,12 +1,13 @@
  import { useEffect, useState } from 'react';
  import { useNavigate } from 'react-router-dom';
- import { ArrowLeft, TrendingUp, Calendar, Target } from 'lucide-react';
+ import { ArrowLeft, TrendingUp, Calendar, Target, RefreshCw, Loader2 } from 'lucide-react';
  import { Button } from '@/components/ui/button';
  import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
  import { useAuth } from '@/hooks/useAuth';
  import { supabase } from '@/lib/supabase';
  import { format, subDays } from 'date-fns';
  import { cn } from '@/lib/utils';
+ import { useToast } from '@/hooks/use-toast';
  
  interface VocabLog {
    date: string;
@@ -16,9 +17,11 @@
  export default function Progress() {
    const navigate = useNavigate();
    const { user } = useAuth();
+   const { toast } = useToast();
    const [logs, setLogs] = useState<VocabLog[]>([]);
    const [isLoading, setIsLoading] = useState(true);
    const [animationStarted, setAnimationStarted] = useState(false);
+   const [isBackfilling, setIsBackfilling] = useState(false);
  
    useEffect(() => {
      if (user) {
@@ -74,6 +77,91 @@
    const maxCount = Math.max(...last7Days.map(d => d.count), 1);
    const avgCount = last7Days.reduce((sum, d) => sum + d.count, 0) / 7;
  
+   // Backfill vocabulary from past messages
+   const backfillVocabulary = async () => {
+     if (!user) return;
+     setIsBackfilling(true);
+ 
+     try {
+       // Get all user messages grouped by date
+       const { data: messages } = await supabase
+         .from('messages')
+         .select('content, created_at')
+         .eq('user_id', user.id)
+         .eq('role', 'user')
+         .order('created_at', { ascending: true });
+ 
+       if (!messages || messages.length === 0) {
+         toast({ title: 'No messages found', description: 'Start a diary conversation first!' });
+         setIsBackfilling(false);
+         return;
+       }
+ 
+       // Common function words to exclude
+       const STOP_WORDS = new Set([
+         'i', 'me', 'my', 'myself', 'we', 'our', 'ours', 'ourselves', 'you', 'your', 'yours',
+         'yourself', 'yourselves', 'he', 'him', 'his', 'himself', 'she', 'her', 'hers',
+         'herself', 'it', 'its', 'itself', 'they', 'them', 'their', 'theirs', 'themselves',
+         'what', 'which', 'who', 'whom', 'this', 'that', 'these', 'those', 'am', 'is', 'are',
+         'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had', 'having', 'do', 'does',
+         'did', 'doing', 'a', 'an', 'the', 'and', 'but', 'if', 'or', 'because', 'as', 'until',
+         'while', 'of', 'at', 'by', 'for', 'with', 'about', 'against', 'between', 'into',
+         'through', 'during', 'before', 'after', 'above', 'below', 'to', 'from', 'up', 'down',
+         'in', 'out', 'on', 'off', 'over', 'under', 'again', 'further', 'then', 'once', 'here',
+         'there', 'when', 'where', 'why', 'how', 'all', 'each', 'few', 'more', 'most', 'other',
+         'some', 'such', 'no', 'nor', 'not', 'only', 'own', 'same', 'so', 'than', 'too', 'very',
+         's', 't', 'can', 'will', 'just', 'don', 'should', 'now', 'd', 'll', 'm', 'o', 're',
+         've', 'y', 'ain', 'aren', 'couldn', 'didn', 'doesn', 'hadn', 'hasn', 'haven', 'isn',
+         'ma', 'mightn', 'mustn', 'needn', 'shan', 'shouldn', 'wasn', 'weren', 'won', 'wouldn',
+         'also', 'really', 'well', 'yeah', 'yes', 'no', 'ok', 'okay', 'um', 'uh', 'like'
+       ]);
+ 
+       // Group messages by date
+       const messagesByDate: { [date: string]: string[] } = {};
+       for (const msg of messages) {
+         const date = format(new Date(msg.created_at), 'yyyy-MM-dd');
+         if (!messagesByDate[date]) {
+           messagesByDate[date] = [];
+         }
+         messagesByDate[date].push(msg.content);
+       }
+ 
+       // Calculate word counts for each date
+       for (const [date, contents] of Object.entries(messagesByDate)) {
+         const combinedText = contents.join(' ');
+         const words = combinedText
+           .toLowerCase()
+           .replace(/[.,!?;:'"()\-]/g, ' ')
+           .split(/\s+/)
+           .filter(w => w.length > 2)
+           .filter(w => !STOP_WORDS.has(w))
+           .filter(w => !/^\d+$/.test(w));
+         
+         const uniqueWords = [...new Set(words)];
+ 
+         if (uniqueWords.length > 0) {
+           // Upsert the vocabulary log
+           await supabase
+             .from('spoken_vocabulary_logs')
+             .upsert({
+               user_id: user.id,
+               date: date,
+               unique_words: uniqueWords,
+               word_count: uniqueWords.length,
+             }, { onConflict: 'user_id,date' });
+         }
+       }
+ 
+       toast({ title: 'Vocabulary synced!', description: `Updated ${Object.keys(messagesByDate).length} days of data.` });
+       fetchVocabLogs();
+     } catch (error) {
+       console.error('Backfill error:', error);
+       toast({ variant: 'destructive', title: 'Sync failed', description: 'Could not sync vocabulary data.' });
+     } finally {
+       setIsBackfilling(false);
+     }
+   };
+ 
    return (
      <div className="min-h-screen flex flex-col p-6 safe-bottom">
        <header className="flex items-center gap-4 mb-8">
@@ -84,6 +172,21 @@
            <h1 className="font-bold text-xl">Progress</h1>
            <p className="text-sm text-muted-foreground">Your speaking vocabulary trend</p>
          </div>
+ 
+         {/* Sync button */}
+         <Button
+           variant="ghost"
+           size="icon"
+           onClick={backfillVocabulary}
+           disabled={isBackfilling}
+           className="ml-auto"
+         >
+           {isBackfilling ? (
+             <Loader2 className="w-5 h-5 animate-spin" />
+           ) : (
+             <RefreshCw className="w-5 h-5" />
+           )}
+         </Button>
        </header>
  
        {/* Today's Summary */}
@@ -188,9 +291,27 @@
            <p className="text-muted-foreground mb-4">
              No vocabulary data yet. Start speaking to track your progress!
            </p>
-           <Button variant="outline" onClick={() => navigate('/chat')}>
-             Start today's diary
-           </Button>
+           <div className="space-y-2">
+             <Button variant="glow" onClick={backfillVocabulary} disabled={isBackfilling}>
+               {isBackfilling ? (
+                 <>
+                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                   Syncing...
+                 </>
+               ) : (
+                 <>
+                   <RefreshCw className="w-4 h-4 mr-2" />
+                   Sync from past diaries
+                 </>
+               )}
+             </Button>
+             <p className="text-xs text-muted-foreground">
+               or
+             </p>
+             <Button variant="outline" onClick={() => navigate('/chat')}>
+               Start today's diary
+             </Button>
+           </div>
          </div>
        )}
      </div>

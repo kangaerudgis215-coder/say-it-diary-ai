@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Mic, Brain, BookOpen, Sparkles, LogOut, Zap, TrendingUp } from 'lucide-react';
+ import { Mic, Brain, BookOpen, Sparkles, LogOut, Shuffle, TrendingUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { StreakBadge } from '@/components/StreakBadge';
 import { ActionCard } from '@/components/ActionCard';
@@ -160,11 +160,11 @@ export default function Home() {
           disabled={!hasPastDiaries}
         />
 
-        {/* 3. Instant English Composition */}
+         {/* 3. Expression Memory Game */}
         <ActionCard
-          icon={<Zap className="w-8 h-8" />}
-          title="Instant English"
-          description="瞬間英作文 - Quick composition from Japanese"
+           icon={<Shuffle className="w-8 h-8" />}
+           title="Expression Memory Game"
+           description="フレーズ神経衰弱 - Match Japanese ↔ English"
           onClick={() => navigate('/instant')}
           variant="secondary"
         />
