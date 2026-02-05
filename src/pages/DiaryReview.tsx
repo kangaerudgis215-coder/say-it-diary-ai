@@ -1,16 +1,22 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Volume2, Check, Loader2, Eye, RotateCcw, BookOpen, Target, Home } from 'lucide-react';
+import { ArrowLeft, Volume2, Loader2, BookOpen, Home } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { SelectableText } from '@/components/SelectableText';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
-import { ClozeQuiz } from '@/components/ClozeQuiz';
+import { SentencePracticeFlow } from '@/components/practice/SentencePracticeFlow';
 import { ThreeAxisEvaluation, ThreeAxisScores } from '@/components/ThreeAxisEvaluation';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
+import {
+  buildPracticeSentences,
+  persistDiarySentences,
+  loadDiarySentences,
+  PracticeSentence,
+} from '@/lib/practiceBuilder';
 
 interface EvaluationResult {
   score: number;
@@ -28,12 +34,13 @@ export default function DiaryReview() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { toast } = useToast();
-  
+
   const diaryId = searchParams.get('diaryId');
   const diaryDate = searchParams.get('date');
 
   const [diaryEntry, setDiaryEntry] = useState<any>(null);
   const [expressions, setExpressions] = useState<any[]>([]);
+  const [practiceSentences, setPracticeSentences] = useState<PracticeSentence[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [phase, setPhase] = useState<ReviewPhase>('study');
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
@@ -59,12 +66,22 @@ export default function DiaryReview() {
     if (entry) {
       setDiaryEntry(entry);
 
-      const { data: exprs } = await supabase
-        .from('expressions')
-        .select('*')
-        .eq('diary_entry_id', entry.id);
+      const { data: exprs } = await supabase.from('expressions').select('*').eq('diary_entry_id', entry.id);
 
-      setExpressions(exprs || []);
+      const exprList = exprs || [];
+      setExpressions(exprList);
+
+      // Load or build canonical sentences
+      let sentences = await loadDiarySentences(supabase, user.id, entry.id);
+
+      if (!sentences || sentences.length === 0) {
+        const exprStrings = exprList.map((e) => e.expression);
+        const important = entry.important_sentences as any[] | null;
+        sentences = buildPracticeSentences(entry.content, entry.japanese_summary, exprStrings, important);
+        await persistDiarySentences(supabase, user.id, entry.id, sentences);
+      }
+
+      setPracticeSentences(sentences);
     }
 
     setIsLoading(false);
@@ -74,14 +91,14 @@ export default function DiaryReview() {
     if (!diaryEntry?.content || isPlayingAudio) return;
 
     setIsPlayingAudio(true);
-    
+
     try {
       const utterance = new SpeechSynthesisUtterance(diaryEntry.content);
       utterance.lang = 'en-US';
       utterance.rate = 0.9;
       utterance.onend = () => setIsPlayingAudio(false);
       utterance.onerror = () => setIsPlayingAudio(false);
-      
+
       speechSynthesis.speak(utterance);
     } catch (error) {
       console.error('TTS error:', error);
@@ -103,79 +120,48 @@ export default function DiaryReview() {
     setPhase('practice');
   };
 
-  // Evaluate a single sentence or full diary - returns object for new 3-axis system
-  const handleEvaluate = useCallback(async (attemptText: string, targetText: string): Promise<{ score: number; threeAxis?: ThreeAxisScores; passed?: boolean }> => {
-    try {
-      const { data, error } = await supabase.functions.invoke('evaluate-recall', {
-        body: {
-          originalText: targetText,
-          recallText: attemptText,
-          expressions: [],
-        },
-      });
+  // Handle practice completion
+  const handlePracticeComplete = useCallback(
+    async (userAttempt: string, accuracy: number, usedExprs: string[], missedExprs: string[]) => {
+      if (!user || !diaryEntry) return;
 
-      if (error) throw error;
-      return {
-        score: data.score || 0,
-        threeAxis: data.threeAxis as ThreeAxisScores | undefined,
-        passed: data.passed,
-      };
-    } catch (error) {
-      console.error('Evaluation error:', error);
-      // Be generous on error
-      return { score: 85, passed: true };
-    }
-  }, []);
+      try {
+        const result: EvaluationResult = {
+          score: accuracy,
+          feedback:
+            usedExprs.length > 0
+              ? `You used ${usedExprs.length} key expression${usedExprs.length > 1 ? 's' : ''}!`
+              : 'Great effort!',
+          usedExpressions: usedExprs,
+          missedExpressions: missedExprs,
+          passed: accuracy >= 60,
+        };
 
-  // Handle practice completion (final quiz done)
-  const handlePracticeComplete = useCallback(async (transcript: string, score: number, passed: boolean) => {
-    if (!user || !diaryEntry) return;
+        // Save the session
+        await supabase.from('recall_sessions').insert({
+          user_id: user.id,
+          diary_entry_id: diaryEntry.id,
+          user_attempt: userAttempt,
+          hints_used: ['today_memory_test_3step'],
+          completed: true,
+          score: result.score,
+          used_expressions: result.usedExpressions,
+          missed_expressions: result.missedExpressions,
+        });
 
-    try {
-      const expressionTexts = expressions.map(e => e.expression);
-      
-      // Get detailed evaluation for the result screen
-      const { data: evalData } = await supabase.functions.invoke('evaluate-recall', {
-        body: {
-          originalText: diaryEntry.content,
-          recallText: transcript,
-          expressions: expressionTexts,
-        },
-      });
-
-      const result: EvaluationResult = {
-        score: evalData?.score || score,
-        feedback: evalData?.feedback || 'Great effort!',
-        usedExpressions: evalData?.usedExpressions || [],
-        missedExpressions: evalData?.missedExpressions || [],
-        threeAxis: evalData?.threeAxis,
-        passed: evalData?.passed ?? passed,
-      };
-
-      // Save the session
-      await supabase.from('recall_sessions').insert({
-        user_id: user.id,
-        diary_entry_id: diaryEntry.id,
-        user_attempt: transcript,
-        hints_used: ['today_memory_test'],
-        completed: true,
-        score: result.score,
-        used_expressions: result.usedExpressions,
-        missed_expressions: result.missedExpressions,
-      });
-
-      setEvaluationResult(result);
-      setPhase('result');
-
-    } catch (error) {
-      console.error('Save error:', error);
-      toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: 'Failed to save your practice session.',
-      });
-    }
-  }, [user, diaryEntry, expressions, toast]);
+        setEvaluationResult(result);
+        setPhase('result');
+      } catch (error) {
+        console.error('Save error:', error);
+        toast({
+          variant: 'destructive',
+          title: 'Error',
+          description: 'Failed to save your practice session.',
+        });
+      }
+    },
+    [user, diaryEntry, toast]
+  );
 
   const handleTryAgain = () => {
     setPhase('practice');
@@ -215,7 +201,7 @@ export default function DiaryReview() {
 
   // Result Phase
   if (phase === 'result' && evaluationResult) {
-    const isPassed = evaluationResult.passed ?? evaluationResult.score >= 70;
+    const isPassed = evaluationResult.passed ?? evaluationResult.score >= 60;
 
     return (
       <div className="min-h-screen flex flex-col p-6 safe-bottom">
@@ -228,29 +214,21 @@ export default function DiaryReview() {
 
         <div className="flex-1 flex flex-col items-center justify-center gap-6">
           {/* Three-axis evaluation */}
-          {evaluationResult.threeAxis && (
-            <ThreeAxisEvaluation scores={evaluationResult.threeAxis} size="lg" />
-          )}
+          {evaluationResult.threeAxis && <ThreeAxisEvaluation scores={evaluationResult.threeAxis} size="lg" />}
 
           {/* Feedback */}
           <div className="text-center max-w-sm">
             {isPassed ? (
               <>
-                <h2 className="text-xl font-bold text-green-500 mb-2">
-                  🎉 Great job!
-                </h2>
+                <h2 className="text-xl font-bold text-primary mb-2">🎉 Great job!</h2>
                 <p className="text-muted-foreground">
                   You remembered today's diary very well. Today's memorization is complete!
                 </p>
               </>
             ) : (
               <>
-                <h2 className="text-xl font-bold text-primary mb-2">
-                  Nice try! 💪
-                </h2>
-                <p className="text-muted-foreground">
-                  {evaluationResult.feedback}
-                </p>
+                <h2 className="text-xl font-bold text-primary mb-2">Nice try! 💪</h2>
+                <p className="text-muted-foreground">{evaluationResult.feedback}</p>
                 <p className="text-sm text-muted-foreground mt-2">
                   You've done great practice! Try the full recall again when you're ready.
                 </p>
@@ -260,11 +238,11 @@ export default function DiaryReview() {
 
           {/* Expressions Used/Missed */}
           {evaluationResult.usedExpressions.length > 0 && (
-            <div className="w-full max-w-sm bg-green-500/10 rounded-xl p-4">
+            <div className="w-full max-w-sm bg-primary/10 rounded-xl p-4">
               <p className="text-xs text-muted-foreground mb-2 uppercase">Expressions you used ✓</p>
               <div className="flex flex-wrap gap-2">
                 {evaluationResult.usedExpressions.map((exp, i) => (
-                  <span key={i} className="text-xs bg-green-500/20 text-green-400 px-2 py-1 rounded">
+                  <span key={i} className="text-xs bg-primary/20 text-primary px-2 py-1 rounded">
                     {exp}
                   </span>
                 ))}
@@ -277,7 +255,10 @@ export default function DiaryReview() {
               <p className="text-xs text-muted-foreground mb-2 uppercase">Expressions to practice</p>
               <div className="flex flex-wrap gap-2">
                 {evaluationResult.missedExpressions.map((exp, i) => (
-                  <span key={i} className="text-xs bg-muted-foreground/20 text-muted-foreground px-2 py-1 rounded">
+                  <span
+                    key={i}
+                    className="text-xs bg-muted-foreground/20 text-muted-foreground px-2 py-1 rounded"
+                  >
                     {exp}
                   </span>
                 ))}
@@ -296,11 +277,9 @@ export default function DiaryReview() {
           ) : (
             <>
               <Button variant="glow" size="lg" className="w-full" onClick={handleTryAgain}>
-                <RotateCcw className="w-5 h-5 mr-2" />
                 Practice Again
               </Button>
               <Button variant="outline" size="lg" className="w-full" onClick={handleBackToStudy}>
-                <Eye className="w-5 h-5 mr-2" />
                 Review Diary Again
               </Button>
             </>
@@ -310,42 +289,18 @@ export default function DiaryReview() {
     );
   }
 
-  // Practice Phase - use ClozeQuiz with important sentences
+  // Practice Phase - unified 3-step flow
   if (phase === 'practice') {
-    // Parse important_sentences if available
-    const importantSentences = diaryEntry.important_sentences 
-      ? (diaryEntry.important_sentences as Array<{ english: string; japanese: string; expressions?: string[] }>)
-      : null;
-
-    // Build sentences array for ClozeQuiz
-    const practiceSentences = importantSentences && importantSentences.length > 0
-      ? importantSentences
-      : diaryEntry.content.split(/[.!?]+/).filter((s: string) => s.trim()).map((s: string, i: number) => ({
-          english: s.trim() + '.',
-          japanese: diaryEntry.japanese_summary?.split(/[。！？]+/)[i]?.trim() || '',
-          expressions: expressions.filter(e => s.toLowerCase().includes(e.expression.toLowerCase())).map(e => e.expression),
-        }));
-
     return (
-      <div className="min-h-screen flex flex-col p-6 safe-bottom">
-        <header className="flex items-center gap-4 mb-4">
-          <Button variant="ghost" size="icon" onClick={handleBackToStudy}>
-            <ArrowLeft className="w-5 h-5" />
-          </Button>
-          <div>
-            <h1 className="font-bold text-xl">Sentence Practice</h1>
-            <p className="text-sm text-muted-foreground">{dateLabel}</p>
-          </div>
-        </header>
-
-        <div className="flex-1">
-          <ClozeQuiz 
-            sentences={practiceSentences}
-            onComplete={handlePracticeComplete}
-            onEvaluate={handleEvaluate}
-          />
-        </div>
-      </div>
+      <SentencePracticeFlow
+        sentences={practiceSentences}
+        japaneseSummary={diaryEntry.japanese_summary || ''}
+        englishDiary={diaryEntry.content || ''}
+        onComplete={handlePracticeComplete}
+        onBack={handleBackToStudy}
+        title="Sentence Practice"
+        subtitle={dateLabel}
+      />
     );
   }
 
@@ -375,19 +330,13 @@ export default function DiaryReview() {
                 onClick={isPlayingAudio ? handleStopAudio : handlePlayAudio}
                 disabled={!diaryEntry.content}
               >
-                {isPlayingAudio ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Volume2 className="w-4 h-4" />
-                )}
-                <span className="ml-1 text-xs">
-                  {isPlayingAudio ? 'Stop' : 'Listen'}
-                </span>
+                {isPlayingAudio ? <Loader2 className="w-4 h-4 animate-spin" /> : <Volume2 className="w-4 h-4" />}
+                <span className="ml-1 text-xs">{isPlayingAudio ? 'Stop' : 'Listen'}</span>
               </Button>
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <SelectableText 
+            <SelectableText
               text={diaryEntry.content}
               diaryEntryId={diaryEntry.id}
               className="text-sm leading-relaxed"
@@ -414,16 +363,14 @@ export default function DiaryReview() {
         {expressions.length > 0 && (
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-base">💡 Key Expressions</CardTitle>
+              <CardTitle className="text-base">💡 Key Expressions ({expressions.length})</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
                 {expressions.map((exp) => (
                   <div key={exp.id} className="bg-muted rounded-lg p-3">
                     <p className="font-medium text-sm text-primary">{exp.expression}</p>
-                    {exp.meaning && (
-                      <p className="text-xs text-muted-foreground mt-1">{exp.meaning}</p>
-                    )}
+                    {exp.meaning && <p className="text-xs text-muted-foreground mt-1">{exp.meaning}</p>}
                     {exp.example_sentence && (
                       <p className="text-xs text-muted-foreground/70 mt-1 italic">
                         e.g. {exp.example_sentence}
@@ -435,13 +382,28 @@ export default function DiaryReview() {
             </CardContent>
           </Card>
         )}
+
+        {/* Practice coverage */}
+        <Card className="bg-muted/30">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">📋 Practice coverage</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground">
+              {practiceSentences.length} sentence{practiceSentences.length !== 1 ? 's' : ''} ×{' '}
+              {practiceSentences.reduce((c, s) => c + (s.expressions?.length || 0), 0)} expression
+              {practiceSentences.reduce((c, s) => c + (s.expressions?.length || 0), 0) !== 1 ? 's' : ''} to
+              practice
+            </p>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Action Buttons */}
       <div className="mt-6 space-y-3">
         <p className="text-xs text-muted-foreground text-center">
-          Read the diary, listen to the audio, and review the expressions.
-          When ready, start the sentence practice!
+          Read the diary, listen to the audio, and review the expressions. When ready, start the sentence
+          practice!
         </p>
         <Button variant="glow" size="lg" className="w-full" onClick={handleStartPractice}>
           <BookOpen className="w-5 h-5 mr-2" />
