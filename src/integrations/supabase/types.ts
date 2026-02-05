@@ -94,6 +94,42 @@ export type Database = {
           },
         ]
       }
+      diary_sentences: {
+        Row: {
+          created_at: string
+          diary_entry_id: string
+          english_sentence: string
+          id: string
+          japanese_sentence: string
+          key_expressions: string[]
+          sentence_index: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          diary_entry_id: string
+          english_sentence: string
+          id?: string
+          japanese_sentence?: string
+          key_expressions?: string[]
+          sentence_index: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          diary_entry_id?: string
+          english_sentence?: string
+          id?: string
+          japanese_sentence?: string
+          key_expressions?: string[]
+          sentence_index?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       expressions: {
         Row: {
           created_at: string

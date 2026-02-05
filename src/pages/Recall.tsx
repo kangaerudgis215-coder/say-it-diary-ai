@@ -1,18 +1,22 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Loader2, AlertCircle, Home, RotateCcw, Eye, BookOpen } from 'lucide-react';
+import { ArrowLeft, Loader2, AlertCircle, Home, BookOpen, Volume2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { SelectableText } from '@/components/SelectableText';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
-import { ClozeQuiz } from '@/components/ClozeQuiz';
+import { SentencePracticeFlow } from '@/components/practice/SentencePracticeFlow';
 import { RecallResult } from '@/components/RecallResult';
 import { ThreeAxisScores } from '@/components/ThreeAxisEvaluation';
 import { format } from 'date-fns';
-import { cn } from '@/lib/utils';
-import { normalizeForExpression } from '@/lib/textComparison';
+import {
+  buildPracticeSentences,
+  persistDiarySentences,
+  loadDiarySentences,
+  PracticeSentence,
+} from '@/lib/practiceBuilder';
 
 interface EvaluationResult {
   score: number;
@@ -36,73 +40,23 @@ export default function Recall() {
 
   const [diaryEntry, setDiaryEntry] = useState<any>(null);
   const [expressions, setExpressions] = useState<any[]>([]);
+  const [practiceSentences, setPracticeSentences] = useState<PracticeSentence[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [sourceMode, setSourceMode] = useState<'latest' | 'calendar' | 'random'>('latest');
   const [phase, setPhase] = useState<RecallPhase>('study');
   const [evaluationResult, setEvaluationResult] = useState<EvaluationResult | null>(null);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
 
-  type PracticeSentence = { english: string; japanese: string; expressions: string[] };
-
   useEffect(() => {
     fetchDiaryForRecall();
   }, [user, diaryIdFromUrl, modeFromUrl]);
-
-  const expressionAppearsInSentence = useCallback((englishSentence: string, expression: string) => {
-    const sent = normalizeForExpression(englishSentence);
-    const expr = normalizeForExpression(expression);
-    if (!expr) return false;
-    return sent.includes(expr);
-  }, []);
-
-  const buildPracticeSentences = useCallback((entry: any, exprs: any[]): PracticeSentence[] => {
-    const allExpressions: string[] = (exprs || [])
-      .map((e) => e?.expression)
-      .filter((x): x is string => typeof x === 'string' && x.trim().length > 0);
-
-    const important = entry?.important_sentences
-      ? (entry.important_sentences as Array<{ english: string; japanese: string; expressions?: string[]; key_expressions?: string[] }>)
-      : null;
-
-    if (important && important.length > 0) {
-      return important.map((s) => {
-        const candidates: string[] = (s.expressions ?? s.key_expressions ?? [])
-          .filter((x): x is string => typeof x === 'string' && x.trim().length > 0);
-
-        const aligned = candidates.filter((expr) => expressionAppearsInSentence(s.english, expr));
-        const fallback: string[] = aligned.length > 0
-          ? aligned
-          : allExpressions.filter((expr) => expressionAppearsInSentence(s.english, expr));
-
-        return {
-          english: s.english,
-          japanese: s.japanese,
-          expressions: Array.from(new Set<string>(fallback)),
-        };
-      });
-    }
-
-    // Fallback: split diary content and attach only expressions that appear in each sentence.
-    const englishSentences = (entry?.content || '')
-      .split(/[.!?]+/)
-      .filter((s: string) => s.trim());
-
-    const japaneseSentences = (entry?.japanese_summary || '')
-      .split(/[。！？]+/)
-      .map((s: string) => s.trim());
-
-    return englishSentences.map((s: string, i: number): PracticeSentence => ({
-      english: s.trim() + '.',
-      japanese: japaneseSentences[i] || '',
-      expressions: allExpressions.filter((expr) => expressionAppearsInSentence(s, expr)),
-    }));
-  }, [expressionAppearsInSentence]);
 
   const fetchDiaryForRecall = async () => {
     if (!user) return;
     setIsLoading(true);
     setDiaryEntry(null);
     setExpressions([]);
+    setPracticeSentences([]);
     setEvaluationResult(null);
 
     const today = format(new Date(), 'yyyy-MM-dd');
@@ -138,32 +92,28 @@ export default function Recall() {
         .eq('diary_entry_id', entry.id);
 
       const exprList = exprs || [];
-
-      // Repair important_sentences so key expressions always come from the same sentence.
-      // We only keep expressions that are actually a substring of that exact english sentence.
-      if (Array.isArray(entry.important_sentences) && entry.important_sentences.length > 0) {
-        const repaired = buildPracticeSentences(entry, exprList);
-        const current = (entry.important_sentences as any[]).map((s) => ({
-          english: s.english,
-          japanese: s.japanese,
-          expressions: s.expressions,
-        }));
-
-        if (JSON.stringify(repaired) !== JSON.stringify(current)) {
-          await supabase
-            .from('diary_entries')
-            .update({ important_sentences: repaired })
-            .eq('id', entry.id)
-            .eq('user_id', user.id);
-
-          entry = { ...entry, important_sentences: repaired };
-        }
-      }
-
       setDiaryEntry(entry);
       setExpressions(exprList);
+
+      // Try to load canonical sentences from DB
+      let sentences = await loadDiarySentences(supabase, user.id, entry.id);
+
+      if (!sentences || sentences.length === 0) {
+        // Build from scratch and persist
+        const exprStrings = exprList.map((e) => e.expression);
+        const important = entry.important_sentences as any[] | null;
+        sentences = buildPracticeSentences(
+          entry.content,
+          entry.japanese_summary,
+          exprStrings,
+          important
+        );
+        await persistDiarySentences(supabase, user.id, entry.id, sentences);
+      }
+
+      setPracticeSentences(sentences);
     }
-    
+
     setIsLoading(false);
   };
 
@@ -176,7 +126,7 @@ export default function Recall() {
     utterance.rate = 0.9;
     utterance.onend = () => setIsPlayingAudio(false);
     utterance.onerror = () => setIsPlayingAudio(false);
-    
+
     speechSynthesis.speak(utterance);
   }, [diaryEntry, isPlayingAudio]);
 
@@ -185,92 +135,57 @@ export default function Recall() {
     setIsPlayingAudio(false);
   }, []);
 
-  // Evaluate a single sentence or full diary - returns object for new 3-axis system
-  const handleEvaluate = useCallback(async (attemptText: string, targetText: string): Promise<{ score: number; threeAxis?: ThreeAxisScores; passed?: boolean }> => {
-    try {
-      const { data, error } = await supabase.functions.invoke('evaluate-recall', {
-        body: {
-          originalText: targetText,
-          recallText: attemptText,
-          expressions: [],
-        },
-      });
+  // Handle practice completion from the unified flow
+  const handlePracticeComplete = useCallback(
+    async (userAttempt: string, accuracy: number, usedExprs: string[], missedExprs: string[]) => {
+      if (!user || !diaryEntry) return;
 
-      if (error) throw error;
-      return {
-        score: data.score || 0,
-        threeAxis: data.threeAxis as ThreeAxisScores | undefined,
-        passed: data.passed,
-      };
-    } catch (error) {
-      console.error('Evaluation error:', error);
-      return { score: 85, passed: true };
-    }
-  }, []);
+      try {
+        const result: EvaluationResult = {
+          score: accuracy,
+          feedback:
+            usedExprs.length > 0
+              ? `You used ${usedExprs.length} key expression${usedExprs.length > 1 ? 's' : ''}!`
+              : 'Great effort!',
+          usedExpressions: usedExprs,
+          missedExpressions: missedExprs,
+          passed: accuracy >= 60,
+        };
 
-  // Handle practice completion
-  const handlePracticeComplete = useCallback(async (transcript: string, score: number, passed: boolean) => {
-    if (!user || !diaryEntry) return;
+        // Save recall session
+        await supabase.from('recall_sessions').insert({
+          user_id: user.id,
+          diary_entry_id: diaryEntry.id,
+          user_attempt: userAttempt,
+          hints_used: ['sentence_practice_3step'],
+          completed: true,
+          score: result.score,
+          used_expressions: result.usedExpressions,
+          missed_expressions: result.missedExpressions,
+        });
 
-    try {
-      // IMPORTANT: For key-expression practice, the session summary must match the per-question checks.
-      // Since the user cannot advance without producing the key expression(s), we do not run a
-      // separate end-of-session analysis that could contradict the question-level judgments.
-      const practiceSentences = buildPracticeSentences(diaryEntry, expressions);
-      const usedExpressions = Array.from(
-        new Set(
-          practiceSentences
-            .flatMap((s) => s.expressions ?? [])
-            .filter((x): x is string => typeof x === 'string' && x.trim().length > 0)
-        )
-      );
+        // Update diary review count
+        await supabase
+          .from('diary_entries')
+          .update({
+            review_count: (diaryEntry.review_count || 0) + 1,
+            next_review_date: format(new Date(Date.now() + 3 * 24 * 60 * 60 * 1000), 'yyyy-MM-dd'),
+          })
+          .eq('id', diaryEntry.id);
 
-      const result: EvaluationResult = {
-        score: usedExpressions.length > 0 ? 100 : score,
-        feedback: usedExpressions.length > 0
-          ? 'Key expressions cleared — nice work!'
-          : 'Practice complete!',
-        usedExpressions,
-        missedExpressions: [],
-        passed: true,
-      };
-
-      // Save recall session
-      await supabase.from('recall_sessions').insert({
-        user_id: user.id,
-        diary_entry_id: diaryEntry.id,
-        user_attempt: transcript,
-        hints_used: ['sentence_practice_key_expressions'],
-        completed: true,
-        score: result.score,
-        used_expressions: result.usedExpressions,
-        missed_expressions: result.missedExpressions,
-      });
-
-      // Update diary review count
-      await supabase
-        .from('diary_entries')
-        .update({
-          review_count: (diaryEntry.review_count || 0) + 1,
-          next_review_date: format(
-            new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
-            'yyyy-MM-dd'
-          ),
-        })
-        .eq('id', diaryEntry.id);
-
-      setEvaluationResult(result);
-      setPhase('result');
-
-    } catch (error) {
-      console.error('Save error:', error);
-      toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: 'Failed to save your recall session.',
-      });
-    }
-  }, [user, diaryEntry, expressions, toast, buildPracticeSentences]);
+        setEvaluationResult(result);
+        setPhase('result');
+      } catch (error) {
+        console.error('Save error:', error);
+        toast({
+          variant: 'destructive',
+          title: 'Error',
+          description: 'Failed to save your recall session.',
+        });
+      }
+    },
+    [user, diaryEntry, toast]
+  );
 
   const handleTryAgain = () => {
     setPhase('practice');
@@ -287,7 +202,7 @@ export default function Recall() {
   };
 
   const handleGoHome = () => navigate('/');
-  
+
   const handleGoBack = () => {
     if (sourceMode === 'calendar' || sourceMode === 'random') {
       navigate('/calendar');
@@ -330,13 +245,12 @@ export default function Recall() {
           <AlertCircle className="w-8 h-8 text-muted-foreground" />
         </div>
         <h2 className="text-xl font-bold mb-2">
-          {sourceMode === 'calendar' ? "No diary for this date" : "No past diaries yet"}
+          {sourceMode === 'calendar' ? 'No diary for this date' : 'No past diaries yet'}
         </h2>
         <p className="text-muted-foreground mb-6 max-w-xs">
-          {sourceMode === 'calendar' 
-            ? "There is no diary entry for this date. Try selecting a different day."
-            : "You don't have any past diaries yet. Please complete today's diary first! 💪"
-          }
+          {sourceMode === 'calendar'
+            ? 'There is no diary entry for this date. Try selecting a different day.'
+            : "You don't have any past diaries yet. Please complete today's diary first! 💪"}
         </p>
         {sourceMode === 'latest' && (
           <Button variant="glow" onClick={() => navigate('/chat')}>
@@ -344,7 +258,7 @@ export default function Recall() {
           </Button>
         )}
         <Button variant="ghost" onClick={handleGoBack} className="mt-3">
-          {sourceMode !== 'latest' ? "Back to calendar" : "Go back home"}
+          {sourceMode !== 'latest' ? 'Back to calendar' : 'Go back home'}
         </Button>
       </div>
     );
@@ -353,39 +267,27 @@ export default function Recall() {
   const recallingDateLabel = format(new Date(diaryEntry.date), 'MMMM d, yyyy');
   const getModeLabel = () => {
     switch (sourceMode) {
-      case 'random': return ' (random)';
-      case 'latest': return ' (most recent)';
-      default: return '';
+      case 'random':
+        return ' (random)';
+      case 'latest':
+        return ' (most recent)';
+      default:
+        return '';
     }
   };
 
-  // Practice Phase - use ClozeQuiz
+  // Practice Phase - unified 3-step flow
   if (phase === 'practice') {
-    const practiceSentences = buildPracticeSentences(diaryEntry, expressions);
-
     return (
-      <div className="min-h-screen flex flex-col p-6 safe-bottom">
-        <header className="flex items-center gap-4 mb-4">
-          <Button variant="ghost" size="icon" onClick={handleBackToStudy}>
-            <ArrowLeft className="w-5 h-5" />
-          </Button>
-          <div>
-            <h1 className="font-bold text-xl">Recall Practice</h1>
-            <p className="text-sm text-muted-foreground">
-              {recallingDateLabel}
-              <span className="text-primary">{getModeLabel()}</span>
-            </p>
-          </div>
-        </header>
-
-        <div className="flex-1">
-          <ClozeQuiz 
-            sentences={practiceSentences}
-            onComplete={handlePracticeComplete}
-            onEvaluate={handleEvaluate}
-          />
-        </div>
-      </div>
+      <SentencePracticeFlow
+        sentences={practiceSentences}
+        japaneseSummary={diaryEntry.japanese_summary || ''}
+        englishDiary={diaryEntry.content || ''}
+        onComplete={handlePracticeComplete}
+        onBack={handleBackToStudy}
+        title="Recall Practice"
+        subtitle={`${recallingDateLabel}${getModeLabel()}`}
+      />
     );
   }
 
@@ -431,13 +333,14 @@ export default function Recall() {
                 {isPlayingAudio ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
                 ) : (
-                  <span className="text-xs">🔊 Listen</span>
+                  <Volume2 className="w-4 h-4" />
                 )}
+                <span className="ml-1 text-xs">{isPlayingAudio ? 'Stop' : 'Listen'}</span>
               </Button>
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <SelectableText 
+            <SelectableText
               text={diaryEntry.content}
               diaryEntryId={diaryEntry.id}
               className="text-sm leading-relaxed"
@@ -450,11 +353,11 @@ export default function Recall() {
         {expressions.length > 0 && (
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-base">💡 Key Expressions</CardTitle>
+              <CardTitle className="text-base">💡 Key Expressions ({expressions.length})</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
-                {expressions.slice(0, 5).map((exp) => (
+                {expressions.map((exp) => (
                   <div key={exp.id} className="bg-muted rounded-lg p-2">
                     <p className="font-medium text-sm text-primary">{exp.expression}</p>
                     {exp.meaning && (
@@ -466,12 +369,29 @@ export default function Recall() {
             </CardContent>
           </Card>
         )}
+
+        {/* Practice sentences preview */}
+        <Card className="bg-muted/30">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">📋 Practice coverage</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground">
+              {practiceSentences.length} sentence{practiceSentences.length !== 1 ? 's' : ''} ×{' '}
+              {practiceSentences.reduce((c, s) => c + (s.expressions?.length || 0), 0)} expression
+              {practiceSentences.reduce((c, s) => c + (s.expressions?.length || 0), 0) !== 1
+                ? 's'
+                : ''}{' '}
+              to practice
+            </p>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Action Buttons */}
       <div className="mt-6 space-y-3">
         <p className="text-xs text-muted-foreground text-center">
-          Review the diary briefly, then start the sentence-by-sentence practice.
+          Review the diary briefly, then start the 3-step sentence practice.
         </p>
         <Button variant="glow" size="lg" className="w-full" onClick={handleStartPractice}>
           <BookOpen className="w-5 h-5 mr-2" />
