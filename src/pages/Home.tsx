@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Mic, Brain, BookOpen, Sparkles, LogOut, Zap } from 'lucide-react';
+import { Mic, Brain, BookOpen, Sparkles, LogOut, Zap, TrendingUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { StreakBadge } from '@/components/StreakBadge';
 import { ActionCard } from '@/components/ActionCard';
@@ -184,6 +184,15 @@ export default function Home() {
           title="My diary collection"
           description="Browse all your past diary entries"
           onClick={() => navigate('/calendar')}
+          variant="secondary"
+        />
+
+        {/* 6. Progress / Stats */}
+        <ActionCard
+          icon={<TrendingUp className="w-8 h-8" />}
+          title="Progress"
+          description="Track your spoken vocabulary growth"
+          onClick={() => navigate('/progress')}
           variant="secondary"
         />
       </div>

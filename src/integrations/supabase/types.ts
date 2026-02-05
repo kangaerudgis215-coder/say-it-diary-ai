@@ -309,6 +309,36 @@ export type Database = {
           },
         ]
       }
+      spoken_vocabulary_logs: {
+        Row: {
+          created_at: string
+          date: string
+          id: string
+          unique_words: string[] | null
+          updated_at: string
+          user_id: string
+          word_count: number
+        }
+        Insert: {
+          created_at?: string
+          date?: string
+          id?: string
+          unique_words?: string[] | null
+          updated_at?: string
+          user_id: string
+          word_count?: number
+        }
+        Update: {
+          created_at?: string
+          date?: string
+          id?: string
+          unique_words?: string[] | null
+          updated_at?: string
+          user_id?: string
+          word_count?: number
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

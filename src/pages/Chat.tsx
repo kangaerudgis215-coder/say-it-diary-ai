@@ -16,6 +16,7 @@ import {
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
+import { useVocabularyLog } from '@/hooks/useVocabularyLog';
 import { format, parseISO, isToday as isTodayFn } from 'date-fns';
 
 interface Message {
@@ -29,6 +30,7 @@ export default function Chat() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { toast } = useToast();
+  const { logSpokenWords } = useVocabularyLog();
   
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
@@ -129,6 +131,9 @@ export default function Chat() {
       role: 'user',
       content: userMessage.content,
     });
+
+    // Log spoken vocabulary
+    logSpokenWords(userMessage.content);
 
     try {
       // Call AI for response
