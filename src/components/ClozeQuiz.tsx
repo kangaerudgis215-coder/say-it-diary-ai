@@ -266,7 +266,8 @@ export function ClozeQuiz({ sentences, onComplete, onEvaluate }: ClozeQuizProps)
           onTryAgain={handleTryAgain}
           onNext={handleNext}
           nextLabel={currentIndex < sentences.length - 1 ? 'Next Sentence' : 'Complete!'}
-          showTryAgain={!passed}
+          showTryAgain={true}
+          requireKeyExpressions={true}
         />
       </div>
     );

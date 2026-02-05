@@ -1,8 +1,8 @@
  import { useEffect, useState } from 'react';
  import { useNavigate } from 'react-router-dom';
- import { ArrowLeft, TrendingUp, Calendar, Target, RefreshCw, Loader2 } from 'lucide-react';
+ import { ArrowLeft, TrendingUp, Trophy, Flame, RefreshCw, Loader2 } from 'lucide-react';
  import { Button } from '@/components/ui/button';
- import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+ import { Card, CardContent } from '@/components/ui/card';
  import { useAuth } from '@/hooks/useAuth';
  import { supabase } from '@/lib/supabase';
  import { format, subDays } from 'date-fns';
@@ -30,9 +30,9 @@
    }, [user]);
  
    useEffect(() => {
-     // Start animation after data loads
-     if (!isLoading && logs.length > 0) {
-       setTimeout(() => setAnimationStarted(true), 100);
+     if (!isLoading && logs.length >= 0) {
+       const timer = setTimeout(() => setAnimationStarted(true), 200);
+       return () => clearTimeout(timer);
      }
    }, [isLoading, logs]);
  
@@ -55,7 +55,6 @@
      setIsLoading(false);
    };
  
-   // Calculate stats
    const today = format(new Date(), 'yyyy-MM-dd');
    const todayLog = logs.find(l => l.date === today);
    const yesterdayLog = logs.find(l => l.date === format(subDays(new Date(), 1), 'yyyy-MM-dd'));
@@ -63,27 +62,27 @@
    const yesterdayCount = yesterdayLog?.word_count || 0;
    const diff = todayCount - yesterdayCount;
    
-   // Get last 7 days for the chart
    const last7Days = Array.from({ length: 7 }, (_, i) => {
      const date = format(subDays(new Date(), 6 - i), 'yyyy-MM-dd');
      const log = logs.find(l => l.date === date);
      return {
        date,
        dayLabel: format(subDays(new Date(), 6 - i), 'EEE'),
+       fullDate: format(subDays(new Date(), 6 - i), 'M/d'),
        count: log?.word_count || 0,
      };
    });
  
-   const maxCount = Math.max(...last7Days.map(d => d.count), 1);
+   const maxCount = Math.max(...last7Days.map(d => d.count), 10);
    const avgCount = last7Days.reduce((sum, d) => sum + d.count, 0) / 7;
+   const bestDay = last7Days.reduce((best, day) => day.count > best.count ? day : best, last7Days[0]);
+   const totalWeek = last7Days.reduce((sum, d) => sum + d.count, 0);
  
-   // Backfill vocabulary from past messages
    const backfillVocabulary = async () => {
      if (!user) return;
      setIsBackfilling(true);
  
      try {
-       // Get all user messages grouped by date
        const { data: messages } = await supabase
          .from('messages')
          .select('content, created_at')
@@ -97,7 +96,6 @@
          return;
        }
  
-       // Common function words to exclude
        const STOP_WORDS = new Set([
          'i', 'me', 'my', 'myself', 'we', 'our', 'ours', 'ourselves', 'you', 'your', 'yours',
          'yourself', 'yourselves', 'he', 'him', 'his', 'himself', 'she', 'her', 'hers',
@@ -113,10 +111,9 @@
          's', 't', 'can', 'will', 'just', 'don', 'should', 'now', 'd', 'll', 'm', 'o', 're',
          've', 'y', 'ain', 'aren', 'couldn', 'didn', 'doesn', 'hadn', 'hasn', 'haven', 'isn',
          'ma', 'mightn', 'mustn', 'needn', 'shan', 'shouldn', 'wasn', 'weren', 'won', 'wouldn',
-         'also', 'really', 'well', 'yeah', 'yes', 'no', 'ok', 'okay', 'um', 'uh', 'like'
+         'also', 'really', 'well', 'yeah', 'yes', 'ok', 'okay', 'um', 'uh', 'like'
        ]);
  
-       // Group messages by date
        const messagesByDate: { [date: string]: string[] } = {};
        for (const msg of messages) {
          const date = format(new Date(msg.created_at), 'yyyy-MM-dd');
@@ -126,7 +123,6 @@
          messagesByDate[date].push(msg.content);
        }
  
-       // Calculate word counts for each date
        for (const [date, contents] of Object.entries(messagesByDate)) {
          const combinedText = contents.join(' ');
          const words = combinedText
@@ -140,7 +136,6 @@
          const uniqueWords = [...new Set(words)];
  
          if (uniqueWords.length > 0) {
-           // Upsert the vocabulary log
            await supabase
              .from('spoken_vocabulary_logs')
              .upsert({
@@ -163,23 +158,20 @@
    };
  
    return (
-     <div className="min-h-screen flex flex-col p-6 safe-bottom">
-       <header className="flex items-center gap-4 mb-8">
+     <div className="min-h-screen flex flex-col p-4 safe-bottom bg-gradient-to-b from-background to-muted/20">
+       <header className="flex items-center gap-3 mb-6">
          <Button variant="ghost" size="icon" onClick={() => navigate('/')}>
            <ArrowLeft className="w-5 h-5" />
          </Button>
-         <div>
-           <h1 className="font-bold text-xl">Progress</h1>
-           <p className="text-sm text-muted-foreground">Your speaking vocabulary trend</p>
+         <div className="flex-1">
+           <h1 className="font-bold text-xl">Speaking Progress</h1>
+           <p className="text-xs text-muted-foreground">Track your vocabulary growth</p>
          </div>
- 
-         {/* Sync button */}
          <Button
            variant="ghost"
            size="icon"
            onClick={backfillVocabulary}
            disabled={isBackfilling}
-           className="ml-auto"
          >
            {isBackfilling ? (
              <Loader2 className="w-5 h-5 animate-spin" />
@@ -189,130 +181,161 @@
          </Button>
        </header>
  
-       {/* Today's Summary */}
-       <Card className="mb-6 bg-gradient-to-br from-primary/20 to-primary/5 border-primary/20">
-         <CardContent className="py-6">
+       <Card className="mb-6 overflow-hidden border-0 bg-gradient-to-br from-primary via-primary/90 to-primary/70 shadow-xl">
+         <CardContent className="py-8 px-6">
            <div className="flex items-center justify-between">
              <div>
-               <p className="text-sm text-muted-foreground mb-1">Today's unique words</p>
-               <p className="text-4xl font-bold text-primary">{todayCount}</p>
+               <p className="text-sm text-primary-foreground/80 mb-2">Today's Words</p>
+               <p className="text-6xl font-black text-primary-foreground tracking-tight">
+                 {animationStarted ? todayCount : 0}
+               </p>
                {diff !== 0 && (
-                 <p className={cn(
-                   "text-sm mt-1",
-                   diff > 0 ? "text-green-400" : "text-muted-foreground"
+                 <div className={cn(
+                   "inline-flex items-center gap-1 mt-3 px-3 py-1 rounded-full text-sm font-medium",
+                   diff > 0 
+                     ? "bg-green-500/30 text-green-100" 
+                     : "bg-primary-foreground/20 text-primary-foreground/70"
                  )}>
+                   <TrendingUp className={cn("w-4 h-4", diff < 0 && "rotate-180")} />
                    {diff > 0 ? '+' : ''}{diff} vs yesterday
+                 </div>
+               )}
+               {diff === 0 && todayCount === 0 && (
+                 <p className="text-sm text-primary-foreground/60 mt-3">
+                   Start speaking to track today!
                  </p>
                )}
              </div>
-             <div className="w-14 h-14 rounded-full bg-primary/20 flex items-center justify-center">
-               <TrendingUp className="w-7 h-7 text-primary" />
+             <div className="w-20 h-20 rounded-full bg-primary-foreground/20 flex items-center justify-center backdrop-blur-sm">
+               <Flame className="w-10 h-10 text-primary-foreground" />
              </div>
            </div>
          </CardContent>
        </Card>
  
-       {/* 7-day Chart */}
-       <Card className="mb-6">
-         <CardHeader className="pb-2">
-           <CardTitle className="text-base flex items-center gap-2">
-             <Calendar className="w-4 h-4" />
-             Last 7 Days
-           </CardTitle>
-         </CardHeader>
-         <CardContent>
-           <div className="flex items-end justify-between h-40 gap-2">
+       <Card className="mb-6 flex-1">
+         <CardContent className="py-6">
+           <div className="flex items-center justify-between mb-6">
+             <h2 className="text-lg font-semibold">Last 7 Days</h2>
+             <span className="text-sm text-muted-foreground">
+               {totalWeek} words total
+             </span>
+           </div>
+           
+           <div className="flex items-end justify-between gap-3" style={{ height: '220px' }}>
              {last7Days.map((day, i) => {
                const heightPercent = maxCount > 0 ? (day.count / maxCount) * 100 : 0;
                const isToday = day.date === today;
+               const isBest = day.count === bestDay.count && day.count > 0;
                
                return (
-                 <div key={day.date} className="flex-1 flex flex-col items-center">
-                   {/* Count label */}
-                   <span className="text-xs text-muted-foreground mb-1">
-                     {day.count > 0 ? day.count : ''}
+                 <div key={day.date} className="flex-1 flex flex-col items-center h-full">
+                   <span className={cn(
+                     "text-sm font-medium mb-2 transition-all duration-500",
+                     isToday ? "text-primary" : "text-muted-foreground",
+                     animationStarted ? "opacity-100" : "opacity-0"
+                   )}>
+                     {day.count > 0 ? day.count : '–'}
                    </span>
                    
-                   {/* Bar */}
-                   <div className="w-full flex-1 flex items-end">
+                   <div className="w-full flex-1 flex items-end relative">
+                     {isBest && animationStarted && (
+                       <div className="absolute -top-6 left-1/2 -translate-x-1/2 animate-fade-in">
+                         <Trophy className="w-4 h-4 text-yellow-400" />
+                       </div>
+                     )}
+                     
                      <div
                        className={cn(
-                         "w-full rounded-t-md transition-all duration-700 ease-out",
-                         isToday ? "bg-primary" : "bg-primary/40"
+                         "w-full rounded-xl transition-all ease-out",
+                         isToday 
+                           ? "bg-gradient-to-t from-primary to-primary/70 shadow-lg shadow-primary/30" 
+                           : isBest 
+                             ? "bg-gradient-to-t from-yellow-500/80 to-yellow-400/60"
+                             : "bg-gradient-to-t from-muted-foreground/30 to-muted-foreground/20"
                        )}
                        style={{
-                         height: animationStarted ? `${Math.max(heightPercent, 4)}%` : '4%',
-                         minHeight: '4px',
+                         height: animationStarted ? `${Math.max(heightPercent, 8)}%` : '4%',
+                         minHeight: '8px',
+                         transitionDuration: `${500 + i * 100}ms`,
                        }}
                      />
                    </div>
                    
-                   {/* Day label */}
-                   <span className={cn(
-                     "text-xs mt-2",
-                     isToday ? "text-primary font-medium" : "text-muted-foreground"
-                   )}>
-                     {day.dayLabel}
-                   </span>
+                   <div className="mt-3 text-center">
+                     <span className={cn(
+                       "text-xs font-medium block",
+                       isToday ? "text-primary" : "text-muted-foreground"
+                     )}>
+                       {day.dayLabel}
+                     </span>
+                     <span className="text-[10px] text-muted-foreground/70">
+                       {day.fullDate}
+                     </span>
+                   </div>
                  </div>
                );
              })}
            </div>
-           
-           {/* Average line description */}
-           <div className="mt-4 pt-4 border-t border-border flex items-center justify-between text-sm">
-             <span className="text-muted-foreground">7-day average</span>
-             <span className="font-medium">{Math.round(avgCount)} words/day</span>
-           </div>
          </CardContent>
        </Card>
  
-       {/* Goals / Tips */}
-       <Card className="bg-muted/30">
-         <CardContent className="py-4">
-           <div className="flex items-start gap-3">
-             <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
-               <Target className="w-4 h-4 text-primary" />
-             </div>
-             <div>
-               <p className="font-medium text-sm mb-1">Keep speaking!</p>
-               <p className="text-xs text-muted-foreground">
-                 The more you speak, the more words become part of your active vocabulary.
-                 Try to beat your average each day! 💪
-               </p>
-             </div>
-           </div>
-         </CardContent>
-       </Card>
+       <div className="grid grid-cols-3 gap-3 mb-6">
+         <Card className="bg-muted/40 border-0">
+           <CardContent className="py-4 text-center">
+             <p className="text-2xl font-bold text-foreground">{Math.round(avgCount)}</p>
+             <p className="text-xs text-muted-foreground">Daily Avg</p>
+           </CardContent>
+         </Card>
+         <Card className="bg-yellow-500/10 border-0">
+           <CardContent className="py-4 text-center">
+             <p className="text-2xl font-bold text-yellow-500">{bestDay.count}</p>
+             <p className="text-xs text-muted-foreground">Best Day</p>
+           </CardContent>
+         </Card>
+         <Card className="bg-primary/10 border-0">
+           <CardContent className="py-4 text-center">
+             <p className="text-2xl font-bold text-primary">{totalWeek}</p>
+             <p className="text-xs text-muted-foreground">This Week</p>
+           </CardContent>
+         </Card>
+       </div>
  
-       {/* Empty state */}
        {!isLoading && logs.length === 0 && (
-         <div className="flex-1 flex flex-col items-center justify-center text-center py-8">
-           <p className="text-muted-foreground mb-4">
-             No vocabulary data yet. Start speaking to track your progress!
-           </p>
-           <div className="space-y-2">
-             <Button variant="glow" onClick={backfillVocabulary} disabled={isBackfilling}>
-               {isBackfilling ? (
-                 <>
-                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                   Syncing...
-                 </>
-               ) : (
-                 <>
-                   <RefreshCw className="w-4 h-4 mr-2" />
-                   Sync from past diaries
-                 </>
-               )}
-             </Button>
-             <p className="text-xs text-muted-foreground">
-               or
+         <Card className="bg-muted/30 border-dashed">
+           <CardContent className="py-8 text-center">
+             <Flame className="w-12 h-12 mx-auto mb-4 text-muted-foreground/50" />
+             <p className="text-muted-foreground mb-4">
+               No vocabulary data yet.<br />
+               Start speaking to track your progress!
              </p>
-             <Button variant="outline" onClick={() => navigate('/chat')}>
-               Start today's diary
-             </Button>
-           </div>
-         </div>
+             <div className="space-y-3">
+               <Button variant="glow" onClick={backfillVocabulary} disabled={isBackfilling}>
+                 {isBackfilling ? (
+                   <>
+                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                     Syncing...
+                   </>
+                 ) : (
+                   <>
+                     <RefreshCw className="w-4 h-4 mr-2" />
+                     Sync from past diaries
+                   </>
+                 )}
+               </Button>
+               <p className="text-xs text-muted-foreground">or</p>
+               <Button variant="outline" onClick={() => navigate('/chat')}>
+                 Start today's diary
+               </Button>
+             </div>
+           </CardContent>
+         </Card>
+       )}
+ 
+       {!isLoading && logs.length > 0 && (
+         <p className="text-xs text-center text-muted-foreground mt-auto pt-4">
+           💡 Speak more unique words each day to grow your active vocabulary!
+         </p>
        )}
      </div>
    );

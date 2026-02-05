@@ -24,6 +24,37 @@
  }
  
  /**
+  * Simple Levenshtein distance for typo tolerance
+  */
+ export function levenshteinDistance(a: string, b: string): number {
+   const matrix: number[][] = [];
+   
+   for (let i = 0; i <= b.length; i++) {
+     matrix[i] = [i];
+   }
+   
+   for (let j = 0; j <= a.length; j++) {
+     matrix[0][j] = j;
+   }
+   
+   for (let i = 1; i <= b.length; i++) {
+     for (let j = 1; j <= a.length; j++) {
+       if (b.charAt(i - 1) === a.charAt(j - 1)) {
+         matrix[i][j] = matrix[i - 1][j - 1];
+       } else {
+         matrix[i][j] = Math.min(
+           matrix[i - 1][j - 1] + 1,
+           matrix[i][j - 1] + 1,
+           matrix[i - 1][j] + 1
+         );
+       }
+     }
+   }
+   
+   return matrix[b.length][a.length];
+ }
+ 
+ /**
   * Compare two texts at the token level
   * Returns detailed information about matches, misses, and extras
   */
@@ -103,34 +134,65 @@
  }
  
  /**
-  * Simple Levenshtein distance for typo tolerance
+  * Check if all tokens of an expression are present in the user text
   */
- function levenshteinDistance(a: string, b: string): number {
-   const matrix: number[][] = [];
+ export function checkExpressionPresent(userText: string, expression: string): {
+   present: boolean;
+   matchedTokens: string[];
+   missingTokens: string[];
+ } {
+   const userTokens = tokenize(userText);
+   const exprTokens = tokenize(expression);
    
-   for (let i = 0; i <= b.length; i++) {
-     matrix[i] = [i];
-   }
+   const matchedTokens: string[] = [];
+   const missingTokens: string[] = [];
+   const userTokensCopy = [...userTokens];
    
-   for (let j = 0; j <= a.length; j++) {
-     matrix[0][j] = j;
-   }
-   
-   for (let i = 1; i <= b.length; i++) {
-     for (let j = 1; j <= a.length; j++) {
-       if (b.charAt(i - 1) === a.charAt(j - 1)) {
-         matrix[i][j] = matrix[i - 1][j - 1];
-       } else {
-         matrix[i][j] = Math.min(
-           matrix[i - 1][j - 1] + 1,
-           matrix[i][j - 1] + 1,
-           matrix[i - 1][j] + 1
-         );
-       }
+   for (const exprToken of exprTokens) {
+     // Look for exact or close match
+     const matchIndex = userTokensCopy.findIndex(ut => 
+       ut === exprToken || 
+       (ut.length > 3 && exprToken.length > 3 && levenshteinDistance(ut, exprToken) <= 1)
+     );
+     
+     if (matchIndex !== -1) {
+       matchedTokens.push(exprToken);
+       userTokensCopy.splice(matchIndex, 1); // Remove matched token
+     } else {
+       missingTokens.push(exprToken);
      }
    }
    
-   return matrix[b.length][a.length];
+   // Expression is present if at least 70% of tokens are matched
+   const present = matchedTokens.length >= exprTokens.length * 0.7;
+   
+   return { present, matchedTokens, missingTokens };
+ }
+ 
+ /**
+  * Check if user correctly produced all key expressions
+  */
+ export function checkKeyExpressions(userText: string, expressions: string[]): {
+   allPresent: boolean;
+   results: Array<{
+     expression: string;
+     present: boolean;
+     matchedTokens: string[];
+     missingTokens: string[];
+   }>;
+ } {
+   if (!expressions || expressions.length === 0) {
+     return { allPresent: true, results: [] };
+   }
+   
+   const results = expressions.map(expr => ({
+     expression: expr,
+     ...checkExpressionPresent(userText, expr),
+   }));
+   
+   const allPresent = results.every(r => r.present);
+   
+   return { allPresent, results };
  }
  
  /**
