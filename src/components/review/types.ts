@@ -7,6 +7,8 @@ export interface ReviewSentence {
   japanese: string;
   expressions: string[];
   index: number;
+  /** True if this sentence has expressions and should show cloze step */
+  hasExpressions: boolean;
 }
 
 export interface SentenceProgress {

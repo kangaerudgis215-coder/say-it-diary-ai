@@ -94,6 +94,7 @@ export function ReviewHub() {
       japanese: s.japanese,
       expressions: s.expressions,
       index: i,
+      hasExpressions: s.expressions.length > 0,
     }));
 
     setSentences(reviewSentences);
@@ -121,7 +122,7 @@ export function ReviewHub() {
     return Math.min(...counts);
   }, [sentences.length]);
 
-  // Handle cloze completion
+  // Handle cloze completion (only called for sentences with expressions)
   const handleClozeComplete = useCallback(() => {
     setDiaryProgress((prev) => {
       const updated = { ...prev };
@@ -134,6 +135,24 @@ export function ReviewHub() {
     });
     setPhase('full_sentence');
   }, [currentSentenceIndex]);
+
+  // Move to next sentence helper
+  const moveToNextSentence = useCallback(() => {
+    if (currentSentenceIndex < sentences.length - 1) {
+      const nextIndex = currentSentenceIndex + 1;
+      setCurrentSentenceIndex(nextIndex);
+      // Check if next sentence has expressions
+      const nextSentence = sentences[nextIndex];
+      if (nextSentence && !nextSentence.hasExpressions) {
+        setPhase('full_sentence'); // Skip cloze
+      } else {
+        setPhase('cloze');
+      }
+    } else {
+      // Loop complete - go back to overview
+      setPhase('overview');
+    }
+  }, [currentSentenceIndex, sentences]);
 
   // Handle full sentence completion
   const handleFullSentenceComplete = useCallback(() => {
@@ -158,14 +177,8 @@ export function ReviewHub() {
     });
 
     // Move to next sentence or back to overview
-    if (currentSentenceIndex < sentences.length - 1) {
-      setCurrentSentenceIndex(currentSentenceIndex + 1);
-      setPhase('cloze');
-    } else {
-      // Loop complete - go back to overview
-      setPhase('overview');
-    }
-  }, [currentSentenceIndex, sentences.length, calculateLoops]);
+    moveToNextSentence();
+  }, [currentSentenceIndex, calculateLoops, moveToNextSentence]);
 
   const handleBackToCloze = useCallback(() => {
     setPhase('cloze');
@@ -173,8 +186,14 @@ export function ReviewHub() {
 
   const handleStartPractice = useCallback(() => {
     setCurrentSentenceIndex(0);
-    setPhase('cloze');
-  }, []);
+    // If first sentence has no expressions, skip to full sentence
+    const firstSentence = sentences[0];
+    if (firstSentence && !firstSentence.hasExpressions) {
+      setPhase('full_sentence');
+    } else {
+      setPhase('cloze');
+    }
+  }, [sentences]);
 
   const handleStartFullDiary = useCallback(() => {
     setPhase('full_diary');
@@ -333,15 +352,18 @@ export function ReviewHub() {
 
   // Full sentence step
   if (phase === 'full_sentence' && currentSentence) {
+    const stepLabel = currentSentence.hasExpressions ? 'Step 2: Full Sentence' : 'Full Sentence';
+    const handleBack = currentSentence.hasExpressions ? handleBackToCloze : handleBackToSentences;
+    
     return (
       <div className="min-h-screen flex flex-col safe-bottom">
         <header className="sticky top-0 z-10 glass border-b border-border p-4">
           <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" onClick={handleBackToCloze}>
+            <Button variant="ghost" size="icon" onClick={handleBack}>
               <ArrowLeft className="w-5 h-5" />
             </Button>
             <div className="flex-1">
-              <h1 className="font-bold text-lg">Step 2: Full Sentence</h1>
+              <h1 className="font-bold text-lg">{stepLabel}</h1>
               <p className="text-xs text-muted-foreground">{dateLabel}</p>
             </div>
           </div>
@@ -359,6 +381,7 @@ export function ReviewHub() {
             sentenceNumber={currentSentenceIndex + 1}
             totalSentences={sentences.length}
             isLastSentence={currentSentenceIndex === sentences.length - 1}
+            hasClozeStep={currentSentence.hasExpressions}
           />
         </div>
       </div>
