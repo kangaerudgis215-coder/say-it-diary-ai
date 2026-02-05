@@ -28,6 +28,11 @@ export function expressionAppearsIn(english: string, expression: string): boolea
  * IMPORTANT (strict rule): expressions that do not appear in the diary English text
  * are dropped here (they should also be cleaned up at save-time / load-time).
  */
+/**
+ * Given a diary entry and its expressions, build a list of practice sentences.
+ * ALL sentences are included for quiz - even those without expressions.
+ * Sentences without expressions will use full-sentence-only practice (no cloze).
+ */
 export function buildPracticeSentences(
   diaryContent: string,
   japaneseSummary: string | null,
@@ -82,8 +87,9 @@ export function buildPracticeSentences(
     sent.expressions = Array.from(new Set(sent.expressions));
   }
 
-  // Remove sentences that have zero expressions (practice is expression-driven)
-  return baseSentences.filter((s) => s.expressions.length > 0);
+  // NEW: Return ALL sentences (even those without expressions)
+  // Quiz flow will handle sentences with no expressions differently (full-sentence-only)
+  return baseSentences;
 }
 
 

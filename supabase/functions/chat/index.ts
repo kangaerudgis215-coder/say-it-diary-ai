@@ -57,16 +57,30 @@ Your task:
 4. Write in first person, natural English
 5. Fix grammar naturally without changing the essence
 6. Provide a Japanese translation (sentence-by-sentence, close to English structure)
-7. Extract 3-5 useful, general-purpose English expressions
-8. For each expression, classify:
-   - scene_or_context: a short label (1-2 words) for when this expression is typically used
-     Examples: "daily life", "small talk", "school", "work", "feelings", "travel", "health", "hobbies", "food", "weather"
-   - pos_or_type: a simple grammatical/phrase type label
-     Examples: "verb phrase", "adjective phrase", "noun phrase", "fixed phrase", "adverb phrase", "idiom"
-9. Select 3-5 "important sentences" for focused practice:
-   - These are short, useful sentences from the diary that contain key expressions
-   - For EACH important sentence, provide both the English AND its Japanese translation
-   - These sentences will be used for instant English composition practice
+
+CRITICAL EXPRESSION EXTRACTION RULES:
+- Extract general-purpose English expressions that MUST appear literally in the diary text
+- For EACH sentence in the diary:
+  - If the sentence has 6+ words: extract AT LEAST one useful phrase from that sentence
+  - Look for 2-4 word chunks that are reusable (verb phrases, noun phrases, common patterns)
+  - Examples: "a busy shift", "go to sleep", "part-time job", "try some tea", "have to work"
+- Total expressions: 3-10 per diary (not just 1-2!)
+- NEVER invent expressions that are not exact substrings of the diary text
+- Prioritize:
+  - Verb phrases: "have to work", "go to bed", "try to relax"
+  - Common patterns: "at my part-time job", "a busy day"
+  - Noun phrases: "busy shift", "good night's sleep"
+
+For each expression, classify:
+- scene_or_context: a short label (1-2 words) for when this expression is typically used
+  Examples: "daily life", "small talk", "school", "work", "feelings", "travel", "health", "hobbies", "food", "weather"
+- pos_or_type: a simple grammatical/phrase type label
+  Examples: "verb phrase", "adjective phrase", "noun phrase", "fixed phrase", "adverb phrase", "idiom"
+
+Select 3-5 "important sentences" for focused practice:
+- These should be the core sentences from the diary that contain key expressions
+- For EACH important sentence, provide both the English AND its Japanese translation
+- For EACH important sentence, list which expressions appear in that sentence
 
 CRITICAL LENGTH REQUIREMENT:
 - The diary MUST be 3-5 sentences only (about 5 lines on a phone screen)
@@ -83,7 +97,7 @@ Respond in this exact JSON format:
     ...
   ],
   "importantSentences": [
-    {"english": "One important sentence from the diary.", "japanese": "その文の日本語訳", "expressions": ["key phrase used"]},
+    {"english": "One important sentence from the diary.", "japanese": "その文の日本語訳", "expressions": ["key phrase from this sentence"]},
     ...
   ]
 }`;

@@ -21,6 +21,8 @@ interface FullSentenceStepNewProps {
   sentenceNumber: number;
   totalSentences: number;
   isLastSentence: boolean;
+  /** If false, hide the "Back to cloze" button */
+  hasClozeStep: boolean;
 }
 
 interface EvaluationResult {
@@ -81,6 +83,7 @@ export function FullSentenceStepNew({
   sentenceNumber,
   totalSentences,
   isLastSentence,
+  hasClozeStep,
 }: FullSentenceStepNewProps) {
   const [showTyping, setShowTyping] = useState(false);
   const [typedInput, setTypedInput] = useState('');
@@ -224,10 +227,12 @@ export function FullSentenceStepNew({
               Continue anyway →
             </Button>
           )}
-          <Button variant="ghost" size="sm" className="w-full" onClick={onBackToCloze}>
-            <ArrowLeft className="w-4 h-4 mr-1" />
-            Back to cloze
-          </Button>
+          {hasClozeStep && (
+            <Button variant="ghost" size="sm" className="w-full" onClick={onBackToCloze}>
+              <ArrowLeft className="w-4 h-4 mr-1" />
+              Back to cloze
+            </Button>
+          )}
         </div>
       </div>
     );
@@ -330,10 +335,12 @@ export function FullSentenceStepNew({
         <Button variant="glow" size="lg" className="w-full" onClick={handleCheck} disabled={!currentInput || isChecking}>
           {isChecking ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Check Answer'}
         </Button>
-        <Button variant="ghost" size="sm" className="w-full" onClick={onBackToCloze}>
-          <ArrowLeft className="w-4 h-4 mr-1" />
-          Back to cloze
-        </Button>
+        {hasClozeStep && (
+          <Button variant="ghost" size="sm" className="w-full" onClick={onBackToCloze}>
+            <ArrowLeft className="w-4 h-4 mr-1" />
+            Back to cloze
+          </Button>
+        )}
       </div>
     </div>
   );
