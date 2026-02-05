@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
- import { Mic, BookOpen, Sparkles, LogOut, Shuffle, TrendingUp } from 'lucide-react';
+import { Mic, BookOpen, Sparkles, LogOut, Shuffle, TrendingUp, Brain } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { StreakBadge } from '@/components/StreakBadge';
 import { ActionCard } from '@/components/ActionCard';
@@ -15,6 +15,8 @@ export default function Home() {
   const [profile, setProfile] = useState<any>(null);
   const [todayComplete, setTodayComplete] = useState(false);
   const [hasPastDiaries, setHasPastDiaries] = useState(false);
+  const [latestDiaryId, setLatestDiaryId] = useState<string | null>(null);
+  const [latestDiaryDate, setLatestDiaryDate] = useState<string | null>(null);
 
   useEffect(() => {
     if (user) {
@@ -42,6 +44,20 @@ export default function Home() {
       }
     }
 
+    // Get the latest diary (for review button)
+    const { data: latestEntry } = await supabase
+      .from('diary_entries')
+      .select('id, date')
+      .eq('user_id', user.id)
+      .order('date', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (latestEntry) {
+      setLatestDiaryId(latestEntry.id);
+      setLatestDiaryDate(latestEntry.date);
+    }
+
     // Check if there are any past diary entries (before today)
     const { data: pastEntries } = await supabase
       .from('diary_entries')
@@ -61,6 +77,11 @@ export default function Home() {
     return 'Good evening';
   };
 
+  const handleReviewLatest = () => {
+    if (latestDiaryId && latestDiaryDate) {
+      navigate(`/review?diaryId=${latestDiaryId}&date=${latestDiaryDate}`);
+    }
+  };
 
   return (
     <div className="min-h-screen flex flex-col p-6 safe-bottom">
@@ -115,10 +136,22 @@ export default function Home() {
           badge={!todayComplete ? "MUST" : undefined}
         />
 
-        {/* 2. Latest Recall Quiz - TEMPORARILY DISABLED */}
-        {/* Will be redesigned with a simpler, more stable approach */}
+        {/* 2. Latest Quiz - Review latest diary */}
+        <ActionCard
+          icon={<Brain className="w-8 h-8" />}
+          title="Latest Quiz"
+          description={
+            latestDiaryId
+              ? "Review your latest diary with cloze & full sentence practice"
+              : "Write a diary first to unlock"
+          }
+          onClick={handleReviewLatest}
+          variant={todayComplete ? "secondary" : "secondary"}
+          badge={todayComplete && latestDiaryId ? "NEXT" : undefined}
+          disabled={!latestDiaryId}
+        />
 
-         {/* 3. Expression Memory Game */}
+        {/* 3. Expression Memory Game */}
         <ActionCard
            icon={<Shuffle className="w-8 h-8" />}
            title="Expression Memory Game"

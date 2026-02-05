@@ -14,6 +14,7 @@ import DiaryReview from "./pages/DiaryReview";
 import InstantComposition from "./pages/InstantComposition";
 import Progress from "./pages/Progress";
 import NotFound from "./pages/NotFound";
+import ReviewHub from "./components/review/ReviewHub";
 
 const queryClient = new QueryClient();
 
@@ -31,7 +32,7 @@ const App = () => (
             <Route path="/recall" element={<Recall />} />
             <Route path="/calendar" element={<Calendar />} />
             <Route path="/expressions" element={<Expressions />} />
-            <Route path="/review" element={<DiaryReview />} />
+            <Route path="/review" element={<ReviewHub />} />
             <Route path="/instant" element={<InstantComposition />} />
             <Route path="/progress" element={<Progress />} />
             <Route path="*" element={<NotFound />} />
