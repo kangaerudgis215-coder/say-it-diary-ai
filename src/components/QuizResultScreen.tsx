@@ -2,9 +2,9 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ThreeAxisEvaluation, ThreeAxisScores, calculatePassStatus } from '@/components/ThreeAxisEvaluation';
-import { RotateCcw, ChevronRight, Check, X } from 'lucide-react';
+import { RotateCcw, ChevronRight, Check, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { compareTokens, TokenComparisonResult } from '@/lib/textComparison';
+import { compareTokens, checkKeyExpressions } from '@/lib/textComparison';
 
 interface QuizResultScreenProps {
   userAnswer: string;
@@ -15,6 +15,7 @@ interface QuizResultScreenProps {
   onNext: () => void;
   nextLabel?: string;
   showTryAgain?: boolean;
+  requireKeyExpressions?: boolean;
 }
 
 // Simple word-level diff for highlighting differences
@@ -57,38 +58,82 @@ export function QuizResultScreen({
   onNext,
   nextLabel = 'Next',
   showTryAgain = true,
+  requireKeyExpressions = false,
 }: QuizResultScreenProps) {
   const { passed } = calculatePassStatus(scores);
   const [diff, setDiff] = useState<ReturnType<typeof computeDiff> | null>(null);
+  const [expressionCheck, setExpressionCheck] = useState<ReturnType<typeof checkKeyExpressions> | null>(null);
   
   useEffect(() => {
     setDiff(computeDiff(userAnswer, correctAnswer));
+    if (keyExpressions && keyExpressions.length > 0) {
+      setExpressionCheck(checkKeyExpressions(userAnswer, keyExpressions));
+    }
   }, [userAnswer, correctAnswer]);
+
+  const keyExpressionsMissing = requireKeyExpressions && expressionCheck && !expressionCheck.allPresent;
+  const canAdvance = passed && !keyExpressionsMissing;
 
   return (
     <div className="flex flex-col h-full space-y-4">
       {/* Pass/Fail header */}
       <div className={cn(
         "text-center py-3 px-4 rounded-xl",
-        passed ? "bg-green-500/20 border border-green-500/30" : "bg-muted"
+        canAdvance ? "bg-green-500/20 border border-green-500/30" : 
+        keyExpressionsMissing ? "bg-yellow-500/20 border border-yellow-500/30" : "bg-muted"
       )}>
         <div className="flex items-center justify-center gap-2 mb-1">
-          {passed ? (
+          {canAdvance ? (
             <Check className="w-5 h-5 text-green-400" />
+          ) : keyExpressionsMissing ? (
+            <AlertTriangle className="w-5 h-5 text-yellow-400" />
           ) : (
             <RotateCcw className="w-5 h-5 text-muted-foreground" />
           )}
           <span className={cn(
             "font-bold text-lg",
-            passed ? "text-green-400" : "text-muted-foreground"
+            canAdvance ? "text-green-400" : 
+            keyExpressionsMissing ? "text-yellow-400" : "text-muted-foreground"
           )}>
-            {passed ? "Pass!" : "Keep practicing!"}
+            {canAdvance ? "Pass!" : 
+             keyExpressionsMissing ? "Key expression missing!" : "Keep practicing!"}
           </span>
         </div>
+        {keyExpressionsMissing && (
+          <p className="text-xs text-yellow-400/80 mt-1">
+            Use the key expression to advance
+          </p>
+        )}
       </div>
 
       {/* Three-axis scores */}
       <ThreeAxisEvaluation scores={scores} size="md" />
+
+      {/* Missing key expressions alert */}
+      {keyExpressionsMissing && expressionCheck && (
+        <Card className="bg-yellow-500/10 border-yellow-500/30">
+          <CardContent className="py-3">
+            <p className="text-xs text-yellow-400 mb-2 font-medium">
+              Key expressions needed:
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {expressionCheck.results.map((r, i) => (
+                <span 
+                  key={i}
+                  className={cn(
+                    "px-2 py-1 rounded-full text-xs font-medium",
+                    r.present 
+                      ? "bg-green-500/20 text-green-400" 
+                      : "bg-yellow-500/20 text-yellow-400"
+                  )}
+                >
+                  {r.present ? '✓ ' : '✗ '}{r.expression}
+                </span>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Side-by-side comparison */}
       <div className="grid gap-3">
@@ -152,6 +197,8 @@ export function QuizResultScreen({
 
       {/* Action buttons */}
       <div className="mt-auto space-y-2 pt-4">
+        {/* Only show Next if can advance */}
+        {canAdvance && (
         <Button
           variant="glow"
           size="lg"
@@ -161,8 +208,22 @@ export function QuizResultScreen({
           <ChevronRight className="w-5 h-5 mr-2" />
           {nextLabel}
         </Button>
+        )}
         
-        {showTryAgain && !passed && (
+        {/* Force retry if key expressions missing */}
+        {keyExpressionsMissing && (
+          <Button
+            variant="glow"
+            size="lg"
+            className="w-full bg-yellow-500 hover:bg-yellow-600"
+            onClick={onTryAgain}
+          >
+            <RotateCcw className="w-5 h-5 mr-2" />
+            Try the key expression again
+          </Button>
+        )}
+        
+        {showTryAgain && !canAdvance && !keyExpressionsMissing && (
         <Button
           variant="outline"
           size="lg"
@@ -175,7 +236,7 @@ export function QuizResultScreen({
       )}
       
       {/* Always show try again for passed answers too if showTryAgain is true */}
-      {showTryAgain && passed && (
+      {showTryAgain && canAdvance && (
         <Button
           variant="ghost"
           size="sm"
