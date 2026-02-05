@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { ThreeAxisEvaluation, ThreeAxisScores, calculatePassStatus } from '@/components/ThreeAxisEvaluation';
 import { RotateCcw, ChevronRight, Check, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { compareTokens, checkKeyExpressions } from '@/lib/textComparison';
+import { compareTokens, checkKeyExpressionsEnhanced } from '@/lib/textComparison';
 
 interface QuizResultScreenProps {
   userAnswer: string;
@@ -62,17 +62,25 @@ export function QuizResultScreen({
 }: QuizResultScreenProps) {
   const { passed } = calculatePassStatus(scores);
   const [diff, setDiff] = useState<ReturnType<typeof computeDiff> | null>(null);
-  const [expressionCheck, setExpressionCheck] = useState<ReturnType<typeof checkKeyExpressions> | null>(null);
+  const [expressionCheck, setExpressionCheck] = useState<ReturnType<typeof checkKeyExpressionsEnhanced> | null>(null);
   
   useEffect(() => {
     setDiff(computeDiff(userAnswer, correctAnswer));
     if (keyExpressions && keyExpressions.length > 0) {
-      setExpressionCheck(checkKeyExpressions(userAnswer, keyExpressions));
+      setExpressionCheck(checkKeyExpressionsEnhanced(userAnswer, keyExpressions));
     }
   }, [userAnswer, correctAnswer]);
 
-  const keyExpressionsMissing = requireKeyExpressions && expressionCheck && !expressionCheck.allPresent;
-  const canAdvance = passed && !keyExpressionsMissing;
+  // For cloze mode: ONLY the key expression matters for advancement
+  // If requireKeyExpressions is true, we ONLY check if expressions are present
+  const keyExpressionsMissing = requireKeyExpressions && keyExpressions.length > 0 && expressionCheck && !expressionCheck.allPresent;
+  
+  // Can advance if: 
+  // 1. No key expressions required -> use standard pass check
+  // 2. Key expressions required -> ONLY check if expressions are present (ignore other scoring)
+  const canAdvance = requireKeyExpressions 
+    ? (expressionCheck?.allPresent ?? false) 
+    : passed;
 
   return (
     <div className="flex flex-col h-full space-y-4">
@@ -95,13 +103,18 @@ export function QuizResultScreen({
             canAdvance ? "text-green-400" : 
             keyExpressionsMissing ? "text-yellow-400" : "text-muted-foreground"
           )}>
-            {canAdvance ? "Pass!" : 
+            {canAdvance ? "Key expression correct! ◎" : 
              keyExpressionsMissing ? "Key expression missing!" : "Keep practicing!"}
           </span>
         </div>
         {keyExpressionsMissing && (
           <p className="text-xs text-yellow-400/80 mt-1">
-            Use the key expression to advance
+            Say the key expression correctly to continue
+          </p>
+        )}
+        {canAdvance && requireKeyExpressions && (
+          <p className="text-xs text-green-400/80 mt-1">
+            You correctly used the key expression!
           </p>
         )}
       </div>
@@ -114,20 +127,47 @@ export function QuizResultScreen({
         <Card className="bg-yellow-500/10 border-yellow-500/30">
           <CardContent className="py-3">
             <p className="text-xs text-yellow-400 mb-2 font-medium">
-              Key expressions needed:
+              Try saying this expression:
             </p>
             <div className="flex flex-wrap gap-2">
               {expressionCheck.results.map((r, i) => (
                 <span 
                   key={i}
                   className={cn(
-                    "px-2 py-1 rounded-full text-xs font-medium",
+                    "px-3 py-1.5 rounded-full text-sm font-medium",
                     r.present 
                       ? "bg-green-500/20 text-green-400" 
                       : "bg-yellow-500/20 text-yellow-400"
                   )}
                 >
-                  {r.present ? '✓ ' : '✗ '}{r.expression}
+                  {r.present ? '✓ ' : ''}{r.expression}
+                  {!r.present && r.confidence > 0 && (
+                    <span className="text-xs opacity-70"> ({r.confidence}% matched)</span>
+                  )}
+                </span>
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground mt-2">
+              Tip: You can say just the expression by itself, or the full sentence.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Show key expressions when passed */}
+      {canAdvance && keyExpressions.length > 0 && (
+        <Card className="bg-green-500/10 border-green-500/30">
+          <CardContent className="py-3">
+            <p className="text-xs text-green-400 mb-2 font-medium">
+              Key expression mastered:
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {keyExpressions.map((expr, i) => (
+                <span 
+                  key={i}
+                  className="px-3 py-1.5 rounded-full text-sm font-medium bg-green-500/20 text-green-400"
+                >
+                  ✓ {expr}
                 </span>
               ))}
             </div>

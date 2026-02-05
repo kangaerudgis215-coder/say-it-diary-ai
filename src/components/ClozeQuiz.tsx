@@ -5,11 +5,12 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Textarea } from '@/components/ui/textarea';
 import { QuizResultScreen } from '@/components/QuizResultScreen';
-import { ThreeAxisScores, calculatePassStatus } from '@/components/ThreeAxisEvaluation';
+import { ThreeAxisScores } from '@/components/ThreeAxisEvaluation';
 import { useSpeechRecognition } from '@/hooks/useSpeechRecognition';
 import { useSuccessSound } from '@/hooks/useSuccessSound';
 import { useVocabularyLog } from '@/hooks/useVocabularyLog';
 import { cn } from '@/lib/utils';
+import { evaluateClozeAnswer, checkKeyExpressionsEnhanced } from '@/lib/textComparison';
 
 interface PracticeSentence {
   english: string;
@@ -161,18 +162,27 @@ export function ClozeQuiz({ sentences, onComplete, onEvaluate }: ClozeQuizProps)
     setLastUserAnswer(currentInput);
     
     try {
-      const result = await onEvaluate(currentInput, currentSentence.english);
+      // Get the key expressions for this sentence
+      const keyExpressions = currentSentence.expressions || [];
       
       // Log spoken vocabulary
       logSpokenWords(currentInput);
       
-      const threeAxis = result.threeAxis || {
-        meaning: result.score >= 85 ? 'excellent' : result.score >= 60 ? 'good' : 'needs_work',
-        structure: result.score >= 85 ? 'excellent' : result.score >= 60 ? 'good' : 'needs_work',
-        fluency: result.score >= 85 ? 'excellent' : result.score >= 60 ? 'good' : 'needs_work',
-      } as ThreeAxisScores;
+      // For cloze questions: evaluate based on KEY EXPRESSION only
+      // The rest of the sentence doesn't matter for pass/fail
+      const clozeEval = evaluateClozeAnswer(
+        currentInput, 
+        currentSentence.english, 
+        keyExpressions
+      );
       
-      const passed = result.passed !== undefined ? result.passed : calculatePassStatus(threeAxis).passed;
+      const threeAxis: ThreeAxisScores = {
+        meaning: clozeEval.meaning,
+        structure: clozeEval.structure,
+        fluency: clozeEval.fluency,
+      };
+      
+      const passed = clozeEval.passed;
       
       setLastScores(threeAxis);
       
@@ -187,11 +197,11 @@ export function ClozeQuiz({ sentences, onComplete, onEvaluate }: ClozeQuizProps)
     } finally {
       setIsEvaluating(false);
     }
-  }, [currentSentence, currentInput, step, onEvaluate, playSuccess, resetTranscript]);
+  }, [currentSentence, currentInput, playSuccess, logSpokenWords]);
 
   const handleTryAgain = useCallback(() => {
     // Go back to the previous cloze step for this sentence
-    setStep(lastScores && calculatePassStatus(lastScores).passed ? 'full_cloze' : 'partial_cloze');
+    setStep('partial_cloze');
     setLastScores(null);
     resetTranscript();
     setTypedInput('');
@@ -232,7 +242,12 @@ export function ClozeQuiz({ sentences, onComplete, onEvaluate }: ClozeQuizProps)
   // Result screen - always show when we have scores
   if (step === 'result') {
     const hasScores = lastScores !== null;
-    const passed = hasScores ? calculatePassStatus(lastScores).passed : false;
+    // For cloze mode: check if key expression is present (not the 3-axis score)
+    const keyExpressions = currentSentence.expressions || [];
+    const expressionCheck = keyExpressions.length > 0 
+      ? checkKeyExpressionsEnhanced(lastUserAnswer, keyExpressions)
+      : { allPresent: true, results: [] };
+    const passed = expressionCheck.allPresent;
     
     if (!hasScores) {
       // Safety fallback - should not happen but handle gracefully
