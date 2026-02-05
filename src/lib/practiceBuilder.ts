@@ -25,8 +25,8 @@ export function expressionAppearsIn(english: string, expression: string): boolea
  * Given a diary entry and its expressions, build a list of practice sentences
  * ensuring each expression is attached only to sentences where it exists.
  *
- * All provided expressions will be represented at least once in the output.
- * If no sentence contains an expression, it's attached to a synthetic sentence.
+ * IMPORTANT (strict rule): expressions that do not appear in the diary English text
+ * are dropped here (they should also be cleaned up at save-time / load-time).
  */
 export function buildPracticeSentences(
   diaryContent: string,
@@ -36,12 +36,16 @@ export function buildPracticeSentences(
 ): PracticeSentence[] {
   // Dedupe expression list (case-insensitive)
   const seenNorm = new Set<string>();
-  const expressions = expressionStrings.filter((e) => {
+  const deduped = expressionStrings.filter((e) => {
     const n = normalizeForExpression(e);
     if (!n || seenNorm.has(n)) return false;
     seenNorm.add(n);
     return true;
   });
+
+  // STRICT: keep only expressions that appear in the diary English text.
+  const diaryNorm = normalizeForExpression(diaryContent || '');
+  const expressions = deduped.filter((e) => diaryNorm.includes(normalizeForExpression(e)));
 
   // Build sentences from content
   const englishSentences = (diaryContent || '')
@@ -68,36 +72,20 @@ export function buildPracticeSentences(
           expressions: [],
         }));
 
-  // Assign each expression to the first sentence it belongs to
-  const usedExprs = new Set<string>();
+  // Attach expressions only to sentences where they appear
   for (const sent of baseSentences) {
     for (const expr of expressions) {
       if (expressionAppearsIn(sent.english, expr)) {
         sent.expressions.push(expr);
-        usedExprs.add(normalizeForExpression(expr));
       }
     }
-  }
-
-  // Find orphan expressions (don't appear in any sentence)
-  const orphans = expressions.filter((e) => !usedExprs.has(normalizeForExpression(e)));
-
-  // Dedupe final expressions per sentence
-  for (const sent of baseSentences) {
     sent.expressions = Array.from(new Set(sent.expressions));
   }
 
-  // Append orphans as synthetic sentences so they still get practiced
-  for (const orphan of orphans) {
-    baseSentences.push({
-      english: `Use "${orphan}" in your own sentence.`,
-      japanese: `「${orphan}」を使った文を作ってください。`,
-      expressions: [orphan],
-    });
-  }
-
-  return baseSentences;
+  // Remove sentences that have zero expressions (practice is expression-driven)
+  return baseSentences.filter((s) => s.expressions.length > 0);
 }
+
 
 /**
  * Persist the canonical sentence list to the new diary_sentences table (upsert).

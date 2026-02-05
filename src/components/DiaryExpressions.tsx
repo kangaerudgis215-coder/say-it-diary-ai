@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
-import { Sparkles, ChevronDown, ChevronUp, Tag, Layers, Star } from 'lucide-react';
+import { Sparkles, ChevronDown, ChevronUp, Star } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/lib/supabase';
 import { cn } from '@/lib/utils';
+import { partitionExpressionsForText } from '@/lib/expressionValidation';
 
 interface Expression {
   id: string;
@@ -34,12 +35,38 @@ export function DiaryExpressions({ diaryEntryId }: DiaryExpressionsProps) {
 
   const fetchExpressions = async () => {
     setIsLoading(true);
+
+    const { data: entry } = await supabase
+      .from('diary_entries')
+      .select('content')
+      .eq('id', diaryEntryId)
+      .maybeSingle();
+
+    const diaryText = entry?.content || '';
+
     const { data } = await supabase
       .from('expressions')
       .select('*')
       .eq('diary_entry_id', diaryEntryId);
-    
-    setExpressions(data || []);
+
+    const exprs = (data || []) as Expression[];
+    const { valid, invalid } = partitionExpressionsForText(exprs, diaryText);
+
+    // Safety: hide invalid expressions and unlink them so they don't reappear.
+    if (invalid.length > 0) {
+      console.warn(
+        `[expression-validation] Hiding/unlinking ${invalid.length} expression(s) that are not present in diary ${diaryEntryId}.`
+      );
+      await supabase
+        .from('expressions')
+        .update({ diary_entry_id: null })
+        .in(
+          'id',
+          invalid.map((x) => x.id)
+        );
+    }
+
+    setExpressions(valid);
     setIsLoading(false);
   };
 
