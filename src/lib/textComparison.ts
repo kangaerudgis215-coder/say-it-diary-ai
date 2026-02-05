@@ -171,43 +171,63 @@
      return { present: true, confidence: 100, matchedTokens: exprTokens, missingTokens: [] };
    }
    
-   // Token-based check
-   const userTokens = userNorm.split(' ').filter(t => t.length > 0);
-   const exprTokens = exprNorm.split(' ').filter(t => t.length > 0);
-   
-   const matchedTokens: string[] = [];
-   const missingTokens: string[] = [];
-   const userTokensCopy = [...userTokens];
-   
-   for (const exprToken of exprTokens) {
-     // Look for exact or close match
-     const matchIndex = userTokensCopy.findIndex(ut => {
-       if (ut === exprToken) return true;
-       // Allow 1 char typo for words > 3 chars
-       if (ut.length > 3 && exprToken.length > 3 && levenshteinDistance(ut, exprToken) <= 1) return true;
-       // Allow partial match for longer words (e.g., "satisfy" matches "satisfied")
-       if (ut.length >= 4 && exprToken.length >= 4) {
-         const shorter = ut.length < exprToken.length ? ut : exprToken;
-         const longer = ut.length < exprToken.length ? exprToken : ut;
-         if (longer.startsWith(shorter.slice(0, -2)) || shorter.startsWith(longer.slice(0, -2))) return true;
-       }
-       return false;
-     });
-     
-     if (matchIndex !== -1) {
-       matchedTokens.push(exprToken);
-       userTokensCopy.splice(matchIndex, 1);
-     } else {
-       missingTokens.push(exprToken);
-     }
-   }
+  const FILLER_WORDS = new Set([
+    'a', 'an', 'the',
+    'to', 'of', 'in', 'on', 'at', 'for', 'with', 'from',
+    'and', 'or', 'but',
+    'is', 'am', 'are', 'was', 'were', 'be', 'been', 'being',
+    'i', 'you', 'he', 'she', 'we', 'they', 'it',
+    'my', 'your', 'his', 'her', 'our', 'their',
+    'this', 'that', 'these', 'those',
+    'just', 'really', 'very',
+  ]);
+
+  const tokenEqualsLoose = (userToken: string, exprToken: string) => {
+    if (userToken === exprToken) return true;
+    // Allow 1 char typo for words > 3 chars
+    if (userToken.length > 3 && exprToken.length > 3 && levenshteinDistance(userToken, exprToken) <= 1) return true;
+    // Allow partial/prefix match for longer words (e.g., "satisfy" matches "satisfied")
+    if (userToken.length >= 4 && exprToken.length >= 4) {
+      const shorter = userToken.length < exprToken.length ? userToken : exprToken;
+      const longer = userToken.length < exprToken.length ? exprToken : userToken;
+      const stem = shorter.length > 4 ? shorter.slice(0, -2) : shorter;
+      if (longer.startsWith(stem)) return true;
+    }
+    return false;
+  };
+
+  // Token-based check (ORDERED subsequence match)
+  const userTokensRaw = userNorm.split(' ').filter(t => t.length > 0);
+  const exprTokens = exprNorm.split(' ').filter(t => t.length > 0);
+
+  // Remove filler words from the user's answer *unless* they are part of the expression.
+  // (This prevents filler from breaking matching while still allowing expressions like "go to sleep".)
+  const exprTokenSet = new Set(exprTokens);
+  const userTokens = userTokensRaw.filter(t => !(FILLER_WORDS.has(t) && !exprTokenSet.has(t)));
+
+  const matchedTokens: string[] = [];
+  const missingTokens: string[] = [];
+  let cursor = 0;
+
+  for (const exprToken of exprTokens) {
+    let found = false;
+    for (let i = cursor; i < userTokens.length; i++) {
+      if (tokenEqualsLoose(userTokens[i], exprToken)) {
+        found = true;
+        cursor = i + 1;
+        matchedTokens.push(exprToken);
+        break;
+      }
+    }
+    if (!found) missingTokens.push(exprToken);
+  }
    
    // Calculate confidence
    const confidence = exprTokens.length > 0 
      ? Math.round((matchedTokens.length / exprTokens.length) * 100) 
      : 100;
    
-   // Expression is present if at least 70% of tokens are matched
+  // Expression is present if at least 70% of tokens are matched (encouraging, tolerant)
    const present = confidence >= 70;
    
    return { present, confidence, matchedTokens, missingTokens };

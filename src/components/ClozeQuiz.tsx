@@ -4,13 +4,12 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Textarea } from '@/components/ui/textarea';
-import { QuizResultScreen } from '@/components/QuizResultScreen';
-import { ThreeAxisScores } from '@/components/ThreeAxisEvaluation';
+import { ExpressionOnlyResultScreen } from '@/components/expressionPractice/ExpressionOnlyResultScreen';
 import { useSpeechRecognition } from '@/hooks/useSpeechRecognition';
 import { useSuccessSound } from '@/hooks/useSuccessSound';
 import { useVocabularyLog } from '@/hooks/useVocabularyLog';
 import { cn } from '@/lib/utils';
-import { evaluateClozeAnswer, checkKeyExpressionsEnhanced } from '@/lib/textComparison';
+import { checkKeyExpressionsEnhanced, normalizeForExpression } from '@/lib/textComparison';
 
 interface PracticeSentence {
   english: string;
@@ -23,11 +22,8 @@ type QuizStep = 'show' | 'partial_cloze' | 'full_cloze' | 'result';
 interface ClozeQuizProps {
   sentences: PracticeSentence[];
   onComplete: (attemptText: string, score: number, passed: boolean) => void;
-  onEvaluate: (text: string, target: string) => Promise<{ 
-    score: number; 
-    threeAxis?: ThreeAxisScores; 
-    passed?: boolean 
-  }>;
+  // Legacy prop (kept to avoid breaking callers) — cloze mode is expression-only.
+  onEvaluate?: (text: string, target: string) => Promise<any>;
 }
 
 // Generate a cloze (gap-fill) version of a sentence
@@ -39,42 +35,29 @@ function generateCloze(sentence: string, expressions?: string[]): string {
     return words.slice(0, -1).join(' ') + ' ____';
   }
 
-  // Prefer to hide key expressions if available
-  let cloze = sentence;
-  let hiddenCount = 0;
-  const targetHides = Math.min(3, Math.ceil(words.length / 3));
-
+  // Expression-focused cloze: ONLY hide key expressions (no random extra blanks)
   if (expressions && expressions.length > 0) {
+    let cloze = sentence;
     for (const expr of expressions) {
-      if (cloze.toLowerCase().includes(expr.toLowerCase()) && hiddenCount < targetHides) {
-        const regex = new RegExp(`\\b${expr.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi');
-        cloze = cloze.replace(regex, '____');
-        hiddenCount++;
-      }
+      if (!expr?.trim()) continue;
+      // Replace the exact phrase (case-insensitive). We intentionally don't use word boundaries
+      // because many expressions include punctuation/hyphens.
+      const escaped = expr.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const regex = new RegExp(escaped, 'gi');
+      cloze = cloze.replace(regex, '____');
     }
+
+    // If nothing was hidden (mismatch), fall back to hiding the last word.
+    if (!cloze.includes('____')) {
+      const lastWord = words[words.length - 1];
+      return words.slice(0, -1).join(' ') + ' ____';
+    }
+    return cloze;
   }
 
-  // If we didn't hide enough, hide some other words
-  if (hiddenCount < targetHides) {
-    const wordsToHide = targetHides - hiddenCount;
-    const clozeWords = cloze.split(/\s+/);
-    const indices: number[] = [];
-    
-    // Pick random content words (skip short words and already hidden)
-    for (let i = 0; i < clozeWords.length && indices.length < wordsToHide; i++) {
-      if (clozeWords[i].length > 3 && clozeWords[i] !== '____') {
-        indices.push(i);
-      }
-    }
-    
-    // Shuffle and pick
-    indices.sort(() => Math.random() - 0.5);
-    const toHide = indices.slice(0, wordsToHide);
-    
-    cloze = clozeWords.map((w, i) => toHide.includes(i) ? '____' : w).join(' ');
-  }
-
-  return cloze;
+  // No expressions: simple fallback
+  const lastWord = words[words.length - 1];
+  return words.slice(0, -1).join(' ') + ' ____';
 }
 
 export function ClozeQuiz({ sentences, onComplete, onEvaluate }: ClozeQuizProps) {
@@ -84,10 +67,11 @@ export function ClozeQuiz({ sentences, onComplete, onEvaluate }: ClozeQuizProps)
   const [showHint, setShowHint] = useState(false);
   const [typedInput, setTypedInput] = useState('');
   const [showTyping, setShowTyping] = useState(false);
-  const [lastScores, setLastScores] = useState<ThreeAxisScores | null>(null);
   const [lastUserAnswer, setLastUserAnswer] = useState('');
+  const [lastExpressionCheck, setLastExpressionCheck] = useState<ReturnType<typeof checkKeyExpressionsEnhanced> | null>(null);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const [completedSentences, setCompletedSentences] = useState<Set<number>>(new Set());
+  const [attemptLog, setAttemptLog] = useState<string[]>([]);
 
   const {
     isListening,
@@ -115,6 +99,13 @@ export function ClozeQuiz({ sentences, onComplete, onEvaluate }: ClozeQuizProps)
   const clozeText = useMemo(() => {
     if (!currentSentence) return '';
     return generateCloze(currentSentence.english, currentSentence.expressions);
+  }, [currentSentence]);
+
+  const keyExpressions = useMemo(() => {
+    const exprs = currentSentence?.expressions ?? [];
+    // Final safety: only keep expressions that actually appear in the target sentence.
+    const sentNorm = normalizeForExpression(currentSentence?.english ?? '');
+    return exprs.filter((e) => sentNorm.includes(normalizeForExpression(e)));
   }, [currentSentence]);
 
   // Reset state when sentence changes
@@ -162,47 +153,28 @@ export function ClozeQuiz({ sentences, onComplete, onEvaluate }: ClozeQuizProps)
     setLastUserAnswer(currentInput);
     
     try {
-      // Get the key expressions for this sentence
-      const keyExpressions = currentSentence.expressions || [];
-      
       // Log spoken vocabulary
       logSpokenWords(currentInput);
       
-      // For cloze questions: evaluate based on KEY EXPRESSION only
-      // The rest of the sentence doesn't matter for pass/fail
-      const clozeEval = evaluateClozeAnswer(
-        currentInput, 
-        currentSentence.english, 
-        keyExpressions
-      );
-      
-      const threeAxis: ThreeAxisScores = {
-        meaning: clozeEval.meaning,
-        structure: clozeEval.structure,
-        fluency: clozeEval.fluency,
-      };
-      
-      const passed = clozeEval.passed;
-      
-      setLastScores(threeAxis);
-      
-      if (passed) { 
-        playSuccess();
-      }
-      
-      // Always show result screen for feedback - user controls when to advance
+      // Expression-only grading: PASS iff all key expressions are present.
+      const expressionCheck = checkKeyExpressionsEnhanced(currentInput, keyExpressions);
+      setLastExpressionCheck(expressionCheck);
+
+      if (expressionCheck.allPresent) playSuccess();
+
+      // Always show result screen for feedback — user controls when to retry/advance.
       setStep('result');
     } catch (error) {
       console.error('Evaluation error:', error);
     } finally {
       setIsEvaluating(false);
     }
-  }, [currentSentence, currentInput, playSuccess, logSpokenWords]);
+  }, [currentSentence, currentInput, keyExpressions, playSuccess, logSpokenWords]);
 
   const handleTryAgain = useCallback(() => {
     // Go back to the previous cloze step for this sentence
     setStep('partial_cloze');
-    setLastScores(null);
+    setLastExpressionCheck(null);
     resetTranscript();
     setTypedInput('');
     setLastUserAnswer('');
@@ -211,20 +183,33 @@ export function ClozeQuiz({ sentences, onComplete, onEvaluate }: ClozeQuizProps)
   const handleNext = useCallback(() => {
     // Mark current as completed
     setCompletedSentences(prev => new Set([...prev, currentIndex]));
+
+    // Record this attempt for the session transcript
+    setAttemptLog((prev) => {
+      const next = [...prev];
+      next[currentIndex] = lastUserAnswer;
+      return next;
+    });
     
     if (currentIndex < sentences.length - 1) {
       // Move to next sentence - reset state first, then advance
       const nextIndex = currentIndex + 1;
-      setLastScores(null);
       setLastUserAnswer('');
+      setLastExpressionCheck(null);
       setStep('show');
       setCurrentIndex(nextIndex);
     } else {
       // All sentences done
       playBigSuccess();
-      onComplete(lastUserAnswer, 90, true);
+
+      const finalLog = [...attemptLog];
+      finalLog[currentIndex] = lastUserAnswer;
+      const transcript = finalLog.filter(Boolean).join('\n');
+
+      // Expression-only practice: if they reached here, all key expressions were cleared.
+      onComplete(transcript, 100, true);
     }
-  }, [currentIndex, sentences.length, lastUserAnswer, playBigSuccess, onComplete]);
+  }, [attemptLog, currentIndex, sentences.length, lastUserAnswer, playBigSuccess, onComplete]);
 
   const getStepLabel = () => {
     switch (step) {
@@ -241,15 +226,9 @@ export function ClozeQuiz({ sentences, onComplete, onEvaluate }: ClozeQuizProps)
 
   // Result screen - always show when we have scores
   if (step === 'result') {
-    const hasScores = lastScores !== null;
-    // For cloze mode: check if key expression is present (not the 3-axis score)
-    const keyExpressions = currentSentence.expressions || [];
-    const expressionCheck = keyExpressions.length > 0 
-      ? checkKeyExpressionsEnhanced(lastUserAnswer, keyExpressions)
-      : { allPresent: true, results: [] };
-    const passed = expressionCheck.allPresent;
-    
-    if (!hasScores) {
+    const expressionCheck = lastExpressionCheck ?? checkKeyExpressionsEnhanced(lastUserAnswer, keyExpressions);
+
+    if (!lastExpressionCheck && !lastUserAnswer) {
       // Safety fallback - should not happen but handle gracefully
       return (
         <div className="flex flex-col h-full items-center justify-center">
@@ -273,16 +252,14 @@ export function ClozeQuiz({ sentences, onComplete, onEvaluate }: ClozeQuizProps)
           <Progress value={progress} className="h-2" />
         </div>
 
-        <QuizResultScreen
+        <ExpressionOnlyResultScreen
           userAnswer={lastUserAnswer}
-          correctAnswer={currentSentence.english}
-          scores={lastScores}
-          keyExpressions={currentSentence.expressions}
+          correctSentence={currentSentence.english}
+          keyExpressions={keyExpressions}
+          expressionCheck={expressionCheck}
           onTryAgain={handleTryAgain}
           onNext={handleNext}
           nextLabel={currentIndex < sentences.length - 1 ? 'Next Sentence' : 'Complete!'}
-          showTryAgain={true}
-          requireKeyExpressions={true}
         />
       </div>
     );
@@ -375,6 +352,22 @@ export function ClozeQuiz({ sentences, onComplete, onEvaluate }: ClozeQuizProps)
 
       {(step === 'partial_cloze' || step === 'full_cloze') && (
         <>
+          {/* Key-expression-only indicator */}
+          {keyExpressions.length > 0 && (
+            <div className="mb-3 rounded-xl border border-border bg-muted/30 p-3">
+              <p className="text-xs text-muted-foreground mb-2">
+                Key expression(s) being tested:
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {keyExpressions.map((expr, i) => (
+                  <span key={`${expr}-${i}`} className="px-2 py-1 rounded-full text-xs bg-primary/10 text-primary border border-primary/15">
+                    {expr}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Sentence display */}
           <Card className="mb-4">
             <CardContent className="p-4 space-y-3">
@@ -431,7 +424,7 @@ export function ClozeQuiz({ sentences, onComplete, onEvaluate }: ClozeQuizProps)
                   </p>
                 ) : (
                   <p className="text-sm text-muted-foreground text-center">
-                    Key expressions: {currentSentence.expressions?.join(', ') || 'None'}
+                    Key expressions: {keyExpressions.join(', ') || 'None'}
                   </p>
                 )}
               </CardContent>
