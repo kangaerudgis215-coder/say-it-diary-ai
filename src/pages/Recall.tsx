@@ -12,6 +12,7 @@ import { RecallResult } from '@/components/RecallResult';
 import { ThreeAxisScores } from '@/components/ThreeAxisEvaluation';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { normalizeForExpression } from '@/lib/textComparison';
 
 interface EvaluationResult {
   score: number;
@@ -41,9 +42,61 @@ export default function Recall() {
   const [evaluationResult, setEvaluationResult] = useState<EvaluationResult | null>(null);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
 
+  type PracticeSentence = { english: string; japanese: string; expressions: string[] };
+
   useEffect(() => {
     fetchDiaryForRecall();
   }, [user, diaryIdFromUrl, modeFromUrl]);
+
+  const expressionAppearsInSentence = useCallback((englishSentence: string, expression: string) => {
+    const sent = normalizeForExpression(englishSentence);
+    const expr = normalizeForExpression(expression);
+    if (!expr) return false;
+    return sent.includes(expr);
+  }, []);
+
+  const buildPracticeSentences = useCallback((entry: any, exprs: any[]): PracticeSentence[] => {
+    const allExpressions: string[] = (exprs || [])
+      .map((e) => e?.expression)
+      .filter((x): x is string => typeof x === 'string' && x.trim().length > 0);
+
+    const important = entry?.important_sentences
+      ? (entry.important_sentences as Array<{ english: string; japanese: string; expressions?: string[]; key_expressions?: string[] }>)
+      : null;
+
+    if (important && important.length > 0) {
+      return important.map((s) => {
+        const candidates: string[] = (s.expressions ?? s.key_expressions ?? [])
+          .filter((x): x is string => typeof x === 'string' && x.trim().length > 0);
+
+        const aligned = candidates.filter((expr) => expressionAppearsInSentence(s.english, expr));
+        const fallback: string[] = aligned.length > 0
+          ? aligned
+          : allExpressions.filter((expr) => expressionAppearsInSentence(s.english, expr));
+
+        return {
+          english: s.english,
+          japanese: s.japanese,
+          expressions: Array.from(new Set<string>(fallback)),
+        };
+      });
+    }
+
+    // Fallback: split diary content and attach only expressions that appear in each sentence.
+    const englishSentences = (entry?.content || '')
+      .split(/[.!?]+/)
+      .filter((s: string) => s.trim());
+
+    const japaneseSentences = (entry?.japanese_summary || '')
+      .split(/[。！？]+/)
+      .map((s: string) => s.trim());
+
+    return englishSentences.map((s: string, i: number): PracticeSentence => ({
+      english: s.trim() + '.',
+      japanese: japaneseSentences[i] || '',
+      expressions: allExpressions.filter((expr) => expressionAppearsInSentence(s, expr)),
+    }));
+  }, [expressionAppearsInSentence]);
 
   const fetchDiaryForRecall = async () => {
     if (!user) return;
@@ -79,14 +132,36 @@ export default function Recall() {
     }
 
     if (entry) {
-      setDiaryEntry(entry);
-
       const { data: exprs } = await supabase
         .from('expressions')
         .select('*')
         .eq('diary_entry_id', entry.id);
 
-      setExpressions(exprs || []);
+      const exprList = exprs || [];
+
+      // Repair important_sentences so key expressions always come from the same sentence.
+      // We only keep expressions that are actually a substring of that exact english sentence.
+      if (Array.isArray(entry.important_sentences) && entry.important_sentences.length > 0) {
+        const repaired = buildPracticeSentences(entry, exprList);
+        const current = (entry.important_sentences as any[]).map((s) => ({
+          english: s.english,
+          japanese: s.japanese,
+          expressions: s.expressions,
+        }));
+
+        if (JSON.stringify(repaired) !== JSON.stringify(current)) {
+          await supabase
+            .from('diary_entries')
+            .update({ important_sentences: repaired })
+            .eq('id', entry.id)
+            .eq('user_id', user.id);
+
+          entry = { ...entry, important_sentences: repaired };
+        }
+      }
+
+      setDiaryEntry(entry);
+      setExpressions(exprList);
     }
     
     setIsLoading(false);
@@ -138,23 +213,26 @@ export default function Recall() {
     if (!user || !diaryEntry) return;
 
     try {
-      const expressionTexts = expressions.map(e => e.expression);
-      
-      const { data: evalData } = await supabase.functions.invoke('evaluate-recall', {
-        body: {
-          originalText: diaryEntry.content,
-          recallText: transcript,
-          expressions: expressionTexts,
-        },
-      });
+      // IMPORTANT: For key-expression practice, the session summary must match the per-question checks.
+      // Since the user cannot advance without producing the key expression(s), we do not run a
+      // separate end-of-session analysis that could contradict the question-level judgments.
+      const practiceSentences = buildPracticeSentences(diaryEntry, expressions);
+      const usedExpressions = Array.from(
+        new Set(
+          practiceSentences
+            .flatMap((s) => s.expressions ?? [])
+            .filter((x): x is string => typeof x === 'string' && x.trim().length > 0)
+        )
+      );
 
       const result: EvaluationResult = {
-        score: evalData?.score || score,
-        feedback: evalData?.feedback || 'Great effort!',
-        usedExpressions: evalData?.usedExpressions || [],
-        missedExpressions: evalData?.missedExpressions || [],
-        threeAxis: evalData?.threeAxis,
-        passed: evalData?.passed ?? passed,
+        score: usedExpressions.length > 0 ? 100 : score,
+        feedback: usedExpressions.length > 0
+          ? 'Key expressions cleared — nice work!'
+          : 'Practice complete!',
+        usedExpressions,
+        missedExpressions: [],
+        passed: true,
       };
 
       // Save recall session
@@ -162,7 +240,7 @@ export default function Recall() {
         user_id: user.id,
         diary_entry_id: diaryEntry.id,
         user_attempt: transcript,
-        hints_used: ['sentence_practice'],
+        hints_used: ['sentence_practice_key_expressions'],
         completed: true,
         score: result.score,
         used_expressions: result.usedExpressions,
@@ -192,7 +270,7 @@ export default function Recall() {
         description: 'Failed to save your recall session.',
       });
     }
-  }, [user, diaryEntry, expressions, toast]);
+  }, [user, diaryEntry, expressions, toast, buildPracticeSentences]);
 
   const handleTryAgain = () => {
     setPhase('practice');
@@ -283,19 +361,7 @@ export default function Recall() {
 
   // Practice Phase - use ClozeQuiz
   if (phase === 'practice') {
-    // Parse important_sentences if available
-    const importantSentences = diaryEntry.important_sentences 
-      ? (diaryEntry.important_sentences as Array<{ english: string; japanese: string; expressions?: string[] }>)
-      : null;
-
-    // Build sentences array for ClozeQuiz
-    const practiceSentences = importantSentences && importantSentences.length > 0
-      ? importantSentences
-      : diaryEntry.content.split(/[.!?]+/).filter((s: string) => s.trim()).map((s: string, i: number) => ({
-          english: s.trim() + '.',
-          japanese: diaryEntry.japanese_summary?.split(/[。！？]+/)[i]?.trim() || '',
-          expressions: expressions.filter(e => s.toLowerCase().includes(e.expression.toLowerCase())).map(e => e.expression),
-        }));
+    const practiceSentences = buildPracticeSentences(diaryEntry, expressions);
 
     return (
       <div className="min-h-screen flex flex-col p-6 safe-bottom">
