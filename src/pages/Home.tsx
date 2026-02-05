@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
- import { Mic, Brain, BookOpen, Sparkles, LogOut, Shuffle, TrendingUp } from 'lucide-react';
+ import { Mic, BookOpen, Sparkles, LogOut, Shuffle, TrendingUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { StreakBadge } from '@/components/StreakBadge';
 import { ActionCard } from '@/components/ActionCard';
@@ -15,7 +15,6 @@ export default function Home() {
   const [profile, setProfile] = useState<any>(null);
   const [todayComplete, setTodayComplete] = useState(false);
   const [hasPastDiaries, setHasPastDiaries] = useState(false);
-  const [latestPastDiaryRecalled, setLatestPastDiaryRecalled] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -52,23 +51,7 @@ export default function Home() {
       .order('date', { ascending: false })
       .limit(1);
     
-    const latestPastEntry = pastEntries && pastEntries.length > 0 ? pastEntries[0] : null;
-    setHasPastDiaries(!!latestPastEntry);
-
-    // Check if the latest past diary has been recalled today
-    if (latestPastEntry) {
-      const { data: recallData } = await supabase
-        .from('recall_sessions')
-        .select('completed')
-        .eq('diary_entry_id', latestPastEntry.id)
-        .eq('completed', true)
-        .gte('created_at', today)
-        .maybeSingle();
-      
-      setLatestPastDiaryRecalled(!!recallData);
-    } else {
-      setLatestPastDiaryRecalled(false);
-    }
+    setHasPastDiaries(!!(pastEntries && pastEntries.length > 0));
   };
 
   const getGreeting = () => {
@@ -78,16 +61,6 @@ export default function Home() {
     return 'Good evening';
   };
 
-  // Determine status message for recall
-  const getRecallStatusMessage = () => {
-    if (!hasPastDiaries) return null;
-    if (latestPastDiaryRecalled) return null;
-    if (todayComplete) return "Next step: try the latest recall quiz!";
-    return null;
-  };
-
-  // Determine if both tasks are complete
-  const allDailyTasksDone = todayComplete && (!hasPastDiaries || latestPastDiaryRecalled);
 
   return (
     <div className="min-h-screen flex flex-col p-6 safe-bottom">
@@ -119,10 +92,10 @@ export default function Home() {
       </div>
 
       {/* Completion message */}
-      {allDailyTasksDone && (
+      {todayComplete && (
         <div className="bg-primary/10 border border-primary/20 rounded-2xl p-4 mb-6 text-center">
           <p className="text-sm text-primary font-medium">
-            🎉 Great job! You did both today's diary and recall.
+            🎉 Great job! You completed today's diary.
           </p>
         </div>
       )}
@@ -142,23 +115,8 @@ export default function Home() {
           badge={!todayComplete ? "MUST" : undefined}
         />
 
-        {/* 2. Latest Recall Quiz - Secondary */}
-        <ActionCard
-          icon={<Brain className="w-8 h-8" />}
-          title={latestPastDiaryRecalled ? "Latest recalled ✓" : "Latest recall quiz"}
-          description={
-            !hasPastDiaries
-              ? "No past diaries yet"
-              : latestPastDiaryRecalled
-                ? "Excellent memory work today!"
-                : "Practice recalling your most recent diary from memory."
-          }
-          onClick={() => navigate('/recall')}
-          variant={latestPastDiaryRecalled ? "accent" : hasPastDiaries ? "secondary" : "secondary"}
-          badge={hasPastDiaries && !latestPastDiaryRecalled && todayComplete ? "NEXT" : undefined}
-          statusMessage={getRecallStatusMessage()}
-          disabled={!hasPastDiaries}
-        />
+        {/* 2. Latest Recall Quiz - TEMPORARILY DISABLED */}
+        {/* Will be redesigned with a simpler, more stable approach */}
 
          {/* 3. Expression Memory Game */}
         <ActionCard
