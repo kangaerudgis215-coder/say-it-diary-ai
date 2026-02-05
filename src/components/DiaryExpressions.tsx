@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Sparkles, ChevronDown, ChevronUp, Tag, Layers } from 'lucide-react';
+import { Sparkles, ChevronDown, ChevronUp, Tag, Layers, Star } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/lib/supabase';
@@ -13,6 +13,7 @@ interface Expression {
   mastery_level: number;
   scene_or_context: string | null;
   pos_or_type: string | null;
+  is_user_added?: boolean;
 }
 
 interface DiaryExpressionsProps {
@@ -114,6 +115,12 @@ export function DiaryExpressions({ diaryEntryId }: DiaryExpressionsProps) {
                     {exp.pos_or_type && (
                       <Badge variant="secondary" className="text-xs px-1.5 py-0">
                         {exp.pos_or_type}
+                      </Badge>
+                    )}
+                    {exp.is_user_added && (
+                      <Badge variant="default" className="text-xs px-1.5 py-0 bg-amber-500/20 text-amber-500 border-amber-500/30">
+                        <Star className="w-2 h-2 mr-0.5" />
+                        User
                       </Badge>
                     )}
                   </div>

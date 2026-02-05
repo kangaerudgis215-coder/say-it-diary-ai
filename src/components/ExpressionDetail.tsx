@@ -1,7 +1,10 @@
-import { Calendar, BookOpen, MessageSquare, Tag, Layers } from 'lucide-react';
+import { Calendar, BookOpen, MessageSquare, Tag, Layers, Star, Trash2, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
+import { supabase } from '@/lib/supabase';
+import { useToast } from '@/hooks/use-toast';
+import { useState } from 'react';
 
 interface ExpressionDetailProps {
   expression: {
@@ -14,11 +17,46 @@ interface ExpressionDetailProps {
     scene_or_context: string | null;
     pos_or_type: string | null;
     diary_entry_id: string | null;
+    is_user_added?: boolean;
   };
   onNavigateToDiary?: () => void;
+  onDeleted?: () => void;
 }
 
-export function ExpressionDetail({ expression, onNavigateToDiary }: ExpressionDetailProps) {
+export function ExpressionDetail({ expression, onNavigateToDiary, onDeleted }: ExpressionDetailProps) {
+  const { toast } = useToast();
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const handleDelete = async () => {
+    if (!expression.is_user_added) return;
+    
+    setIsDeleting(true);
+    try {
+      const { error } = await supabase
+        .from('expressions')
+        .delete()
+        .eq('id', expression.id);
+      
+      if (error) throw error;
+      
+      toast({
+        title: 'Expression deleted',
+        description: 'The expression has been removed from your collection.',
+      });
+      
+      onDeleted?.();
+    } catch (error) {
+      console.error('Failed to delete expression:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Could not delete expression. Please try again.',
+      });
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   const formatDiaryDate = (dateStr: string | null) => {
     if (!dateStr) return 'Unknown date';
     return format(new Date(dateStr), 'MMMM d, yyyy');
@@ -26,6 +64,14 @@ export function ExpressionDetail({ expression, onNavigateToDiary }: ExpressionDe
 
   return (
     <div className="space-y-4">
+      {/* User-added badge */}
+      {expression.is_user_added && (
+        <div className="flex items-center gap-2 text-amber-500">
+          <Star className="w-4 h-4 fill-amber-500" />
+          <span className="text-sm font-medium">User-added expression</span>
+        </div>
+      )}
+
       {/* Expression header */}
       <div>
         <h3 className="text-lg font-bold text-primary">{expression.expression}</h3>
@@ -101,6 +147,26 @@ export function ExpressionDetail({ expression, onNavigateToDiary }: ExpressionDe
               View diary from this day
             </Button>
           )}
+        </div>
+      )}
+
+      {/* Delete button for user-added expressions */}
+      {expression.is_user_added && (
+        <div className="pt-3 border-t border-border">
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={handleDelete}
+            disabled={isDeleting}
+            className="w-full text-destructive hover:text-destructive hover:bg-destructive/10"
+          >
+            {isDeleting ? (
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            ) : (
+              <Trash2 className="w-4 h-4 mr-2" />
+            )}
+            {isDeleting ? 'Deleting...' : 'Delete expression'}
+          </Button>
         </div>
       )}
     </div>

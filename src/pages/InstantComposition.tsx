@@ -1,6 +1,6 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Zap, Mic, MicOff, Loader2, ChevronRight, Keyboard, Eye, EyeOff, GraduationCap } from 'lucide-react';
+import { ArrowLeft, Zap, Mic, MicOff, Loader2, ChevronRight, Keyboard, GraduationCap, MessageSquare, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
@@ -13,7 +13,8 @@ import { useSuccessSound } from '@/hooks/useSuccessSound';
 import { supabase } from '@/lib/supabase';
 import { cn } from '@/lib/utils';
 
-type Phase = 'start' | 'test' | 'result' | 'practice';
+type PracticeMode = 'expressions' | 'sentences';
+type Phase = 'mode_select' | 'start' | 'test' | 'result' | 'practice';
 
 export default function InstantComposition() {
   const navigate = useNavigate();
@@ -27,6 +28,15 @@ export default function InstantComposition() {
     nextSentence,
   } = useInstantComposition();
 
+  // Expression mode state
+  const [expressionsList, setExpressionsList] = useState<Array<{
+    id: string;
+    expression: string;
+    meaning: string | null;
+    example_sentence: string | null;
+  }>>([]);
+  const [currentExpr, setCurrentExpr] = useState<typeof expressionsList[0] | null>(null);
+
   const {
     isListening,
     transcript,
@@ -39,7 +49,8 @@ export default function InstantComposition() {
 
   const { playSuccess } = useSuccessSound();
 
-  const [phase, setPhase] = useState<Phase>('start');
+  const [mode, setMode] = useState<PracticeMode | null>(null);
+  const [phase, setPhase] = useState<Phase>('mode_select');
   const [showTyping, setShowTyping] = useState(false);
   const [typedInput, setTypedInput] = useState('');
   const [isEvaluating, setIsEvaluating] = useState(false);
@@ -48,8 +59,38 @@ export default function InstantComposition() {
 
   const currentInput = showTyping ? typedInput : transcript;
 
+  // Fetch expressions when mode is selected
+  const fetchExpressions = useCallback(async () => {
+    const { data } = await supabase
+      .from('expressions')
+      .select('id, expression, meaning, example_sentence')
+      .not('meaning', 'is', null)
+      .order('created_at', { ascending: false })
+      .limit(100);
+    
+    if (data) {
+      setExpressionsList(data);
+    }
+  }, []);
+
+  const handleSelectMode = useCallback((selectedMode: PracticeMode) => {
+    setMode(selectedMode);
+    setPhase('start');
+    if (selectedMode === 'expressions') {
+      fetchExpressions();
+    }
+  }, [fetchExpressions]);
+
   const handleStartPractice = useCallback(() => {
+    if (mode === 'expressions') {
+      // Pick random expression
+      if (expressionsList.length > 0) {
+        const randomIndex = Math.floor(Math.random() * expressionsList.length);
+        setCurrentExpr(expressionsList[randomIndex]);
+      }
+    } else {
     pickRandomSentence();
+    }
     setPhase('test');
     setEvaluationResult(null);
     resetTranscript();
@@ -67,45 +108,84 @@ export default function InstantComposition() {
   }, [isListening, stopListening, resetTranscript, startListening]);
 
   const handleCheckAnswer = useCallback(async () => {
-    if (!currentSentence || !currentInput) return;
+    if (!currentInput) return;
+    if (mode === 'sentences' && !currentSentence) return;
+    if (mode === 'expressions' && !currentExpr) return;
 
     setIsEvaluating(true);
     setLastUserAnswer(currentInput);
     
     try {
-      // Call evaluate-recall for similarity score
-      const { data } = await supabase.functions.invoke('evaluate-recall', {
-        body: {
-          originalText: currentSentence.sentence.english,
-          recallText: currentInput,
-          expressions: currentSentence.sentence.expressions || [],
-        },
-      });
+      if (mode === 'expressions' && currentExpr) {
+        // Expression-level evaluation - simpler matching
+        const userLower = currentInput.toLowerCase().trim();
+        const targetLower = currentExpr.expression.toLowerCase().trim();
+        
+        const containsExpression = userLower.includes(targetLower) || 
+          targetLower.includes(userLower) ||
+          userLower.split(/\s+/).filter(w => w.length > 2).some(word => 
+            targetLower.split(/\s+/).some(tw => tw.includes(word) || word.includes(tw))
+          );
+        
+        const scores: ThreeAxisScores = {
+          meaning: containsExpression ? 'excellent' : 'needs_work',
+          structure: containsExpression ? 'good' : 'needs_work',
+          fluency: 'good',
+        };
+        
+        const passed = calculatePassStatus(scores).passed;
+        setEvaluationResult({ scores, passed });
+        setPhase('result');
+        
+        if (passed) playSuccess();
+      } else if (currentSentence) {
+        // Sentence-level evaluation
+        const { data } = await supabase.functions.invoke('evaluate-recall', {
+          body: {
+            originalText: currentSentence.sentence.english,
+            recallText: currentInput,
+            expressions: currentSentence.sentence.expressions || [],
+          },
+        });
 
-      const similarityScore = data?.score || 50;
-      const result = await evaluateAnswer(currentInput, similarityScore);
-      
-      setEvaluationResult(result);
-      setPhase('result');
+        const similarityScore = data?.score || 50;
+        const result = await evaluateAnswer(currentInput, similarityScore);
+        
+        setEvaluationResult(result);
+        setPhase('result');
 
-      if (result.passed) {
-        playSuccess();
+        if (result.passed) {
+          playSuccess();
+        }
       }
     } catch (error) {
       console.error('Evaluation error:', error);
     } finally {
       setIsEvaluating(false);
     }
-  }, [currentSentence, currentInput, evaluateAnswer, playSuccess]);
+  }, [mode, currentSentence, currentExpr, currentInput, evaluateAnswer, playSuccess]);
 
   const handleNextSentence = useCallback(() => {
+    if (mode === 'expressions') {
+      // Pick another expression
+      if (expressionsList.length > 0) {
+        const randomIndex = Math.floor(Math.random() * expressionsList.length);
+        setCurrentExpr(expressionsList[randomIndex]);
+      }
+      setPhase('test');
+      setEvaluationResult(null);
+      resetTranscript();
+      setTypedInput('');
+      setLastUserAnswer('');
+      return;
+    }
     nextSentence();
     setPhase('test');
     setEvaluationResult(null);
     resetTranscript();
     setTypedInput('');
     setLastUserAnswer('');
-  }, [nextSentence, resetTranscript]);
+  }, [mode, expressionsList, nextSentence, resetTranscript]);
 
   const handleTryAgain = useCallback(() => {
     setPhase('test');
@@ -164,8 +244,8 @@ export default function InstantComposition() {
     );
   }
 
-  // Start screen
-  if (phase === 'start') {
+  // Mode selection screen
+  if (phase === 'mode_select') {
     return (
       <div className="min-h-screen flex flex-col p-6 safe-bottom">
         <header className="flex items-center gap-4 mb-8">
@@ -179,34 +259,112 @@ export default function InstantComposition() {
         </header>
 
         <div className="flex-1 flex flex-col items-center justify-center text-center">
-          <div className="w-20 h-20 rounded-full bg-primary/20 flex items-center justify-center mb-6">
-            <Zap className="w-10 h-10 text-primary" />
-          </div>
-
           <h2 className="text-xl font-bold mb-3">Quick Composition Practice</h2>
           <p className="text-muted-foreground mb-6 max-w-sm">
-            See a Japanese sentence from your past diaries. 
-            Instantly compose the English version by speaking or typing.
+            Choose what you want to practice today.
           </p>
 
-          {hasAnySentences ? (
-            <>
-              <div className="bg-muted rounded-xl p-4 mb-8 text-sm">
-                <p className="text-muted-foreground">
-                  Today: <span className="text-foreground font-medium">{stats.practiced}</span> practiced, 
-                  <span className="text-green-400 font-medium ml-1">{stats.passed}</span> passed
-                </p>
+          <div className="w-full max-w-sm space-y-4">
+            {/* Mode A: Key Expressions */}
+            <button
+              onClick={() => handleSelectMode('expressions')}
+              className="w-full text-left bg-card rounded-xl p-5 border border-border transition-all hover:border-primary/50 hover:shadow-md"
+            >
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
+                  <Sparkles className="w-6 h-6 text-primary" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base">Key Expressions</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Practice short useful phrases (Japanese → English)
+                  </p>
+                </div>
               </div>
+            </button>
 
-              <Button variant="glow" size="lg" onClick={handleStartPractice}>
-                <Zap className="w-5 h-5 mr-2" />
-                Start Practice
-              </Button>
-            </>
+            {/* Mode B: Full Sentences */}
+            <button
+              onClick={() => handleSelectMode('sentences')}
+              className="w-full text-left bg-card rounded-xl p-5 border border-border transition-all hover:border-primary/50 hover:shadow-md"
+            >
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-full bg-secondary/50 flex items-center justify-center shrink-0">
+                  <MessageSquare className="w-6 h-6 text-secondary-foreground" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base">Full Sentences</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Practice complete diary sentences (Japanese → English)
+                  </p>
+                </div>
+              </div>
+            </button>
+          </div>
+
+          {/* Stats */}
+          <div className="bg-muted rounded-xl p-4 mt-8 text-sm">
+            <p className="text-muted-foreground">
+              Today: <span className="text-foreground font-medium">{stats.practiced}</span> practiced, 
+              <span className="text-green-400 font-medium ml-1">{stats.passed}</span> passed
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Start screen for chosen mode
+  if (phase === 'start') {
+    const noContent = mode === 'expressions' 
+      ? expressionsList.length === 0 
+      : !hasAnySentences;
+    
+    return (
+      <div className="min-h-screen flex flex-col p-6 safe-bottom">
+        <header className="flex items-center gap-4 mb-8">
+          <Button variant="ghost" size="icon" onClick={() => setPhase('mode_select')}>
+            <ArrowLeft className="w-5 h-5" />
+          </Button>
+          <div>
+            <h1 className="font-bold text-xl">
+              {mode === 'expressions' ? 'Key Expressions' : 'Full Sentences'}
+            </h1>
+            <p className="text-sm text-muted-foreground">瞬間英作文</p>
+          </div>
+        </header>
+
+        <div className="flex-1 flex flex-col items-center justify-center text-center">
+          <div className="w-20 h-20 rounded-full bg-primary/20 flex items-center justify-center mb-6">
+            {mode === 'expressions' ? (
+              <Sparkles className="w-10 h-10 text-primary" />
+            ) : (
+              <Zap className="w-10 h-10 text-primary" />
+            )}
+          </div>
+
+          <h2 className="text-xl font-bold mb-3">
+            {mode === 'expressions' ? 'Expression Practice' : 'Sentence Composition'}
+          </h2>
+          <p className="text-muted-foreground mb-6 max-w-sm">
+            {mode === 'expressions' 
+              ? 'See a Japanese meaning, produce the English expression.'
+              : 'See a Japanese sentence, compose the English version.'
+            }
+          </p>
+
+          {!noContent ? (
+            <Button variant="glow" size="lg" onClick={handleStartPractice}>
+              <Zap className="w-5 h-5 mr-2" />
+              Start Practice
+            </Button>
           ) : (
-            <div className="bg-muted rounded-xl p-6 text-center">
+            <div className="bg-muted rounded-xl p-6 text-center max-w-sm">
               <p className="text-muted-foreground mb-4">
-                No past diaries yet. Complete a few daily diaries first to unlock this practice mode.
+                {mode === 'expressions' 
+                  ? 'No expressions with Japanese meanings yet. Complete some diaries or add expressions manually first.'
+                  : 'No past diaries yet. Complete a few daily diaries first to unlock this practice mode.'
+                }
               </p>
               <Button variant="outline" onClick={() => navigate('/chat')}>
                 Start today's diary
@@ -249,13 +407,19 @@ export default function InstantComposition() {
   }
 
   // Result screen
-  if (phase === 'result' && evaluationResult && currentSentence) {
+  if (phase === 'result' && evaluationResult) {
+    const correctAnswer = mode === 'expressions' && currentExpr 
+      ? currentExpr.expression 
+      : currentSentence?.sentence.english || '';
+    const keyExprs = mode === 'expressions' 
+      ? [] 
+      : currentSentence?.sentence.expressions;
     const { passed } = evaluationResult;
-    
+
     return (
       <div className="min-h-screen flex flex-col p-6 safe-bottom">
         <header className="flex items-center gap-4 mb-6">
-          <Button variant="ghost" size="icon" onClick={() => setPhase('start')}>
+          <Button variant="ghost" size="icon" onClick={() => setPhase('mode_select')}>
             <ArrowLeft className="w-5 h-5" />
           </Button>
           <h1 className="font-bold text-xl">Result</h1>
@@ -264,18 +428,18 @@ export default function InstantComposition() {
         <div className="flex-1">
           <QuizResultScreen
             userAnswer={lastUserAnswer}
-            correctAnswer={currentSentence.sentence.english}
+            correctAnswer={correctAnswer}
             scores={evaluationResult.scores}
-            keyExpressions={currentSentence.sentence.expressions}
+            keyExpressions={keyExprs}
             onTryAgain={handleTryAgain}
             onNext={handleNextSentence}
-            nextLabel="Next Sentence"
+            nextLabel={mode === 'expressions' ? 'Next Expression' : 'Next Sentence'}
             showTryAgain={!passed}
           />
         </div>
 
-        {/* Practice mode option when failed */}
-        {!passed && (
+        {/* Practice mode option when failed (sentences only) */}
+        {!passed && mode === 'sentences' && currentSentence && (
           <div className="mt-4">
             <Button
               variant="secondary"
@@ -296,7 +460,7 @@ export default function InstantComposition() {
           variant="ghost" 
           size="sm" 
           className="w-full mt-4" 
-          onClick={() => setPhase('start')}
+          onClick={() => setPhase('mode_select')}
         >
           End Practice
         </Button>
@@ -305,14 +469,20 @@ export default function InstantComposition() {
   }
 
   // Test screen (Japanese only, user tries to produce English)
+  const japanesePrompt = mode === 'expressions' && currentExpr
+    ? currentExpr.meaning || '(No meaning available)'
+    : currentSentence?.sentence.japanese || 'Loading...';
+
   return (
     <div className="min-h-screen flex flex-col p-6 safe-bottom">
       <header className="flex items-center gap-4 mb-6">
-        <Button variant="ghost" size="icon" onClick={() => setPhase('start')}>
+        <Button variant="ghost" size="icon" onClick={() => setPhase('mode_select')}>
           <ArrowLeft className="w-5 h-5" />
         </Button>
         <div>
-          <h1 className="font-bold text-lg">Compose in English</h1>
+          <h1 className="font-bold text-lg">
+            {mode === 'expressions' ? 'Say the Expression' : 'Compose in English'}
+          </h1>
           <p className="text-xs text-muted-foreground">
             Practiced today: {stats.practiced}
           </p>
@@ -323,16 +493,16 @@ export default function InstantComposition() {
       <Card className="mb-6 bg-secondary/30">
         <CardContent className="py-6">
           <p className="text-xs text-muted-foreground mb-2 text-center uppercase tracking-wide">
-            Say this in English:
+            {mode === 'expressions' ? 'Say the expression for:' : 'Say this in English:'}
           </p>
           <p className="text-lg text-center font-japanese text-secondary-foreground leading-relaxed">
-            {currentSentence?.sentence.japanese || 'Loading...'}
+            {japanesePrompt}
           </p>
         </CardContent>
       </Card>
 
       {/* Key expressions hint */}
-      {currentSentence?.sentence.expressions && currentSentence.sentence.expressions.length > 0 && (
+      {mode === 'sentences' && currentSentence?.sentence.expressions && currentSentence.sentence.expressions.length > 0 && (
         <div className="flex flex-wrap gap-2 justify-center mb-4">
           {currentSentence.sentence.expressions.map((expr, i) => (
             <span key={i} className="px-2 py-1 bg-primary/20 rounded-full text-xs text-primary">

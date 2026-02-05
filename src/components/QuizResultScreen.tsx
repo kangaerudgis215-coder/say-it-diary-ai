@@ -182,15 +182,28 @@ export function QuizResultScreen({
         </Button>
         
         {showTryAgain && !passed && (
-          <Button
-            variant="outline"
-            size="lg"
-            className="w-full"
-            onClick={onTryAgain}
-          >
-            <RotateCcw className="w-5 h-5 mr-2" />
-            Try Again
-          </Button>
+        <Button
+          variant="outline"
+          size="lg"
+          className="w-full"
+          onClick={onTryAgain}
+        >
+          <RotateCcw className="w-5 h-5 mr-2" />
+          Try Again
+        </Button>
+      )}
+      
+      {/* Always show try again for passed answers too if showTryAgain is true */}
+      {showTryAgain && passed && (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="w-full"
+          onClick={onTryAgain}
+        >
+          <RotateCcw className="w-4 h-4 mr-1" />
+          Practice again
+        </Button>
         )}
       </div>
     </div>
