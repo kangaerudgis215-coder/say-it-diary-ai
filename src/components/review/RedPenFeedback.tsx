@@ -26,14 +26,58 @@ interface SentenceFeedback {
   comment: string;
 }
 
+function splitIntoSentences(text: string): string[] {
+  // First normalize: replace newlines with spaces, then split on sentence boundaries
+  const normalized = text.replace(/[\r\n]+/g, ' ').trim();
+  
+  // Split on sentence-ending punctuation followed by space OR end of string
+  // This handles: "Sentence one. Sentence two." and "Sentence one.Sentence two."
+  const sentences: string[] = [];
+  let current = '';
+  
+  for (let i = 0; i < normalized.length; i++) {
+    current += normalized[i];
+    
+    // Check if we hit sentence-ending punctuation
+    if (/[.!?]/.test(normalized[i])) {
+      // Look ahead - if next char is space, quote, or end, it's likely end of sentence
+      const nextChar = normalized[i + 1];
+      if (!nextChar || /\s/.test(nextChar) || /["']/.test(nextChar)) {
+        const trimmed = current.trim();
+        if (trimmed) {
+          sentences.push(trimmed);
+        }
+        current = '';
+      }
+    }
+  }
+  
+  // Add any remaining text
+  const remaining = current.trim();
+  if (remaining) {
+    sentences.push(remaining);
+  }
+  
+  return sentences;
+}
+
 function alignUserAttemptToSentences(userAttempt: string, sentences: ReviewSentence[]): SentenceFeedback[] {
-  // Split user attempt into rough sentences
-  const userSentences = userAttempt.split(/(?<=[.!?])\s+/).filter((s) => s.trim());
+  // Split user attempt into sentences (handles periods, newlines, etc.)
+  const userSentences = splitIntoSentences(userAttempt);
   const result: SentenceFeedback[] = [];
 
+  // Align user sentences to target sentences
+  // If user wrote fewer sentences, later ones show as "not captured"
+  // If user wrote more, extra ones are ignored (could be merged with last)
   for (let i = 0; i < sentences.length; i++) {
     const target = sentences[i];
-    const userMatch = userSentences[i] || '';
+    let userMatch = userSentences[i] || '';
+    
+    // If this is the last target sentence and user has extra sentences, merge them
+    if (i === sentences.length - 1 && userSentences.length > sentences.length) {
+      userMatch = userSentences.slice(i).join(' ');
+    }
+    
     const userNorm = normalizeForExpression(userMatch);
 
     const expressionsUsed: string[] = [];
@@ -49,12 +93,14 @@ function alignUserAttemptToSentences(userAttempt: string, sentences: ReviewSente
 
     // Generate a short comment
     let comment = '';
-    if (expressionsUsed.length > 0 && expressionsMissed.length === 0) {
+    if (!userMatch) {
+      comment = 'This sentence was not captured in your response.';
+    } else if (expressionsUsed.length > 0 && expressionsMissed.length === 0) {
       comment = `Great! You used "${expressionsUsed[0]}" correctly.`;
     } else if (expressionsMissed.length > 0) {
       comment = `Try adding "${expressionsMissed[0]}" here to match your diary.`;
-    } else if (!userMatch) {
-      comment = 'This sentence was not captured in your response.';
+    } else {
+      comment = 'Good effort on this sentence!';
     }
 
     result.push({
