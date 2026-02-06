@@ -13,12 +13,13 @@
    DialogTrigger,
  } from '@/components/ui/dialog';
  
- interface Expression {
-   id: string;
-   expression: string;
-   meaning: string;
-   mastery_level: number;
- }
+interface Expression {
+  id: string;
+  expression: string;
+  meaning: string;
+  mastery_level: number;
+  created_at: string;
+}
  
  type MasteryStatus = 'mastered' | 'in_progress' | 'not_learned';
  
@@ -54,52 +55,79 @@
      }
    }, [user]);
  
-   const fetchExpressions = async () => {
-     if (!user) return;
- 
-     const { data, error } = await supabase
-       .from('expressions')
-       .select('id, expression, meaning, mastery_level')
-       .eq('user_id', user.id)
-       .not('meaning', 'is', null)
-       .order('created_at', { ascending: false })
-       .limit(200);
- 
-     if (error) {
-       console.error('Error fetching expressions:', error);
-     }
- 
-     if (data) {
-       // Filter out expressions without valid meanings
-       const valid = data.filter(e => e.meaning && e.meaning.trim().length > 0) as Expression[];
-       setExpressions(valid);
-     }
-     setIsLoading(false);
-   };
- 
-   // Select expressions for the game, prioritizing lower mastery
-   const getGameExpressions = useCallback(() => {
-     if (expressions.length < 2) return [];
- 
-     // Sort by mastery (lower first), then shuffle within groups
-     const sorted = [...expressions].sort((a, b) => {
-       const aMastery = a.mastery_level || 0;
-       const bMastery = b.mastery_level || 0;
-       // Add some randomness within the same mastery level
-       if (aMastery === bMastery) return Math.random() - 0.5;
-       return aMastery - bMastery;
-     });
- 
-     // Take the first 4-8 expressions (prioritizing lower mastery)
-     return sorted.slice(0, Math.min(8, sorted.length));
-   }, [expressions]);
- 
-   // Update mastery after game completion
-   const handleGameComplete = useCallback(async () => {
-     // Refresh expressions to get updated mastery levels
-     await fetchExpressions();
-     setIsPlaying(false);
-   }, []);
+  const fetchExpressions = async () => {
+    if (!user) return;
+
+    const { data, error } = await supabase
+      .from('expressions')
+      .select('id, expression, meaning, mastery_level, created_at')
+      .eq('user_id', user.id)
+      .not('meaning', 'is', null)
+      .order('created_at', { ascending: false })
+      .limit(200);
+
+    if (error) {
+      console.error('Error fetching expressions:', error);
+    }
+
+    if (data) {
+      // Filter out expressions without valid meanings
+      const valid = data.filter(e => e.meaning && e.meaning.trim().length > 0) as Expression[];
+      setExpressions(valid);
+    }
+    setIsLoading(false);
+  };
+
+  // Calculate priority score for expression selection
+  // Higher score = higher priority for practice
+  const calculatePriorityScore = useCallback((expr: Expression) => {
+    const mastery = expr.mastery_level || 0;
+    const createdAt = new Date(expr.created_at).getTime();
+    const now = Date.now();
+    const daysSinceCreated = (now - createdAt) / (1000 * 60 * 60 * 24);
+    
+    // Weights for priority calculation
+    const masteryWeight = 0.5;   // Lower mastery = higher priority
+    const newWeight = 0.3;       // Newer expressions get a boost
+    const randomWeight = 0.2;    // Some randomness for variety
+    
+    // Mastery score: 0 mastery = 1.0, 5 mastery = 0.0
+    const masteryScore = 1 - (mastery / 5);
+    
+    // Recency score: newer is better (1.0 for today, decays over 30 days)
+    const recencyScore = Math.max(0, 1 - (daysSinceCreated / 30));
+    
+    // Random factor for variety
+    const randomScore = Math.random();
+    
+    return (masteryWeight * masteryScore) + (newWeight * recencyScore) + (randomWeight * randomScore);
+  }, []);
+
+  // Select expressions for the game, prioritizing newer/less-practiced
+  const getGameExpressions = useCallback(() => {
+    if (expressions.length < 2) return [];
+
+    // Calculate priority score for each expression
+    const scored = expressions.map(expr => ({
+      ...expr,
+      priority: calculatePriorityScore(expr)
+    }));
+
+    // Sort by priority (descending) and take top expressions
+    const sorted = scored.sort((a, b) => b.priority - a.priority);
+
+    // Take 6-8 expressions (dynamic based on available)
+    const gameSize = Math.min(8, Math.max(6, sorted.length));
+    return sorted.slice(0, gameSize);
+  }, [expressions, calculatePriorityScore]);
+
+  // Handle game completion - refresh expressions to get updated mastery
+  const handleGameComplete = useCallback(async (matchedIds: string[]) => {
+    console.log('Game completed with expressions:', matchedIds);
+    // Refresh expressions to get updated mastery levels
+    await fetchExpressions();
+    // Stay in playing mode to allow "Play Again"
+  }, []);
  
    const handleStartGame = useCallback(() => {
      setIsPlaying(true);
