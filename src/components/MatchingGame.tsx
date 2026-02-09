@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Check, RotateCcw, Shuffle, Trophy } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
+import { useSuccessSound } from '@/hooks/useSuccessSound';
 
 interface ExpressionPair {
   id: string;
@@ -36,6 +37,7 @@ export function MatchingGame({ expressions, onComplete, onBack, maxPairs = DEFAU
   const [showResult, setShowResult] = useState(false);
   const [lastWrongPair, setLastWrongPair] = useState<string[] | null>(null);
   const [gameExpressionIds, setGameExpressionIds] = useState<string[]>([]);
+  const { playSuccess, playBigSuccess } = useSuccessSound();
 
   // Calculate how many pairs to use (dynamic based on available expressions)
   const pairsToUse = Math.min(maxPairs, expressions.length);
@@ -156,6 +158,9 @@ export function MatchingGame({ expressions, onComplete, onBack, maxPairs = DEFAU
         newMatched.add(newSelected[0].pairId);
         setMatchedPairs(newMatched);
         
+        // Play success sound on match
+        playSuccess();
+        
         // Update stats for this expression (correct match)
         updateExpressionStats(newSelected[0].pairId, true);
         
@@ -170,6 +175,7 @@ export function MatchingGame({ expressions, onComplete, onBack, maxPairs = DEFAU
           setSelectedCards([]);
           // Check if game complete
           if (newMatched.size === pairsToUse) {
+            playBigSuccess();
             setShowResult(true);
           }
         }, 500);
