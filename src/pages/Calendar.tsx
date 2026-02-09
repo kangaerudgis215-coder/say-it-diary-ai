@@ -1,16 +1,18 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, X, Brain, Shuffle, Plus, Edit } from 'lucide-react';
+import { ArrowLeft, X, Brain, Shuffle, Plus, Edit, Crown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DiaryCalendar } from '@/components/DiaryCalendar';
 import { RecallHistory } from '@/components/RecallHistory';
 import { DiaryExpressions } from '@/components/DiaryExpressions';
 import { useAuth } from '@/hooks/useAuth';
+import { useSubscription } from '@/hooks/useSubscription';
 import { supabase } from '@/lib/supabase';
-import { format, isToday, isFuture, parseISO } from 'date-fns';
+import { format, isToday, isFuture, parseISO, subDays } from 'date-fns';
 
 export default function Calendar() {
   const { user } = useAuth();
+  const { isPro, startCheckout } = useSubscription();
   const navigate = useNavigate();
 
   const [searchParams] = useSearchParams();
@@ -193,17 +195,40 @@ export default function Calendar() {
           </Button>
 
           {/* Review Quiz Button */}
-          <Button
-            variant="glow"
-            className="w-full mt-2 gap-2"
-            onClick={() => navigate(`/review?diaryId=${selectedEntry.id}&date=${selectedEntry.date}`)}
-          >
-            <Brain className="w-4 h-4" />
-            Review this diary
-          </Button>
-          <p className="text-xs text-muted-foreground text-center mt-2">
-            Practice key expressions and full sentences.
-          </p>
+          {(() => {
+            const threeDaysAgo = format(subDays(new Date(), 3), 'yyyy-MM-dd');
+            const isOldDiary = selectedEntry.date < threeDaysAgo;
+            const needsPro = isOldDiary && !isPro;
+
+            if (needsPro) {
+              return (
+                <Button
+                  variant="outline"
+                  className="w-full mt-2 gap-2 border-amber-500/30 text-amber-600"
+                  onClick={startCheckout}
+                >
+                  <Crown className="w-4 h-4" />
+                  Pro限定: この日記を復習する
+                </Button>
+              );
+            }
+
+            return (
+              <>
+                <Button
+                  variant="glow"
+                  className="w-full mt-2 gap-2"
+                  onClick={() => navigate(`/review?diaryId=${selectedEntry.id}&date=${selectedEntry.date}`)}
+                >
+                  <Brain className="w-4 h-4" />
+                  Review this diary
+                </Button>
+                <p className="text-xs text-muted-foreground text-center mt-2">
+                  Practice key expressions and full sentences.
+                </p>
+              </>
+            );
+          })()}
 
           {/* Recall History */}
           <RecallHistory attempts={recallHistory} />

@@ -13,6 +13,7 @@ import Expressions from "./pages/Expressions";
 import DiaryReview from "./pages/DiaryReview";
 import InstantComposition from "./pages/InstantComposition";
 import Progress from "./pages/Progress";
+import Upgrade from "./pages/Upgrade";
 import NotFound from "./pages/NotFound";
 import ReviewHub from "./components/review/ReviewHub";
 
@@ -35,6 +36,7 @@ const App = () => (
             <Route path="/review" element={<ReviewHub />} />
             <Route path="/instant" element={<InstantComposition />} />
             <Route path="/progress" element={<Progress />} />
+            <Route path="/upgrade" element={<Upgrade />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
