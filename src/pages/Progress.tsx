@@ -4,8 +4,6 @@
  import { Button } from '@/components/ui/button';
  import { Card, CardContent } from '@/components/ui/card';
  import { useAuth } from '@/hooks/useAuth';
- import { useSubscription } from '@/hooks/useSubscription';
- import { ProPaywall } from '@/components/ProPaywall';
  import { supabase } from '@/lib/supabase';
  import { format, subDays } from 'date-fns';
  import { cn } from '@/lib/utils';
@@ -19,7 +17,6 @@
  export default function Progress() {
    const navigate = useNavigate();
    const { user } = useAuth();
-   const { isPro, startCheckout } = useSubscription();
    const { toast } = useToast();
    const [logs, setLogs] = useState<VocabLog[]>([]);
    const [isLoading, setIsLoading] = useState(true);
@@ -160,23 +157,6 @@
      }
    };
  
-   if (!isPro) {
-     return (
-       <div className="min-h-screen flex flex-col safe-bottom">
-         <header className="flex items-center gap-4 p-4">
-           <Button variant="ghost" size="icon" onClick={() => navigate('/')}>
-             <ArrowLeft className="w-5 h-5" />
-           </Button>
-         </header>
-         <ProPaywall
-           onUpgrade={startCheckout}
-           onDismiss={() => navigate('/')}
-           context="語彙成長の統計はProプランで利用できます。"
-         />
-       </div>
-     );
-   }
-
    return (
      <div className="min-h-screen flex flex-col p-4 safe-bottom bg-gradient-to-b from-background to-muted/20">
        <header className="flex items-center gap-3 mb-6">

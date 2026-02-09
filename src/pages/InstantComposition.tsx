@@ -4,8 +4,6 @@
  import { Button } from '@/components/ui/button';
  import { MatchingGame } from '@/components/MatchingGame';
  import { useAuth } from '@/hooks/useAuth';
- import { useSubscription } from '@/hooks/useSubscription';
- import { ProPaywall } from '@/components/ProPaywall';
  import { supabase } from '@/lib/supabase';
  import {
    Dialog,
@@ -49,7 +47,6 @@ interface Expression {
  export default function InstantComposition() {
    const navigate = useNavigate();
    const { user } = useAuth();
-   const { isPro, startCheckout } = useSubscription();
    const [expressions, setExpressions] = useState<Expression[]>([]);
    const [isLoading, setIsLoading] = useState(true);
    const [isPlaying, setIsPlaying] = useState(false);
@@ -141,32 +138,14 @@ interface Expression {
      setIsPlaying(true);
    }, []);
  
-   // Gate: Pro only
-   if (!isPro) {
+   if (isLoading) {
      return (
-       <div className="min-h-screen flex flex-col safe-bottom">
-         <header className="flex items-center gap-4 p-4">
-           <Button variant="ghost" size="icon" onClick={() => navigate('/')}>
-             <ArrowLeft className="w-5 h-5" />
-           </Button>
-         </header>
-         <ProPaywall
-           onUpgrade={startCheckout}
-           onDismiss={() => navigate('/')}
-           context="フレーズ神経衰弱はProプランで利用できます。"
-         />
+       <div className="min-h-screen flex flex-col items-center justify-center p-6">
+         <Loader2 className="w-8 h-8 animate-spin text-primary mb-4" />
+         <p className="text-muted-foreground">Loading expressions...</p>
        </div>
      );
    }
-
-   if (isLoading) {
-      return (
-        <div className="min-h-screen flex flex-col items-center justify-center p-6">
-          <Loader2 className="w-8 h-8 animate-spin text-primary mb-4" />
-          <p className="text-muted-foreground">Loading expressions...</p>
-        </div>
-      );
-    }
  
    // Game is active
    if (isPlaying && expressions.length >= 2) {

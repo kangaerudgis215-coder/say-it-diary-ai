@@ -1,10 +1,9 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Sparkles, Filter, X, RefreshCw, Loader2, Crown } from 'lucide-react';
+import { ArrowLeft, Sparkles, Filter, X, RefreshCw, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/hooks/useAuth';
-import { useSubscription } from '@/hooks/useSubscription';
 import { supabase } from '@/lib/supabase';
 import { cn } from '@/lib/utils';
 import { ExpressionDetail } from '@/components/ExpressionDetail';
@@ -35,7 +34,6 @@ const PAGE_SIZE = 50;
 
 export default function Expressions() {
   const { user } = useAuth();
-  const { isPro, startCheckout } = useSubscription();
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -119,26 +117,15 @@ export default function Expressions() {
         break;
     }
 
-    // Free tier: limit to 30 most recent
-    if (!isPro && sortBy === 'recent') {
-      result = result.slice(0, 30);
-    }
-
     return result;
-  }, [expressions, sceneFilter, typeFilter, statusFilter, sortBy, isPro]);
-
-  const FREE_LIMIT = 30;
-  const isFreeLimited = !isPro && filteredExpressions.length >= FREE_LIMIT;
+  }, [expressions, sceneFilter, typeFilter, statusFilter, sortBy]);
 
   // Paginated view
   const visibleExpressions = useMemo(() => {
-    const list = !isPro ? filteredExpressions.slice(0, FREE_LIMIT) : filteredExpressions;
-    return list.slice(0, visibleCount);
-  }, [filteredExpressions, visibleCount, isPro]);
+    return filteredExpressions.slice(0, visibleCount);
+  }, [filteredExpressions, visibleCount]);
 
-  const hasMore = isPro
-    ? visibleCount < filteredExpressions.length
-    : visibleCount < Math.min(filteredExpressions.length, FREE_LIMIT);
+  const hasMore = visibleCount < filteredExpressions.length;
 
   const selectedExpression = useMemo(() => {
     return expressions.find(e => e.id === selectedId) || null;
@@ -321,21 +308,6 @@ export default function Expressions() {
                 >
                   Load more ({filteredExpressions.length - visibleCount} remaining)
                 </Button>
-              )}
-              {isFreeLimited && (
-                <div className="mt-4 p-4 rounded-xl border border-amber-500/30 bg-amber-500/5 text-center">
-                  <p className="text-sm font-japanese mb-2">
-                    Freeプランでは最新30件まで表示されます
-                  </p>
-                  <Button
-                    size="sm"
-                    className="gap-1"
-                    onClick={startCheckout}
-                  >
-                    <Crown className="w-4 h-4" />
-                    Proで全件表示
-                  </Button>
-                </div>
               )}
             </div>
           )}

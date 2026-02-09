@@ -34,7 +34,7 @@ export default function Auth() {
         const { error } = await signUp(email, password, displayName);
         if (error) throw error;
         toast({
-          title: "Welcome to SO-KI! ✨",
+          title: "Welcome to VoiceDiary! ✨",
           description: "Your journey begins now.",
         });
         navigate('/');
@@ -57,7 +57,7 @@ export default function Auth() {
         <div className="w-20 h-20 mx-auto bg-primary/20 rounded-3xl flex items-center justify-center float">
           <BookOpen className="w-10 h-10 text-primary" />
         </div>
-        <h1 className="text-3xl font-bold">SO-KI</h1>
+        <h1 className="text-3xl font-bold">VoiceDiary</h1>
         <p className="text-muted-foreground">
           Speak your day, learn English naturally
         </p>

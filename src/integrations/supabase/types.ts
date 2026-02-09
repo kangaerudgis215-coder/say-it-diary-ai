@@ -326,8 +326,6 @@ export type Database = {
           id: string
           last_diary_date: string | null
           longest_streak: number | null
-          plan: string
-          stripe_customer_id: string | null
           total_diary_entries: number | null
           updated_at: string
           user_id: string
@@ -339,8 +337,6 @@ export type Database = {
           id?: string
           last_diary_date?: string | null
           longest_streak?: number | null
-          plan?: string
-          stripe_customer_id?: string | null
           total_diary_entries?: number | null
           updated_at?: string
           user_id: string
@@ -352,8 +348,6 @@ export type Database = {
           id?: string
           last_diary_date?: string | null
           longest_streak?: number | null
-          plan?: string
-          stripe_customer_id?: string | null
           total_diary_entries?: number | null
           updated_at?: string
           user_id?: string

@@ -1,23 +1,17 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Mic, BookOpen, Sparkles, LogOut, Shuffle, TrendingUp, Brain, Crown, Settings } from 'lucide-react';
+import { Mic, BookOpen, Sparkles, LogOut, Shuffle, TrendingUp, Brain } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { StreakBadge } from '@/components/StreakBadge';
 import { ActionCard } from '@/components/ActionCard';
 import { MasteredDiariesBadge } from '@/components/MasteredDiariesBadge';
 import { useAuth } from '@/hooks/useAuth';
-import { useSubscription } from '@/hooks/useSubscription';
 import { supabase } from '@/lib/supabase';
 import { format, isToday } from 'date-fns';
-import { useToast } from '@/hooks/use-toast';
-import { useSearchParams } from 'react-router-dom';
 
 export default function Home() {
   const { user, signOut } = useAuth();
-  const { isPro, plan, checkSubscription, openPortal } = useSubscription();
   const navigate = useNavigate();
-  const { toast } = useToast();
-  const [searchParams] = useSearchParams();
   const [profile, setProfile] = useState<any>(null);
   const [todayComplete, setTodayComplete] = useState(false);
   const [hasPastDiaries, setHasPastDiaries] = useState(false);
@@ -30,24 +24,12 @@ export default function Home() {
     }
   }, [user]);
 
-  // Handle checkout return
-  useEffect(() => {
-    const checkout = searchParams.get('checkout');
-    if (checkout === 'success') {
-      toast({ title: 'Proプランへようこそ！🎉', description: 'すべての機能が使えるようになりました。' });
-      checkSubscription();
-      // Clean URL
-      window.history.replaceState({}, '', '/');
-    } else if (checkout === 'cancel') {
-      window.history.replaceState({}, '', '/');
-    }
-  }, [searchParams]);
-
   const fetchUserData = async () => {
     if (!user) return;
 
     const today = format(new Date(), 'yyyy-MM-dd');
 
+    // Fetch profile
     const { data: profileData } = await supabase
       .from('profiles')
       .select('*')
@@ -56,11 +38,13 @@ export default function Home() {
     
     if (profileData) {
       setProfile(profileData);
+      // Check if today's diary is done
       if (profileData.last_diary_date) {
         setTodayComplete(isToday(new Date(profileData.last_diary_date)));
       }
     }
 
+    // Get the latest diary (for review button)
     const { data: latestEntry } = await supabase
       .from('diary_entries')
       .select('id, date')
@@ -74,6 +58,7 @@ export default function Home() {
       setLatestDiaryDate(latestEntry.date);
     }
 
+    // Check if there are any past diary entries (before today)
     const { data: pastEntries } = await supabase
       .from('diary_entries')
       .select('id, date')
@@ -109,35 +94,10 @@ export default function Home() {
           </h1>
         </div>
         
-        <div className="flex items-center gap-1">
-          {isPro && (
-            <Button variant="ghost" size="icon" onClick={openPortal} title="Manage subscription">
-              <Settings className="w-5 h-5" />
-            </Button>
-          )}
-          <Button variant="ghost" size="icon" onClick={signOut}>
-            <LogOut className="w-5 h-5" />
-          </Button>
-        </div>
-      </header>
-
-      {/* Plan badge */}
-      {isPro ? (
-        <div className="mb-4 flex items-center gap-2 px-3 py-1.5 bg-amber-500/10 border border-amber-500/20 rounded-full w-fit">
-          <Crown className="w-4 h-4 text-amber-500" />
-          <span className="text-xs font-medium text-amber-600">Pro</span>
-        </div>
-      ) : (
-        <Button
-          variant="outline"
-          size="sm"
-          className="mb-4 w-fit gap-2 border-amber-500/30 text-amber-600 hover:bg-amber-500/10"
-          onClick={() => navigate('/upgrade')}
-        >
-          <Crown className="w-4 h-4" />
-          Proにアップグレード
+        <Button variant="ghost" size="icon" onClick={signOut}>
+          <LogOut className="w-5 h-5" />
         </Button>
-      )}
+      </header>
 
       {/* Streak Badge */}
       <div className="mb-4">
@@ -163,6 +123,7 @@ export default function Home() {
 
       {/* Main Actions */}
       <div className="space-y-4 flex-1">
+        {/* 1. Today's Diary - Primary action */}
         <ActionCard
           icon={<Mic className="w-8 h-8" />}
           title={todayComplete ? "Today's diary ✓" : "Start today's diary"}
@@ -175,6 +136,7 @@ export default function Home() {
           badge={!todayComplete ? "MUST" : undefined}
         />
 
+        {/* 2. Latest Quiz - Review latest diary */}
         <ActionCard
           icon={<Brain className="w-8 h-8" />}
           title="Latest Quiz"
@@ -184,20 +146,21 @@ export default function Home() {
               : "Write a diary first to unlock"
           }
           onClick={handleReviewLatest}
-          variant="secondary"
+          variant={todayComplete ? "secondary" : "secondary"}
           badge={todayComplete && latestDiaryId ? "NEXT" : undefined}
           disabled={!latestDiaryId}
         />
 
+        {/* 3. Expression Memory Game */}
         <ActionCard
-          icon={<Shuffle className="w-8 h-8" />}
-          title="Expression Memory Game"
-          description={isPro ? "フレーズ神経衰弱 - Match Japanese ↔ English" : "Pro限定 - フレーズ神経衰弱"}
-          onClick={() => isPro ? navigate('/instant') : navigate('/upgrade')}
+           icon={<Shuffle className="w-8 h-8" />}
+           title="Expression Memory Game"
+           description="フレーズ神経衰弱 - Match Japanese ↔ English"
+          onClick={() => navigate('/instant')}
           variant="secondary"
-          badge={!isPro ? "PRO" : undefined}
         />
 
+        {/* 4. Review Expressions */}
         <ActionCard
           icon={<Sparkles className="w-8 h-8" />}
           title="My expressions"
@@ -206,6 +169,7 @@ export default function Home() {
           variant="secondary"
         />
 
+        {/* 5. Calendar View */}
         <ActionCard
           icon={<BookOpen className="w-8 h-8" />}
           title="My diary collection"
@@ -214,13 +178,13 @@ export default function Home() {
           variant="secondary"
         />
 
+        {/* 6. Progress / Stats */}
         <ActionCard
           icon={<TrendingUp className="w-8 h-8" />}
           title="Progress"
-          description={isPro ? "Track your spoken vocabulary growth" : "Pro限定 - 語彙成長の統計"}
-          onClick={() => isPro ? navigate('/progress') : navigate('/upgrade')}
+          description="Track your spoken vocabulary growth"
+          onClick={() => navigate('/progress')}
           variant="secondary"
-          badge={!isPro ? "PRO" : undefined}
         />
       </div>
 
