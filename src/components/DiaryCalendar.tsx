@@ -84,7 +84,8 @@ export function DiaryCalendar({ entries, onDateSelect, selectedDate }: DiaryCale
           // Determine icon
           let EntryIcon = hasEntry ? BookOpen : null;
           let iconColor = isSelected ? "text-primary-foreground" : "text-primary";
-          if (entryState?.fullDiaryChallengeCompleted) {
+          const isMastered = !!entryState?.fullDiaryChallengeCompleted;
+          if (isMastered) {
             EntryIcon = Star;
             iconColor = isSelected ? "text-primary-foreground" : "text-yellow-500";
           } else if (entryState?.sentencesReviewCompleted) {
@@ -96,17 +97,24 @@ export function DiaryCalendar({ entries, onDateSelect, selectedDate }: DiaryCale
               key={day.toISOString()}
               onClick={() => onDateSelect(day)}
               className={cn(
-                "aspect-square rounded-lg flex flex-col items-center justify-center gap-0.5 transition-all",
+                "aspect-square rounded-lg flex flex-col items-center justify-center gap-0.5 transition-all relative",
                 "hover:bg-muted text-sm font-medium",
                 !isSameMonth(day, currentMonth) && "text-muted-foreground/30",
                 isCurrentDay && "ring-2 ring-primary ring-offset-2 ring-offset-background",
                 isSelected && "bg-primary text-primary-foreground hover:bg-primary/90",
-                hasEntry && !isSelected && "text-primary"
+                hasEntry && !isSelected && "text-primary",
+                isMastered && !isSelected && "bg-yellow-500/15"
               )}
             >
               <span>{format(day, 'd')}</span>
               {EntryIcon && (
-                <EntryIcon className={cn("w-3 h-3", iconColor)} />
+                <EntryIcon 
+                  className={cn(
+                    isMastered ? "w-4 h-4" : "w-3 h-3",
+                    iconColor
+                  )}
+                  {...(isMastered && !isSelected ? { fill: "currentColor" } : {})}
+                />
               )}
             </button>
           );
