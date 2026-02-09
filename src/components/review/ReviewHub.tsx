@@ -4,7 +4,7 @@
  */
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Volume2, Loader2, ChevronDown, ChevronUp, Trophy } from 'lucide-react';
+import { ArrowLeft, Volume2, Loader2, ChevronDown, ChevronUp, Trophy, CheckCircle, Star } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
@@ -12,15 +12,17 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
 import { format } from 'date-fns';
-import { buildPracticeSentences, loadDiarySentences, persistDiarySentences, PracticeSentence } from '@/lib/practiceBuilder';
+import { buildPracticeSentences, loadDiarySentences, persistDiarySentences } from '@/lib/practiceBuilder';
 import { cleanupInvalidDiaryLinkedExpressions, partitionExpressionsForText } from '@/lib/expressionValidation';
+import { normalizeForExpression } from '@/lib/textComparison';
 import { ReviewSentence, ReviewStep, DiaryProgress, SentenceProgress } from './types';
 import { ClozeStep } from './ClozeStep';
 import { FullSentenceStepNew } from './FullSentenceStepNew';
 import { FullDiaryChallenge } from './FullDiaryChallenge';
 import { RedPenFeedback } from './RedPenFeedback';
+import { CelebrationScreen } from './CelebrationScreen';
 
-type ReviewPhase = 'overview' | 'cloze' | 'full_sentence' | 'full_diary' | 'red_pen';
+type ReviewPhase = 'overview' | 'cloze' | 'full_sentence' | 'full_diary' | 'celebration' | 'red_pen';
 
 const LOOPS_TO_UNLOCK = 2;
 
@@ -46,6 +48,18 @@ export function ReviewHub() {
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const [userDiaryAttempt, setUserDiaryAttempt] = useState('');
 
+  // Persisted completion state from DB
+  const [sentencesReviewCompleted, setSentencesReviewCompleted] = useState(false);
+  const [fullDiaryChallengeCompleted, setFullDiaryChallengeCompleted] = useState(false);
+  const [attemptCount, setAttemptCount] = useState(0);
+
+  // Celebration data
+  const [celebrationData, setCelebrationData] = useState<{
+    usedCount: number;
+    totalCount: number;
+    attemptNumber: number;
+  } | null>(null);
+
   // Load diary and sentences
   useEffect(() => {
     if (user && diaryId) {
@@ -57,7 +71,6 @@ export function ReviewHub() {
     if (!user || !diaryId) return;
     setIsLoading(true);
 
-    // Cleanup invalid expressions
     await cleanupInvalidDiaryLinkedExpressions(supabase, user.id);
 
     const { data: entry } = await supabase
@@ -73,13 +86,22 @@ export function ReviewHub() {
     }
 
     setDiaryEntry(entry);
+    setSentencesReviewCompleted((entry as any).sentences_review_completed || false);
+    setFullDiaryChallengeCompleted((entry as any).full_diary_challenge_completed || false);
+
+    // Load attempt count
+    const { count } = await supabase
+      .from('full_diary_attempts' as any)
+      .select('*', { count: 'exact', head: true })
+      .eq('diary_entry_id', entry.id)
+      .eq('user_id', user.id);
+    setAttemptCount(count || 0);
 
     // Load expressions
     const { data: exprs } = await supabase.from('expressions').select('*').eq('diary_entry_id', entry.id);
     const { valid } = partitionExpressionsForText(exprs || [], entry.content || '');
     const exprStrings = valid.map((e: any) => e.expression);
 
-    // Build or load sentences
     const important = entry.important_sentences as any[] | null;
     const rebuilt = buildPracticeSentences(entry.content, entry.japanese_summary, exprStrings, important);
 
@@ -99,7 +121,6 @@ export function ReviewHub() {
 
     setSentences(reviewSentences);
 
-    // Initialize progress
     const initialProgress: Record<number, SentenceProgress> = {};
     for (let i = 0; i < reviewSentences.length; i++) {
       initialProgress[i] = { clozeCompleted: false, fullSentenceCompleted: false, completionCount: 0 };
@@ -107,7 +128,8 @@ export function ReviewHub() {
     setDiaryProgress({
       sentenceProgress: initialProgress,
       loopsCompleted: 0,
-      fullDiaryChallengeUnlocked: false,
+      // Unlock if previously completed sentence review OR if loops earned this session
+      fullDiaryChallengeUnlocked: (entry as any).sentences_review_completed || false,
     });
 
     setIsLoading(false);
@@ -115,14 +137,55 @@ export function ReviewHub() {
 
   const currentSentence = sentences[currentSentenceIndex];
 
-  // Calculate loops completed
   const calculateLoops = useCallback((progress: DiaryProgress) => {
     if (sentences.length === 0) return 0;
     const counts = Object.values(progress.sentenceProgress).map((p) => p.completionCount);
     return Math.min(...counts);
   }, [sentences.length]);
 
-  // Handle cloze completion (only called for sentences with expressions)
+  // Persist sentences_review_completed
+  const markSentencesCompleted = useCallback(async () => {
+    if (!user || !diaryId || sentencesReviewCompleted) return;
+    setSentencesReviewCompleted(true);
+    await supabase
+      .from('diary_entries')
+      .update({ sentences_review_completed: true } as any)
+      .eq('id', diaryId)
+      .eq('user_id', user.id);
+  }, [user, diaryId, sentencesReviewCompleted]);
+
+  // Persist full_diary_challenge_completed & log attempt
+  const markFullDiaryCompleted = useCallback(async (usedCount: number, totalCount: number) => {
+    if (!user || !diaryId) return;
+
+    const ratio = totalCount > 0 ? usedCount / totalCount : 1;
+    const rating = ratio >= 0.8 ? 'great' : ratio >= 0.5 ? 'good' : 'needs_work';
+
+    // Log the attempt
+    await supabase.from('full_diary_attempts' as any).insert({
+      user_id: user.id,
+      diary_entry_id: diaryId,
+      used_expressions_count: usedCount,
+      total_expressions_count: totalCount,
+      rating,
+    });
+
+    const newAttemptCount = attemptCount + 1;
+    setAttemptCount(newAttemptCount);
+
+    // Mark as completed if good enough
+    if (ratio >= 0.5 && !fullDiaryChallengeCompleted) {
+      setFullDiaryChallengeCompleted(true);
+      await supabase
+        .from('diary_entries')
+        .update({ full_diary_challenge_completed: true } as any)
+        .eq('id', diaryId)
+        .eq('user_id', user.id);
+    }
+
+    return { rating, attemptNumber: newAttemptCount };
+  }, [user, diaryId, attemptCount, fullDiaryChallengeCompleted]);
+
   const handleClozeComplete = useCallback(() => {
     setDiaryProgress((prev) => {
       const updated = { ...prev };
@@ -136,25 +199,21 @@ export function ReviewHub() {
     setPhase('full_sentence');
   }, [currentSentenceIndex]);
 
-  // Move to next sentence helper
   const moveToNextSentence = useCallback(() => {
     if (currentSentenceIndex < sentences.length - 1) {
       const nextIndex = currentSentenceIndex + 1;
       setCurrentSentenceIndex(nextIndex);
-      // Check if next sentence has expressions
       const nextSentence = sentences[nextIndex];
       if (nextSentence && !nextSentence.hasExpressions) {
-        setPhase('full_sentence'); // Skip cloze
+        setPhase('full_sentence');
       } else {
         setPhase('cloze');
       }
     } else {
-      // Loop complete - go back to overview
       setPhase('overview');
     }
   }, [currentSentenceIndex, sentences]);
 
-  // Handle full sentence completion
   const handleFullSentenceComplete = useCallback(() => {
     setDiaryProgress((prev) => {
       const updated = { ...prev };
@@ -166,19 +225,21 @@ export function ReviewHub() {
         completionCount: current.completionCount + 1,
       };
 
-      // Check if loop completed
       const newLoops = calculateLoops(updated);
       if (newLoops > prev.loopsCompleted) {
         updated.loopsCompleted = newLoops;
-        updated.fullDiaryChallengeUnlocked = newLoops >= LOOPS_TO_UNLOCK;
+        if (newLoops >= LOOPS_TO_UNLOCK) {
+          updated.fullDiaryChallengeUnlocked = true;
+          // Persist sentences review completed
+          markSentencesCompleted();
+        }
       }
 
       return updated;
     });
 
-    // Move to next sentence or back to overview
     moveToNextSentence();
-  }, [currentSentenceIndex, calculateLoops, moveToNextSentence]);
+  }, [currentSentenceIndex, calculateLoops, moveToNextSentence, markSentencesCompleted]);
 
   const handleBackToCloze = useCallback(() => {
     setPhase('cloze');
@@ -186,7 +247,6 @@ export function ReviewHub() {
 
   const handleStartPractice = useCallback(() => {
     setCurrentSentenceIndex(0);
-    // If first sentence has no expressions, skip to full sentence
     const firstSentence = sentences[0];
     if (firstSentence && !firstSentence.hasExpressions) {
       setPhase('full_sentence');
@@ -199,13 +259,35 @@ export function ReviewHub() {
     setPhase('full_diary');
   }, []);
 
-  const handleFullDiaryComplete = useCallback((attempt: string) => {
+  const handleFullDiaryComplete = useCallback(async (attempt: string) => {
     setUserDiaryAttempt(attempt);
+
+    // Calculate expression usage for celebration/logging
+    const allExpressions = sentences.flatMap((s) => s.expressions);
+    const userNorm = normalizeForExpression(attempt);
+    const usedCount = allExpressions.filter(
+      (expr) => userNorm.includes(normalizeForExpression(expr))
+    ).length;
+    const totalCount = allExpressions.length;
+
+    const result = await markFullDiaryCompleted(usedCount, totalCount);
+
+    setCelebrationData({
+      usedCount,
+      totalCount,
+      attemptNumber: result?.attemptNumber || attemptCount + 1,
+    });
+
+    setPhase('celebration');
+  }, [sentences, markFullDiaryCompleted, attemptCount]);
+
+  const handleCelebrationSeeCorrections = useCallback(() => {
     setPhase('red_pen');
   }, []);
 
   const handleTryDiaryAgain = useCallback(() => {
     setUserDiaryAttempt('');
+    setCelebrationData(null);
     setPhase('full_diary');
   }, []);
 
@@ -215,7 +297,7 @@ export function ReviewHub() {
   }, []);
 
   const handleDone = useCallback(() => {
-    navigate('/');
+    navigate('/calendar');
   }, [navigate]);
 
   const handlePlayAudio = useCallback(() => {
@@ -236,7 +318,6 @@ export function ReviewHub() {
 
   const dateLabel = diaryDateParam ? format(new Date(diaryDateParam), 'MMMM d, yyyy') : 'Today';
 
-  // Progress calculation
   const overallProgress = useMemo(() => {
     if (sentences.length === 0) return 0;
     const completedSteps = Object.values(diaryProgress.sentenceProgress).filter((p) => p.fullSentenceCompleted).length;
@@ -260,6 +341,21 @@ export function ReviewHub() {
           Go home
         </Button>
       </div>
+    );
+  }
+
+  // Celebration phase
+  if (phase === 'celebration' && celebrationData) {
+    return (
+      <CelebrationScreen
+        diaryDate={dateLabel}
+        usedExpressionsCount={celebrationData.usedCount}
+        totalExpressionsCount={celebrationData.totalCount}
+        attemptNumber={celebrationData.attemptNumber}
+        onSeeCorrections={handleCelebrationSeeCorrections}
+        onTryAgain={handleTryDiaryAgain}
+        onBackToCalendar={handleDone}
+      />
     );
   }
 
@@ -354,7 +450,7 @@ export function ReviewHub() {
   if (phase === 'full_sentence' && currentSentence) {
     const stepLabel = currentSentence.hasExpressions ? 'Step 2: Full Sentence' : 'Full Sentence';
     const handleBack = currentSentence.hasExpressions ? handleBackToCloze : handleBackToSentences;
-    
+
     return (
       <div className="min-h-screen flex flex-col safe-bottom">
         <header className="sticky top-0 z-10 glass border-b border-border p-4">
@@ -388,6 +484,9 @@ export function ReviewHub() {
     );
   }
 
+  // Full diary challenge availability
+  const fullDiaryAvailable = diaryProgress.fullDiaryChallengeUnlocked || sentencesReviewCompleted;
+
   // Overview phase (default)
   return (
     <div className="min-h-screen flex flex-col p-6 safe-bottom">
@@ -402,6 +501,37 @@ export function ReviewHub() {
       </header>
 
       <div className="flex-1 space-y-4 overflow-y-auto">
+        {/* Completion status */}
+        <Card className="bg-muted/20">
+          <CardContent className="p-4 space-y-2">
+            <div className="flex items-center gap-2 text-sm">
+              {sentencesReviewCompleted ? (
+                <CheckCircle className="w-4 h-4 text-primary" />
+              ) : (
+                <div className="w-4 h-4 rounded-full border-2 border-muted-foreground/30" />
+              )}
+              <span className={sentencesReviewCompleted ? 'text-primary font-medium' : 'text-muted-foreground'}>
+                Sentence review: {sentencesReviewCompleted ? 'Completed ✓' : 'Not yet'}
+              </span>
+            </div>
+            <div className="flex items-center gap-2 text-sm">
+              {fullDiaryChallengeCompleted ? (
+                <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />
+              ) : (
+                <div className="w-4 h-4 rounded-full border-2 border-muted-foreground/30" />
+              )}
+              <span className={fullDiaryChallengeCompleted ? 'text-yellow-600 font-medium' : 'text-muted-foreground'}>
+                Full Diary Challenge: {fullDiaryChallengeCompleted ? 'Completed ⭐' : 'Not yet'}
+              </span>
+            </div>
+            {attemptCount > 0 && (
+              <p className="text-xs text-muted-foreground ml-6">
+                {attemptCount} attempt{attemptCount !== 1 ? 's' : ''} total
+              </p>
+            )}
+          </CardContent>
+        </Card>
+
         {/* Japanese summary */}
         {diaryEntry.japanese_summary && (
           <Card className="bg-muted/30">
@@ -480,21 +610,25 @@ export function ReviewHub() {
           </Card>
         )}
 
-        {/* Full diary challenge unlock */}
-        {diaryProgress.fullDiaryChallengeUnlocked && (
+        {/* Full diary challenge section */}
+        {fullDiaryAvailable && (
           <Card className="border-primary/30 bg-primary/5">
             <CardContent className="p-4">
               <div className="flex items-center gap-3 mb-3">
                 <Trophy className="w-6 h-6 text-primary" />
                 <div>
-                  <p className="font-medium text-sm">Full Diary Challenge Unlocked!</p>
+                  <p className="font-medium text-sm">
+                    {fullDiaryChallengeCompleted ? 'Full Diary Challenge' : 'Full Diary Challenge Unlocked!'}
+                  </p>
                   <p className="text-xs text-muted-foreground">
-                    You completed {LOOPS_TO_UNLOCK} loops. Ready for the ultimate test?
+                    {fullDiaryChallengeCompleted
+                      ? 'You passed! Try again to improve.'
+                      : 'Ready for the ultimate test?'}
                   </p>
                 </div>
               </div>
               <Button variant="glow" size="sm" className="w-full" onClick={handleStartFullDiary}>
-                Try saying the whole diary
+                {fullDiaryChallengeCompleted ? 'Try the Full Diary Challenge again' : 'Try saying the whole diary'}
               </Button>
             </CardContent>
           </Card>
@@ -507,7 +641,7 @@ export function ReviewHub() {
           {overallProgress > 0 ? 'Continue Practice' : 'Start Sentence Practice'}
         </Button>
         <Button variant="ghost" size="sm" className="w-full" onClick={handleDone}>
-          Back to Home
+          Back to Calendar
         </Button>
       </div>
     </div>
