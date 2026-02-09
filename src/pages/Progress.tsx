@@ -183,7 +183,7 @@
          </Button>
        </header>
  
-       <Card className="mb-6 overflow-hidden border-0 bg-gradient-to-br from-primary via-primary/90 to-primary/70 shadow-xl">
+       <Card className="mb-6 overflow-hidden border-0 bg-gradient-to-br from-primary via-primary/90 to-primary/70 shadow-xl transition-all duration-300 hover:shadow-2xl hover:scale-[1.01]">
          <CardContent className="py-8 px-6">
            <div className="flex items-center justify-between">
              <div>
@@ -215,7 +215,7 @@
          </CardContent>
        </Card>
  
-       <Card className="mb-6 flex-1">
+       <Card className="mb-6 flex-1 transition-all duration-300 hover:shadow-lg hover:border-primary/20">
          <CardContent className="py-6">
            <div className="flex items-center justify-between mb-6">
              <h2 className="text-lg font-semibold">Last 7 Days</h2>
@@ -283,24 +283,24 @@
        </Card>
  
        <div className="grid grid-cols-3 gap-3 mb-6">
-         <Card className="bg-muted/40 border-0">
-           <CardContent className="py-4 text-center">
-             <p className="text-2xl font-bold text-foreground">{Math.round(avgCount)}</p>
-             <p className="text-xs text-muted-foreground">Daily Avg</p>
-           </CardContent>
-         </Card>
-         <Card className="bg-yellow-500/10 border-0">
-           <CardContent className="py-4 text-center">
-             <p className="text-2xl font-bold text-yellow-500">{bestDay.count}</p>
-             <p className="text-xs text-muted-foreground">Best Day</p>
-           </CardContent>
-         </Card>
-         <Card className="bg-primary/10 border-0">
-           <CardContent className="py-4 text-center">
-             <p className="text-2xl font-bold text-primary">{totalWeek}</p>
-             <p className="text-xs text-muted-foreground">This Week</p>
-           </CardContent>
-         </Card>
+          <Card className="bg-muted/40 border-0 transition-all duration-300 hover:scale-105 hover:bg-muted/60 hover:shadow-md">
+            <CardContent className="py-4 text-center">
+              <p className="text-2xl font-bold text-foreground">{Math.round(avgCount)}</p>
+              <p className="text-xs text-muted-foreground">Daily Avg</p>
+            </CardContent>
+          </Card>
+          <Card className="bg-yellow-500/10 border-0 transition-all duration-300 hover:scale-105 hover:bg-yellow-500/20 hover:shadow-md">
+            <CardContent className="py-4 text-center">
+              <p className="text-2xl font-bold text-yellow-500">{bestDay.count}</p>
+              <p className="text-xs text-muted-foreground">Best Day</p>
+            </CardContent>
+          </Card>
+          <Card className="bg-primary/10 border-0 transition-all duration-300 hover:scale-105 hover:bg-primary/20 hover:shadow-md">
+            <CardContent className="py-4 text-center">
+              <p className="text-2xl font-bold text-primary">{totalWeek}</p>
+              <p className="text-xs text-muted-foreground">This Week</p>
+            </CardContent>
+          </Card>
        </div>
  
         {/* Expression Mastery Stats */}
