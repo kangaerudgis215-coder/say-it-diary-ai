@@ -156,9 +156,10 @@ export default function Home() {
               : "Write a diary first to unlock"
           }
           onClick={handleReviewLatest}
-          variant={todayComplete ? "secondary" : "secondary"}
+          variant="secondary"
           badge={todayComplete && latestDiaryId ? "NEXT" : undefined}
           disabled={!latestDiaryId}
+          hoverColor="hsl(220, 90%, 56%)"
         />
 
         {/* 3. Expression Memory Game */}
@@ -168,6 +169,7 @@ export default function Home() {
            description="フレーズ神経衰弱 - Match Japanese ↔ English"
           onClick={() => navigate('/instant')}
           variant="secondary"
+          hoverColor="hsl(150, 80%, 45%)"
         />
 
         {/* 4. Review Expressions */}
@@ -177,6 +179,7 @@ export default function Home() {
           description="Browse and review phrases from your diaries"
           onClick={() => navigate('/expressions')}
           variant="secondary"
+          hoverColor="hsl(280, 80%, 60%)"
         />
 
         {/* 5. Calendar View */}
@@ -186,6 +189,7 @@ export default function Home() {
           description="Browse all your past diary entries"
           onClick={() => navigate('/calendar')}
           variant="secondary"
+          hoverColor="hsl(340, 80%, 55%)"
         />
 
         {/* 6. Progress / Stats */}
@@ -195,6 +199,7 @@ export default function Home() {
           description="Track your spoken vocabulary growth"
           onClick={() => navigate('/progress')}
           variant="secondary"
+          hoverColor="hsl(180, 70%, 45%)"
         />
       </div>
 
