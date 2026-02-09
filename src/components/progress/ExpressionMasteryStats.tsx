@@ -35,8 +35,8 @@ export function ExpressionMasteryStats() {
       const active = data.filter(e => e.status === 'active');
       const archived = data.filter(e => e.status === 'archived');
       const newCount = active.filter(e => !e.mastery_level || e.mastery_level === 0).length;
-      const inProgress = active.filter(e => e.mastery_level && e.mastery_level >= 1 && e.mastery_level <= 4).length;
-      const mastered = active.filter(e => e.mastery_level && e.mastery_level >= 5).length;
+      const inProgress = active.filter(e => e.mastery_level && e.mastery_level >= 1 && e.mastery_level <= 2).length;
+      const mastered = active.filter(e => e.mastery_level && e.mastery_level >= 3).length;
 
       setStats({
         total: data.length,
