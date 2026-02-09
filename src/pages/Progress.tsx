@@ -7,7 +7,9 @@
  import { supabase } from '@/lib/supabase';
  import { format, subDays } from 'date-fns';
  import { cn } from '@/lib/utils';
- import { useToast } from '@/hooks/use-toast';
+  import { useToast } from '@/hooks/use-toast';
+  import { ExpressionMasteryStats } from '@/components/progress/ExpressionMasteryStats';
+  import { DailyEncouragement } from '@/components/progress/DailyEncouragement';
  
  interface VocabLog {
    date: string;
@@ -301,42 +303,48 @@
          </Card>
        </div>
  
-       {!isLoading && logs.length === 0 && (
-         <Card className="bg-muted/30 border-dashed">
-           <CardContent className="py-8 text-center">
-             <Flame className="w-12 h-12 mx-auto mb-4 text-muted-foreground/50" />
-             <p className="text-muted-foreground mb-4">
-               No vocabulary data yet.<br />
-               Start speaking to track your progress!
-             </p>
-             <div className="space-y-3">
-               <Button variant="glow" onClick={backfillVocabulary} disabled={isBackfilling}>
-                 {isBackfilling ? (
-                   <>
-                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                     Syncing...
-                   </>
-                 ) : (
-                   <>
-                     <RefreshCw className="w-4 h-4 mr-2" />
-                     Sync from past diaries
-                   </>
-                 )}
-               </Button>
-               <p className="text-xs text-muted-foreground">or</p>
-               <Button variant="outline" onClick={() => navigate('/chat')}>
-                 Start today's diary
-               </Button>
-             </div>
-           </CardContent>
-         </Card>
-       )}
- 
-       {!isLoading && logs.length > 0 && (
-         <p className="text-xs text-center text-muted-foreground mt-auto pt-4">
-           💡 Speak more unique words each day to grow your active vocabulary!
-         </p>
-       )}
-     </div>
-   );
- }
+        {/* Expression Mastery Stats */}
+        <ExpressionMasteryStats />
+
+        {/* Daily AI Encouragement */}
+        <DailyEncouragement />
+
+        {!isLoading && logs.length === 0 && (
+          <Card className="bg-muted/30 border-dashed">
+            <CardContent className="py-8 text-center">
+              <Flame className="w-12 h-12 mx-auto mb-4 text-muted-foreground/50" />
+              <p className="text-muted-foreground mb-4">
+                No vocabulary data yet.<br />
+                Start speaking to track your progress!
+              </p>
+              <div className="space-y-3">
+                <Button variant="glow" onClick={backfillVocabulary} disabled={isBackfilling}>
+                  {isBackfilling ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Syncing...
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="w-4 h-4 mr-2" />
+                      Sync from past diaries
+                    </>
+                  )}
+                </Button>
+                <p className="text-xs text-muted-foreground">or</p>
+                <Button variant="outline" onClick={() => navigate('/chat')}>
+                  Start today's diary
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {!isLoading && logs.length > 0 && (
+          <p className="text-xs text-center text-muted-foreground mt-auto pt-4">
+            💡 Speak more unique words each day to grow your active vocabulary!
+          </p>
+        )}
+      </div>
+    );
+  }
