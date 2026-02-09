@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, X, Brain, Shuffle, Plus, Edit } from 'lucide-react';
+import { ArrowLeft, X, Brain, Shuffle, Plus, Edit, Star } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DiaryCalendar } from '@/components/DiaryCalendar';
 import { RecallHistory } from '@/components/RecallHistory';
@@ -142,11 +142,26 @@ export default function Calendar() {
 
       {/* Selected Entry Preview */}
       {selectedEntry && (
-        <div className="mt-6 bg-card rounded-2xl p-5 border border-border fade-in">
+        <div className="mt-6 bg-card rounded-2xl p-5 border border-border fade-in relative overflow-hidden">
+          {/* Sparkle overlay for mastered diaries */}
+          {selectedEntry.full_diary_challenge_completed && (
+            <div className="absolute inset-0 pointer-events-none">
+              <Star className="absolute top-3 right-12 w-4 h-4 text-yellow-500/60 animate-sparkle" fill="currentColor" />
+              <Star className="absolute top-8 right-4 w-3 h-3 text-yellow-500/40 animate-sparkle [animation-delay:0.5s]" fill="currentColor" />
+              <Star className="absolute bottom-16 right-6 w-3.5 h-3.5 text-yellow-500/50 animate-sparkle [animation-delay:1s]" fill="currentColor" />
+              <Star className="absolute top-12 left-3 w-3 h-3 text-yellow-500/30 animate-sparkle [animation-delay:0.7s]" fill="currentColor" />
+            </div>
+          )}
+
           <div className="flex items-center justify-between mb-3">
-            <h3 className="font-bold">
-              {format(new Date(selectedEntry.date), 'MMMM d, yyyy')}
-            </h3>
+            <div className="flex items-center gap-2">
+              <h3 className="font-bold">
+                {format(new Date(selectedEntry.date), 'MMMM d, yyyy')}
+              </h3>
+              {selectedEntry.full_diary_challenge_completed && (
+                <span className="text-yellow-500 text-sm">⭐ Mastered</span>
+              )}
+            </div>
             <Button
               variant="ghost"
               size="icon"
