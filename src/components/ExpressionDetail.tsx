@@ -130,7 +130,7 @@ export function ExpressionDetail({ expression, onNavigateToDiary, onDeleted, onA
             <p className="text-xs text-muted-foreground">Streak</p>
           </div>
           <div className="bg-muted/30 rounded-lg p-2">
-            <p className="font-bold text-sm">{expression.mastery_level}/5</p>
+            <p className="font-bold text-sm">{expression.mastery_level}/3</p>
             <p className="text-xs text-muted-foreground">Mastery</p>
           </div>
         </div>
@@ -146,7 +146,7 @@ export function ExpressionDetail({ expression, onNavigateToDiary, onDeleted, onA
         <div className="h-2 bg-muted rounded-full overflow-hidden">
           <div
             className="h-full bg-primary rounded-full transition-all duration-300"
-            style={{ width: `${(expression.mastery_level / 5) * 100}%` }}
+            style={{ width: `${(expression.mastery_level / 3) * 100}%` }}
           />
         </div>
       </div>
