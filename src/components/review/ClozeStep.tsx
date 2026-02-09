@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { useSpeechRecognition } from '@/hooks/useSpeechRecognition';
+import { useSuccessSound } from '@/hooks/useSuccessSound';
 import { cn } from '@/lib/utils';
 import { normalizeForExpression } from '@/lib/textComparison';
 
@@ -68,6 +69,7 @@ export function ClozeStep({
 
   const { isListening, transcript, interimTranscript, isSupported, startListening, stopListening, resetTranscript } =
     useSpeechRecognition();
+  const { playSuccess } = useSuccessSound();
 
   const currentInput = showTyping ? typedInput : transcript;
 
@@ -100,11 +102,11 @@ export function ClozeStep({
 
   const handleCheck = useCallback(() => {
     const inputNorm = normalizeForExpression(currentInput);
-    // Check if all blanks are present in user's input
     const allPresent = blanks.every((b) => inputNorm.includes(normalizeForExpression(b)));
     setIsCorrect(allPresent);
     setIsChecked(true);
-  }, [currentInput, blanks]);
+    if (allPresent) playSuccess();
+  }, [currentInput, blanks, playSuccess]);
 
   const handleShowAnswer = useCallback(() => {
     setShowAnswer(true);

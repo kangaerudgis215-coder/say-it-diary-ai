@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { useSpeechRecognition } from '@/hooks/useSpeechRecognition';
 import { useVocabularyLog } from '@/hooks/useVocabularyLog';
+import { useSuccessSound } from '@/hooks/useSuccessSound';
 import { cn } from '@/lib/utils';
 import { compareTokens, normalizeForExpression } from '@/lib/textComparison';
 
@@ -96,6 +97,7 @@ export function FullSentenceStepNew({
   const { isListening, transcript, interimTranscript, isSupported, startListening, stopListening, resetTranscript } =
     useSpeechRecognition();
   const { logSpokenWords } = useVocabularyLog();
+  const { playSuccess } = useSuccessSound();
 
   const currentInput = showTyping ? typedInput : transcript;
 
@@ -133,7 +135,8 @@ export function FullSentenceStepNew({
     const evaluation = evaluateAnswer(currentInput, english, expressions);
     setResult(evaluation);
     setIsChecking(false);
-  }, [currentInput, english, expressions, logSpokenWords]);
+    if (evaluation.passed) playSuccess();
+  }, [currentInput, english, expressions, logSpokenWords, playSuccess]);
 
   const handleRetry = useCallback(() => {
     setResult(null);

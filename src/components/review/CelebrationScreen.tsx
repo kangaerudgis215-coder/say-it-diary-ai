@@ -4,6 +4,7 @@
 import { Trophy, PartyPopper, Eye, RotateCcw, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useEffect, useState } from 'react';
+import { useSuccessSound } from '@/hooks/useSuccessSound';
 
 interface CelebrationScreenProps {
   diaryDate: string;
@@ -25,12 +26,15 @@ export function CelebrationScreen({
   onBackToCalendar,
 }: CelebrationScreenProps) {
   const [showConfetti, setShowConfetti] = useState(false);
+  const { playBigSuccess } = useSuccessSound();
 
   useEffect(() => {
-    // Trigger confetti animation after mount
-    const t = setTimeout(() => setShowConfetti(true), 100);
+    const t = setTimeout(() => {
+      setShowConfetti(true);
+      playBigSuccess();
+    }, 100);
     return () => clearTimeout(t);
-  }, []);
+  }, [playBigSuccess]);
 
   const ratio = totalExpressionsCount > 0 ? usedExpressionsCount / totalExpressionsCount : 1;
   const rating = ratio >= 0.8 ? 'Great' : ratio >= 0.5 ? 'Good' : 'Needs work';
