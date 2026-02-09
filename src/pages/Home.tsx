@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Mic, BookOpen, Sparkles, LogOut, Shuffle, TrendingUp, Brain } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { StreakBadge } from '@/components/StreakBadge';
 import { ActionCard } from '@/components/ActionCard';
 import { MasteredDiariesBadge } from '@/components/MasteredDiariesBadge';
@@ -89,9 +90,14 @@ export default function Home() {
       <header className="flex items-center justify-between mb-8">
         <div>
           <p className="text-sm text-muted-foreground">{getGreeting()}</p>
-          <h1 className="text-2xl font-bold">
-            {profile?.display_name || 'Friend'} ✨
-          </h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-bold">
+              {profile?.display_name || 'Friend'} ✨
+            </h1>
+            <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-primary/40 text-primary font-semibold tracking-wider">
+              BETA
+            </Badge>
+          </div>
         </div>
         
         <Button variant="ghost" size="icon" onClick={async () => {
