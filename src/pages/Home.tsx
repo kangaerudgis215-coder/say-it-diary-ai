@@ -45,11 +45,12 @@ export default function Home() {
       }
     }
 
-    // Get the latest diary (for review button)
+    // Get the latest diary excluding today (for review button)
     const { data: latestEntry } = await supabase
       .from('diary_entries')
       .select('id, date')
       .eq('user_id', user.id)
+      .lt('date', today)
       .order('date', { ascending: false })
       .limit(1)
       .maybeSingle();
