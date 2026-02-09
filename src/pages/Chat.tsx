@@ -458,6 +458,21 @@ export default function Chat() {
             </div>
           </div>
         )}
+
+        {/* Prominent CTA to finish diary */}
+        {hasEnoughContent && !isGeneratingDiary && !isLoading && (
+          <div className="flex justify-center py-4">
+            <Button
+              variant="glow"
+              size="lg"
+              onClick={handleGenerateDiary}
+              className="gap-2 px-8 text-base animate-pulse"
+            >
+              <Check className="w-5 h-5" />
+              日記を完成させて練習へ ✨
+            </Button>
+          </div>
+        )}
         
         <div ref={messagesEndRef} />
       </div>
