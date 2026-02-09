@@ -52,6 +52,8 @@ export function ReviewHub() {
   const [sentencesReviewCompleted, setSentencesReviewCompleted] = useState(false);
   const [fullDiaryChallengeCompleted, setFullDiaryChallengeCompleted] = useState(false);
   const [attemptCount, setAttemptCount] = useState(0);
+  // Track whether the initial full-diary attempt failed, requiring sentence practice
+  const [failedInitialChallenge, setFailedInitialChallenge] = useState(false);
 
   // Celebration data
   const [celebrationData, setCelebrationData] = useState<{
@@ -125,12 +127,17 @@ export function ReviewHub() {
     for (let i = 0; i < reviewSentences.length; i++) {
       initialProgress[i] = { clozeCompleted: false, fullSentenceCompleted: false, completionCount: 0 };
     }
+    const alreadyCompletedSentences = (entry as any).sentences_review_completed || false;
     setDiaryProgress({
       sentenceProgress: initialProgress,
       loopsCompleted: 0,
-      // Unlock if previously completed sentence review OR if loops earned this session
-      fullDiaryChallengeUnlocked: (entry as any).sentences_review_completed || false,
+      fullDiaryChallengeUnlocked: alreadyCompletedSentences,
     });
+
+    // NEW: Auto-start Full Diary Challenge if not yet completed
+    if (!(entry as any).full_diary_challenge_completed) {
+      setPhase('full_diary');
+    }
 
     setIsLoading(false);
   };
@@ -270,6 +277,9 @@ export function ReviewHub() {
     ).length;
     const totalCount = allExpressions.length;
 
+    const ratio = totalCount > 0 ? usedCount / totalCount : 1;
+    const passed = ratio >= 0.5;
+
     const result = await markFullDiaryCompleted(usedCount, totalCount);
 
     setCelebrationData({
@@ -278,8 +288,13 @@ export function ReviewHub() {
       attemptNumber: result?.attemptNumber || attemptCount + 1,
     });
 
+    if (!passed && !sentencesReviewCompleted) {
+      // Failed initial challenge → require sentence practice before retry
+      setFailedInitialChallenge(true);
+    }
+
     setPhase('celebration');
-  }, [sentences, markFullDiaryCompleted, attemptCount]);
+  }, [sentences, markFullDiaryCompleted, attemptCount, sentencesReviewCompleted]);
 
   const handleCelebrationSeeCorrections = useCallback(() => {
     setPhase('red_pen');
@@ -288,8 +303,13 @@ export function ReviewHub() {
   const handleTryDiaryAgain = useCallback(() => {
     setUserDiaryAttempt('');
     setCelebrationData(null);
-    setPhase('full_diary');
-  }, []);
+    // If failed initial challenge and haven't earned unlock, go to overview for sentence practice
+    if (failedInitialChallenge && !diaryProgress.fullDiaryChallengeUnlocked && !sentencesReviewCompleted) {
+      setPhase('overview');
+    } else {
+      setPhase('full_diary');
+    }
+  }, [failedInitialChallenge, diaryProgress.fullDiaryChallengeUnlocked, sentencesReviewCompleted]);
 
   const handleBackToSentences = useCallback(() => {
     setCurrentSentenceIndex(0);
@@ -484,8 +504,10 @@ export function ReviewHub() {
     );
   }
 
-  // Full diary challenge availability
-  const fullDiaryAvailable = diaryProgress.fullDiaryChallengeUnlocked || sentencesReviewCompleted;
+  // Full diary challenge availability:
+  // Available if already completed OR sentences review done OR loops earned this session
+  // NOT available if failed initial challenge and haven't done 2 loops yet
+  const fullDiaryAvailable = fullDiaryChallengeCompleted || diaryProgress.fullDiaryChallengeUnlocked || sentencesReviewCompleted;
 
   // Overview phase (default)
   return (
