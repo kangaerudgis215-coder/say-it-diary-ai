@@ -45,12 +45,13 @@ export default function Home() {
       }
     }
 
-    // Get the latest diary excluding today (for review button)
+    // Get the latest diary excluding today AND excluding full_diary_challenge_completed
     const { data: latestEntry } = await supabase
       .from('diary_entries')
       .select('id, date')
       .eq('user_id', user.id)
       .lt('date', today)
+      .eq('full_diary_challenge_completed', false)
       .order('date', { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -58,6 +59,9 @@ export default function Home() {
     if (latestEntry) {
       setLatestDiaryId(latestEntry.id);
       setLatestDiaryDate(latestEntry.date);
+    } else {
+      setLatestDiaryId(null);
+      setLatestDiaryDate(null);
     }
 
     // Check if there are any past diary entries (before today)
