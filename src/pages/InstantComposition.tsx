@@ -19,6 +19,10 @@ interface Expression {
   meaning: string;
   mastery_level: number;
   created_at: string;
+  review_count: number;
+  correct_streak: number;
+  last_reviewed_at: string | null;
+  status: string;
 }
  
  type MasteryStatus = 'mastered' | 'in_progress' | 'not_learned';
@@ -60,8 +64,9 @@ interface Expression {
 
     const { data, error } = await supabase
       .from('expressions')
-      .select('id, expression, meaning, mastery_level, created_at')
+      .select('id, expression, meaning, mastery_level, created_at, review_count, correct_streak, last_reviewed_at, status')
       .eq('user_id', user.id)
+      .eq('status', 'active')
       .not('meaning', 'is', null)
       .order('created_at', { ascending: false })
       .limit(200);
@@ -71,7 +76,6 @@ interface Expression {
     }
 
     if (data) {
-      // Filter out expressions without valid meanings
       const valid = data.filter(e => e.meaning && e.meaning.trim().length > 0) as Expression[];
       setExpressions(valid);
     }
@@ -81,26 +85,27 @@ interface Expression {
   // Calculate priority score for expression selection
   // Higher score = higher priority for practice
   const calculatePriorityScore = useCallback((expr: Expression) => {
-    const mastery = expr.mastery_level || 0;
-    const createdAt = new Date(expr.created_at).getTime();
     const now = Date.now();
-    const daysSinceCreated = (now - createdAt) / (1000 * 60 * 60 * 24);
-    
-    // Weights for priority calculation
-    const masteryWeight = 0.5;   // Lower mastery = higher priority
-    const newWeight = 0.3;       // Newer expressions get a boost
-    const randomWeight = 0.2;    // Some randomness for variety
-    
-    // Mastery score: 0 mastery = 1.0, 5 mastery = 0.0
-    const masteryScore = 1 - (mastery / 5);
-    
-    // Recency score: newer is better (1.0 for today, decays over 30 days)
-    const recencyScore = Math.max(0, 1 - (daysSinceCreated / 30));
-    
+    const daysSinceCreated = (now - new Date(expr.created_at).getTime()) / (1000 * 60 * 60 * 24);
+    const reviewCount = expr.review_count || 0;
+    const correctStreak = expr.correct_streak || 0;
+    const daysSinceReview = expr.last_reviewed_at
+      ? (now - new Date(expr.last_reviewed_at).getTime()) / (1000 * 60 * 60 * 24)
+      : 999;
+
+    // Newness: recently created items score higher
+    const newnessScore = 1 / (1 + daysSinceCreated);
+
+    // Need: low review count, low streak, or long since last review
+    const reviewNeed = 1 / (1 + reviewCount);
+    const streakBoost = correctStreak <= 1 ? 0.3 : 0;
+    const recencyNeed = Math.min(1, daysSinceReview / 14); // peaks at 14+ days
+    const needScore = reviewNeed + streakBoost + recencyNeed * 0.3;
+
     // Random factor for variety
     const randomScore = Math.random();
-    
-    return (masteryWeight * masteryScore) + (newWeight * recencyScore) + (randomWeight * randomScore);
+
+    return 0.3 * newnessScore + 0.5 * needScore + 0.2 * randomScore;
   }, []);
 
   // Select expressions for the game, prioritizing newer/less-practiced

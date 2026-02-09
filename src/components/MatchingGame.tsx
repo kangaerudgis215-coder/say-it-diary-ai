@@ -40,24 +40,37 @@ export function MatchingGame({ expressions, onComplete, onBack, maxPairs = DEFAU
   // Calculate how many pairs to use (dynamic based on available expressions)
   const pairsToUse = Math.min(maxPairs, expressions.length);
 
-  // Update mastery level when a pair is matched
-  const updateMastery = useCallback(async (expressionId: string) => {
+  // Update stats when a pair is matched
+  const updateExpressionStats = useCallback(async (expressionId: string, correct: boolean) => {
     try {
-      // Get current mastery level and increment
       const { data: currentExpr } = await supabase
         .from('expressions')
-        .select('mastery_level')
+        .select('mastery_level, review_count, correct_streak')
         .eq('id', expressionId)
         .single();
 
-      const newLevel = (currentExpr?.mastery_level || 0) + 1;
+      const currentLevel = (currentExpr as any)?.mastery_level || 0;
+      const currentReviewCount = (currentExpr as any)?.review_count || 0;
+      const currentStreak = (currentExpr as any)?.correct_streak || 0;
+
+      const updates: any = {
+        review_count: currentReviewCount + 1,
+        last_reviewed_at: new Date().toISOString(),
+      };
+
+      if (correct) {
+        updates.correct_streak = currentStreak + 1;
+        updates.mastery_level = Math.min(currentLevel + 1, 5);
+      } else {
+        updates.correct_streak = 0;
+      }
 
       await supabase
         .from('expressions')
-        .update({ mastery_level: Math.min(newLevel, 5) }) // Cap at 5
+        .update(updates)
         .eq('id', expressionId);
     } catch (error) {
-      console.error('Error updating mastery:', error);
+      console.error('Error updating expression stats:', error);
     }
   }, []);
 
@@ -143,8 +156,8 @@ export function MatchingGame({ expressions, onComplete, onBack, maxPairs = DEFAU
         newMatched.add(newSelected[0].pairId);
         setMatchedPairs(newMatched);
         
-        // Update mastery for this expression
-        updateMastery(newSelected[0].pairId);
+        // Update stats for this expression (correct match)
+        updateExpressionStats(newSelected[0].pairId, true);
         
         setCards(prev => prev.map(c => 
           c.pairId === newSelected[0].pairId 
@@ -169,7 +182,7 @@ export function MatchingGame({ expressions, onComplete, onBack, maxPairs = DEFAU
         }, 1000);
       }
     }
-  }, [selectedCards, matchedPairs, pairsToUse, updateMastery]);
+  }, [selectedCards, matchedPairs, pairsToUse, updateExpressionStats]);
 
   // Game complete screen
   if (showResult) {

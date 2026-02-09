@@ -1,16 +1,18 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Sparkles, Calendar, Filter, X, RefreshCw, Loader2, Star, Trash2 } from 'lucide-react';
+import { ArrowLeft, Sparkles, Filter, X, RefreshCw, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
 import { cn } from '@/lib/utils';
-import { format } from 'date-fns';
 import { ExpressionDetail } from '@/components/ExpressionDetail';
 import { useToast } from '@/hooks/use-toast';
+import { ExpressionListItem } from '@/components/expressions/ExpressionListItem';
+import { ExpressionFilters } from '@/components/expressions/ExpressionFilters';
+import { ExpressionSortSelect, SortOption } from '@/components/expressions/ExpressionSortSelect';
 
-interface ExpressionWithDiary {
+export interface ExpressionWithDiary {
   id: string;
   expression: string;
   meaning: string | null;
@@ -22,7 +24,13 @@ interface ExpressionWithDiary {
   scene_or_context: string | null;
   pos_or_type: string | null;
   is_user_added?: boolean;
+  status: string;
+  review_count: number;
+  correct_streak: number;
+  last_reviewed_at: string | null;
 }
+
+const PAGE_SIZE = 50;
 
 export default function Expressions() {
   const { user } = useAuth();
@@ -33,8 +41,11 @@ export default function Expressions() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [sceneFilter, setSceneFilter] = useState<string>('All');
   const [typeFilter, setTypeFilter] = useState<string>('All');
+  const [statusFilter, setStatusFilter] = useState<string>('active');
+  const [sortBy, setSortBy] = useState<SortOption>('recent');
   const [showFilters, setShowFilters] = useState(true);
   const [isTagging, setIsTagging] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
   useEffect(() => {
     fetchExpressions();
@@ -63,12 +74,10 @@ export default function Expressions() {
     }
   };
 
-  // Count untagged expressions
   const untaggedCount = useMemo(() => {
     return expressions.filter(e => !e.scene_or_context || !e.pos_or_type).length;
   }, [expressions]);
 
-  // Get unique scenes and types from data for dynamic filters
   const availableScenes = useMemo(() => {
     const scenes = new Set(expressions.map(e => e.scene_or_context).filter(Boolean));
     return ['All', ...Array.from(scenes).sort()] as string[];
@@ -79,42 +88,64 @@ export default function Expressions() {
     return ['All', ...Array.from(types).sort()] as string[];
   }, [expressions]);
 
-  // Filter expressions
+  // Filter and sort expressions
   const filteredExpressions = useMemo(() => {
-    return expressions.filter(exp => {
+    let result = expressions.filter(exp => {
       const matchesScene = sceneFilter === 'All' || exp.scene_or_context === sceneFilter;
       const matchesType = typeFilter === 'All' || exp.pos_or_type === typeFilter;
-      return matchesScene && matchesType;
+      const matchesStatus = statusFilter === 'all' || exp.status === statusFilter;
+      return matchesScene && matchesType && matchesStatus;
     });
-  }, [expressions, sceneFilter, typeFilter]);
+
+    // Sort
+    switch (sortBy) {
+      case 'recent':
+        result.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+        break;
+      case 'least_reviewed':
+        result.sort((a, b) => (a.review_count || 0) - (b.review_count || 0));
+        break;
+      case 'oldest_review':
+        result.sort((a, b) => {
+          const aTime = a.last_reviewed_at ? new Date(a.last_reviewed_at).getTime() : 0;
+          const bTime = b.last_reviewed_at ? new Date(b.last_reviewed_at).getTime() : 0;
+          return aTime - bTime;
+        });
+        break;
+      case 'alphabetical':
+        result.sort((a, b) => a.expression.localeCompare(b.expression));
+        break;
+    }
+
+    return result;
+  }, [expressions, sceneFilter, typeFilter, statusFilter, sortBy]);
+
+  // Paginated view
+  const visibleExpressions = useMemo(() => {
+    return filteredExpressions.slice(0, visibleCount);
+  }, [filteredExpressions, visibleCount]);
+
+  const hasMore = visibleCount < filteredExpressions.length;
 
   const selectedExpression = useMemo(() => {
     return expressions.find(e => e.id === selectedId) || null;
   }, [expressions, selectedId]);
 
-  const formatDiaryDate = (dateStr: string | null) => {
-    if (!dateStr) return 'Unknown date';
-    return format(new Date(dateStr), 'MMM d, yyyy');
-  };
-
   const clearFilters = () => {
     setSceneFilter('All');
     setTypeFilter('All');
+    setStatusFilter('active');
   };
 
   const handleTagExpressions = async () => {
     setIsTagging(true);
     try {
       const { data, error } = await supabase.functions.invoke('tag-expressions');
-      
       if (error) throw error;
-      
       toast({
         title: 'Expressions Tagged',
         description: data.message || `Updated ${data.updated} expressions`,
       });
-      
-      // Refresh the list
       await fetchExpressions();
     } catch (error) {
       console.error('Error tagging expressions:', error);
@@ -128,7 +159,29 @@ export default function Expressions() {
     }
   };
 
-  const hasActiveFilters = sceneFilter !== 'All' || typeFilter !== 'All';
+  const handleArchiveToggle = useCallback(async (id: string, newStatus: string) => {
+    await supabase
+      .from('expressions')
+      .update({ status: newStatus } as any)
+      .eq('id', id);
+    setExpressions(prev => prev.map(e => e.id === id ? { ...e, status: newStatus } : e));
+    toast({
+      title: newStatus === 'archived' ? 'Expression archived' : 'Expression restored',
+      description: newStatus === 'archived'
+        ? 'Removed from practice queue.'
+        : 'Back in your practice queue.',
+    });
+  }, [toast]);
+
+  const hasActiveFilters = sceneFilter !== 'All' || typeFilter !== 'All' || statusFilter !== 'active';
+
+  // Reset pagination when filters change
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+  }, [sceneFilter, typeFilter, statusFilter, sortBy]);
+
+  const activeCount = expressions.filter(e => e.status === 'active').length;
+  const archivedCount = expressions.filter(e => e.status === 'archived').length;
 
   return (
     <div className="min-h-screen flex flex-col p-4 md:p-6 safe-bottom">
@@ -141,10 +194,11 @@ export default function Expressions() {
           <h1 className="font-bold text-xl">My Expressions</h1>
           <p className="text-sm text-muted-foreground">
             {filteredExpressions.length} of {expressions.length} phrases
+            {' · '}{activeCount} active, {archivedCount} archived
           </p>
         </div>
-        <Button 
-          variant="ghost" 
+        <Button
+          variant="ghost"
           size="icon"
           onClick={() => setShowFilters(!showFilters)}
           className={cn(hasActiveFilters && "text-primary")}
@@ -156,89 +210,60 @@ export default function Expressions() {
       {/* Filters */}
       {showFilters && (
         <div className="mb-4 space-y-3 animate-in fade-in duration-200">
-          {/* Tag button for untagged expressions */}
+          {/* Status filter */}
+          <div>
+            <span className="text-xs text-muted-foreground uppercase tracking-wide mb-2 block">Status</span>
+            <div className="flex flex-wrap gap-2">
+              {(['active', 'archived', 'all'] as const).map(s => (
+                <Badge
+                  key={s}
+                  variant={statusFilter === s ? "default" : "outline"}
+                  className={cn(
+                    "cursor-pointer transition-all capitalize",
+                    statusFilter === s ? "bg-primary text-primary-foreground" : "hover:bg-muted"
+                  )}
+                  onClick={() => setStatusFilter(s)}
+                >
+                  {s === 'all' ? 'All' : s === 'active' ? `Active (${activeCount})` : `Archived (${archivedCount})`}
+                </Badge>
+              ))}
+            </div>
+          </div>
+
+          {/* Sort */}
+          <ExpressionSortSelect value={sortBy} onChange={setSortBy} />
+
+          {/* Tag button */}
           {untaggedCount > 0 && (
             <div className="flex items-center justify-between p-3 bg-primary/10 rounded-lg">
               <span className="text-sm text-muted-foreground">
                 {untaggedCount} expression{untaggedCount > 1 ? 's' : ''} need tagging
               </span>
-              <Button 
-                size="sm" 
-                onClick={handleTagExpressions}
-                disabled={isTagging}
-              >
-                {isTagging ? (
-                  <Loader2 className="w-4 h-4 animate-spin mr-1" />
-                ) : (
-                  <RefreshCw className="w-4 h-4 mr-1" />
-                )}
+              <Button size="sm" onClick={handleTagExpressions} disabled={isTagging}>
+                {isTagging ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <RefreshCw className="w-4 h-4 mr-1" />}
                 {isTagging ? 'Tagging...' : 'Auto-tag'}
               </Button>
             </div>
           )}
 
-          {/* Scene filters */}
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs text-muted-foreground uppercase tracking-wide">Scene / Context</span>
-              {hasActiveFilters && (
-                <Button variant="ghost" size="sm" onClick={clearFilters} className="h-6 px-2 text-xs">
-                  <X className="w-3 h-3 mr-1" />
-                  Clear
-                </Button>
-              )}
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {availableScenes.map((scene) => (
-                <Badge
-                  key={scene}
-                  variant={sceneFilter === scene ? "default" : "outline"}
-                  className={cn(
-                    "cursor-pointer transition-all",
-                    sceneFilter === scene 
-                      ? "bg-primary text-primary-foreground" 
-                      : "hover:bg-muted"
-                  )}
-                  onClick={() => setSceneFilter(scene)}
-                >
-                  {scene === 'All' ? 'All Scenes' : scene}
-                </Badge>
-              ))}
-            </div>
-          </div>
-
-          {/* Type filters */}
-          <div>
-            <span className="text-xs text-muted-foreground uppercase tracking-wide mb-2 block">Type / Part of Speech</span>
-            <div className="flex flex-wrap gap-2">
-              {availableTypes.map((type) => (
-                <Badge
-                  key={type}
-                  variant={typeFilter === type ? "default" : "outline"}
-                  className={cn(
-                    "cursor-pointer transition-all",
-                    typeFilter === type 
-                      ? "bg-secondary text-secondary-foreground" 
-                      : "hover:bg-muted"
-                  )}
-                  onClick={() => setTypeFilter(type)}
-                >
-                  {type === 'All' ? 'All Types' : type}
-                </Badge>
-              ))}
-            </div>
-          </div>
+          <ExpressionFilters
+            availableScenes={availableScenes}
+            availableTypes={availableTypes}
+            sceneFilter={sceneFilter}
+            typeFilter={typeFilter}
+            onSceneChange={setSceneFilter}
+            onTypeChange={setTypeFilter}
+            hasActiveFilters={hasActiveFilters}
+            onClear={clearFilters}
+          />
         </div>
       )}
 
       {/* Main content area */}
       <div className="flex-1 flex flex-col lg:flex-row gap-4">
         {/* Expression List */}
-        <div className={cn(
-          "flex-1 overflow-y-auto",
-          selectedExpression && "lg:max-w-md"
-        )}>
-          {filteredExpressions.length === 0 ? (
+        <div className={cn("flex-1 overflow-y-auto", selectedExpression && "lg:max-w-md")}>
+          {visibleExpressions.length === 0 ? (
             <div className="flex flex-col items-center justify-center text-center py-12">
               <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
                 <Sparkles className="w-8 h-8 text-primary" />
@@ -264,66 +289,26 @@ export default function Expressions() {
             </div>
           ) : (
             <div className="space-y-2">
-              {filteredExpressions.map((exp) => (
-                <button
+              {visibleExpressions.map(exp => (
+                <ExpressionListItem
                   key={exp.id}
-                  onClick={() => setSelectedId(selectedId === exp.id ? null : exp.id)}
-                  className={cn(
-                    "w-full text-left bg-card rounded-xl p-4 border border-border transition-all",
-                    "hover:border-primary/30",
-                    selectedId === exp.id && "border-primary ring-1 ring-primary/20"
-                  )}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex-1 min-w-0">
-                      <span className="font-medium text-primary block truncate">{exp.expression}</span>
-                      {exp.meaning && (
-                        <p className="text-sm text-muted-foreground truncate mt-0.5">
-                          {exp.meaning}
-                        </p>
-                      )}
-                      <div className="flex items-center gap-2 mt-2 flex-wrap">
-                        {exp.scene_or_context && (
-                          <Badge variant="outline" className="text-xs">
-                            {exp.scene_or_context}
-                          </Badge>
-                        )}
-                        {exp.pos_or_type && (
-                          <Badge variant="secondary" className="text-xs">
-                            {exp.pos_or_type}
-                          </Badge>
-                        )}
-                        {exp.is_user_added && (
-                          <Badge variant="default" className="text-xs bg-amber-500/20 text-amber-500 border-amber-500/30">
-                            <Star className="w-3 h-3 mr-0.5" />
-                            User
-                          </Badge>
-                        )}
-                      </div>
-                    </div>
-                    {exp.diary_date && (
-                      <div className="flex items-center gap-1 text-xs text-muted-foreground shrink-0">
-                        <Calendar className="w-3 h-3" />
-                        <span>{formatDiaryDate(exp.diary_date)}</span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Inline detail on mobile when selected */}
-                  {selectedId === exp.id && (
-                    <div className="lg:hidden mt-4 pt-4 border-t border-border">
-                      <ExpressionDetail 
-                        expression={exp} 
-                        onNavigateToDiary={() => navigate(`/calendar?date=${exp.diary_date}`)}
-                        onDeleted={() => {
-                          setSelectedId(null);
-                          fetchExpressions();
-                        }}
-                      />
-                    </div>
-                  )}
-                </button>
+                  expression={exp}
+                  isSelected={selectedId === exp.id}
+                  onSelect={() => setSelectedId(selectedId === exp.id ? null : exp.id)}
+                  onArchiveToggle={handleArchiveToggle}
+                  onNavigateToDiary={() => navigate(`/calendar?date=${exp.diary_date}`)}
+                  onDeleted={() => { setSelectedId(null); fetchExpressions(); }}
+                />
               ))}
+              {hasMore && (
+                <Button
+                  variant="outline"
+                  className="w-full mt-2"
+                  onClick={() => setVisibleCount(prev => prev + PAGE_SIZE)}
+                >
+                  Load more ({filteredExpressions.length - visibleCount} remaining)
+                </Button>
+              )}
             </div>
           )}
         </div>
@@ -332,13 +317,11 @@ export default function Expressions() {
         {selectedExpression && (
           <div className="hidden lg:block w-80 xl:w-96 shrink-0">
             <div className="sticky top-4 bg-card rounded-xl border border-border p-5">
-              <ExpressionDetail 
-                expression={selectedExpression} 
+              <ExpressionDetail
+                expression={selectedExpression}
                 onNavigateToDiary={() => navigate(`/calendar?date=${selectedExpression.diary_date}`)}
-                onDeleted={() => {
-                  setSelectedId(null);
-                  fetchExpressions();
-                }}
+                onDeleted={() => { setSelectedId(null); fetchExpressions(); }}
+                onArchiveToggle={handleArchiveToggle}
               />
             </div>
           </div>

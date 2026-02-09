@@ -138,42 +138,54 @@ export type Database = {
       }
       expressions: {
         Row: {
+          correct_streak: number
           created_at: string
           diary_entry_id: string | null
           example_sentence: string | null
           expression: string
           id: string
           is_user_added: boolean
+          last_reviewed_at: string | null
           mastery_level: number | null
           meaning: string | null
           pos_or_type: string | null
+          review_count: number
           scene_or_context: string | null
+          status: string
           user_id: string
         }
         Insert: {
+          correct_streak?: number
           created_at?: string
           diary_entry_id?: string | null
           example_sentence?: string | null
           expression: string
           id?: string
           is_user_added?: boolean
+          last_reviewed_at?: string | null
           mastery_level?: number | null
           meaning?: string | null
           pos_or_type?: string | null
+          review_count?: number
           scene_or_context?: string | null
+          status?: string
           user_id: string
         }
         Update: {
+          correct_streak?: number
           created_at?: string
           diary_entry_id?: string | null
           example_sentence?: string | null
           expression?: string
           id?: string
           is_user_added?: boolean
+          last_reviewed_at?: string | null
           mastery_level?: number | null
           meaning?: string | null
           pos_or_type?: string | null
+          review_count?: number
           scene_or_context?: string | null
+          status?: string
           user_id?: string
         }
         Relationships: [
