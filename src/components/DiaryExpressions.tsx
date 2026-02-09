@@ -167,12 +167,12 @@ export function DiaryExpressions({ diaryEntryId }: DiaryExpressionsProps) {
                     )}
                     <div className="flex items-center gap-2 pt-1">
                       <span className="text-xs text-muted-foreground">
-                        Mastery: {exp.mastery_level}/5
+                        Mastery: {exp.mastery_level}/3
                       </span>
                       <div className="flex-1 h-1.5 bg-background rounded-full overflow-hidden">
                         <div 
                           className="h-full bg-primary rounded-full transition-all"
-                          style={{ width: `${(exp.mastery_level / 5) * 100}%` }}
+                          style={{ width: `${(exp.mastery_level / 3) * 100}%` }}
                         />
                       </div>
                     </div>

@@ -62,7 +62,7 @@ export function MatchingGame({ expressions, onComplete, onBack, maxPairs = DEFAU
 
       if (correct) {
         updates.correct_streak = currentStreak + 1;
-        updates.mastery_level = Math.min(currentLevel + 1, 5);
+        updates.mastery_level = Math.min(currentLevel + 1, 3);
       } else {
         updates.correct_streak = 0;
       }
