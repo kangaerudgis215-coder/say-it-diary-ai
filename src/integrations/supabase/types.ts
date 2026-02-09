@@ -47,11 +47,13 @@ export type Database = {
           conversation_id: string | null
           created_at: string
           date: string
+          full_diary_challenge_completed: boolean
           id: string
           important_sentences: Json | null
           japanese_summary: string | null
           next_review_date: string | null
           review_count: number | null
+          sentences_review_completed: boolean
           updated_at: string
           user_id: string
           word_count: number | null
@@ -61,11 +63,13 @@ export type Database = {
           conversation_id?: string | null
           created_at?: string
           date: string
+          full_diary_challenge_completed?: boolean
           id?: string
           important_sentences?: Json | null
           japanese_summary?: string | null
           next_review_date?: string | null
           review_count?: number | null
+          sentences_review_completed?: boolean
           updated_at?: string
           user_id: string
           word_count?: number | null
@@ -75,11 +79,13 @@ export type Database = {
           conversation_id?: string | null
           created_at?: string
           date?: string
+          full_diary_challenge_completed?: boolean
           id?: string
           important_sentences?: Json | null
           japanese_summary?: string | null
           next_review_date?: string | null
           review_count?: number | null
+          sentences_review_completed?: boolean
           updated_at?: string
           user_id?: string
           word_count?: number | null
@@ -173,6 +179,44 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "expressions_diary_entry_id_fkey"
+            columns: ["diary_entry_id"]
+            isOneToOne: false
+            referencedRelation: "diary_entries"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      full_diary_attempts: {
+        Row: {
+          created_at: string
+          diary_entry_id: string
+          id: string
+          rating: string
+          total_expressions_count: number
+          used_expressions_count: number
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          diary_entry_id: string
+          id?: string
+          rating?: string
+          total_expressions_count?: number
+          used_expressions_count?: number
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          diary_entry_id?: string
+          id?: string
+          rating?: string
+          total_expressions_count?: number
+          used_expressions_count?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "full_diary_attempts_diary_entry_id_fkey"
             columns: ["diary_entry_id"]
             isOneToOne: false
             referencedRelation: "diary_entries"

@@ -44,7 +44,12 @@ export default function Calendar() {
 
     if (data) {
       setAllEntries(data);
-      setEntries(data.map(e => ({ date: e.date, hasEntry: true })));
+      setEntries(data.map(e => ({
+        date: e.date,
+        hasEntry: true,
+        sentencesReviewCompleted: (e as any).sentences_review_completed || false,
+        fullDiaryChallengeCompleted: (e as any).full_diary_challenge_completed || false,
+      })));
     }
   };
 

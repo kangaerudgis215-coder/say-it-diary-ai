@@ -1,11 +1,18 @@
 import { useState } from 'react';
-import { ChevronLeft, ChevronRight, BookOpen } from 'lucide-react';
+import { ChevronLeft, ChevronRight, BookOpen, CheckCircle, Star } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, isToday, addMonths, subMonths } from 'date-fns';
 
+interface DiaryCalendarEntry {
+  date: string;
+  hasEntry: boolean;
+  sentencesReviewCompleted?: boolean;
+  fullDiaryChallengeCompleted?: boolean;
+}
+
 interface DiaryCalendarProps {
-  entries: { date: string; hasEntry: boolean }[];
+  entries: DiaryCalendarEntry[];
   onDateSelect: (date: Date) => void;
   selectedDate?: Date;
 }
@@ -21,10 +28,12 @@ export function DiaryCalendar({ entries, onDateSelect, selectedDate }: DiaryCale
   const startPadding = monthStart.getDay();
   const paddedDays = [...Array(startPadding).fill(null), ...days];
   
-  const hasEntryOnDate = (date: Date) => {
+  const getEntryState = (date: Date) => {
     const dateStr = format(date, 'yyyy-MM-dd');
-    return entries.some(e => e.date === dateStr && e.hasEntry);
+    return entries.find(e => e.date === dateStr && e.hasEntry);
   };
+
+  const hasEntryOnDate = (date: Date) => !!getEntryState(date);
 
   return (
     <div className="bg-card rounded-2xl p-4 border border-border">
@@ -68,8 +77,19 @@ export function DiaryCalendar({ entries, onDateSelect, selectedDate }: DiaryCale
           }
           
           const hasEntry = hasEntryOnDate(day);
+          const entryState = getEntryState(day);
           const isSelected = selectedDate && isSameDay(day, selectedDate);
           const isCurrentDay = isToday(day);
+          
+          // Determine icon
+          let EntryIcon = hasEntry ? BookOpen : null;
+          let iconColor = isSelected ? "text-primary-foreground" : "text-primary";
+          if (entryState?.fullDiaryChallengeCompleted) {
+            EntryIcon = Star;
+            iconColor = isSelected ? "text-primary-foreground" : "text-yellow-500";
+          } else if (entryState?.sentencesReviewCompleted) {
+            EntryIcon = CheckCircle;
+          }
           
           return (
             <button
@@ -85,11 +105,8 @@ export function DiaryCalendar({ entries, onDateSelect, selectedDate }: DiaryCale
               )}
             >
               <span>{format(day, 'd')}</span>
-              {hasEntry && (
-                <BookOpen className={cn(
-                  "w-3 h-3",
-                  isSelected ? "text-primary-foreground" : "text-primary"
-                )} />
+              {EntryIcon && (
+                <EntryIcon className={cn("w-3 h-3", iconColor)} />
               )}
             </button>
           );
