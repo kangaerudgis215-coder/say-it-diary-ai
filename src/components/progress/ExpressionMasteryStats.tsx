@@ -62,7 +62,7 @@ export function ExpressionMasteryStats() {
   ];
 
   return (
-    <Card className="mb-6">
+    <Card className="mb-6 transition-all duration-300 hover:shadow-lg hover:border-primary/20">
       <CardContent className="py-5">
         <div className="flex items-center gap-2 mb-4">
           <BookOpen className="w-5 h-5 text-primary" />
@@ -81,7 +81,7 @@ export function ExpressionMasteryStats() {
         {/* Breakdown grid */}
         <div className="grid grid-cols-4 gap-2">
           {categories.map(cat => (
-            <div key={cat.label} className={cn("rounded-xl p-3 text-center", cat.bg)}>
+            <div key={cat.label} className={cn("rounded-xl p-3 text-center transition-all duration-200 hover:scale-105", cat.bg)}>
               <cat.icon className={cn("w-4 h-4 mx-auto mb-1", cat.color)} />
               <p className={cn("text-xl font-bold", cat.color)}>{cat.count}</p>
               <p className="text-[10px] text-muted-foreground">{cat.label}</p>

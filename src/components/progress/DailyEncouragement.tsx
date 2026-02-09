@@ -67,7 +67,7 @@ export function DailyEncouragement() {
   }
 
   return (
-    <Card className="mb-6 border-primary/20 bg-gradient-to-r from-primary/10 to-accent/10 overflow-hidden">
+    <Card className="mb-6 border-primary/20 bg-gradient-to-r from-primary/10 to-accent/10 overflow-hidden transition-all duration-300 hover:shadow-lg hover:from-primary/15 hover:to-accent/15">
       <CardContent className="py-5">
         <div className="flex gap-3">
           <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0">
