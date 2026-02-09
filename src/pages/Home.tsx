@@ -94,7 +94,10 @@ export default function Home() {
           </h1>
         </div>
         
-        <Button variant="ghost" size="icon" onClick={signOut}>
+        <Button variant="ghost" size="icon" onClick={async () => {
+          await signOut();
+          navigate('/auth');
+        }}>
           <LogOut className="w-5 h-5" />
         </Button>
       </header>
