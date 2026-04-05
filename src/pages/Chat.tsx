@@ -24,6 +24,7 @@ interface Message {
   id: string;
   role: 'user' | 'assistant';
   content: string;
+  japanese?: string;
 }
 
 export default function Chat() {
@@ -169,6 +170,7 @@ export default function Chat() {
         id: Date.now().toString() + '-ai',
         role: 'assistant',
         content: data.content,
+        japanese: data.japanese || undefined,
       };
 
       setMessages(prev => [...prev, assistantMessage]);
@@ -448,6 +450,7 @@ export default function Chat() {
             content={message.content}
             role={message.role}
             isNew={index === messages.length - 1}
+            japaneseTranslation={message.japanese}
           />
         ))}
         
