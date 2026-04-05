@@ -187,7 +187,7 @@ serve(async (req) => {
       ];
     }
 
-    const isJsonType = ["generate_diary", "select_sentences", "generate_quiz"].includes(type);
+    const isJsonType = ["generate_diary", "select_sentences", "generate_quiz", "conversation"].includes(type);
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -229,11 +229,28 @@ serve(async (req) => {
     if (isJsonType) {
       try {
         const parsed = JSON.parse(content);
+        
+        // For conversation type, return reply and japanese separately
+        if (type === "conversation") {
+          return new Response(JSON.stringify({ 
+            content: parsed.reply || content,
+            japanese: parsed.japanese || null
+          }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        
         return new Response(JSON.stringify(parsed), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       } catch (e) {
         console.error("Failed to parse JSON response:", e);
+        // For conversation, fallback gracefully
+        if (type === "conversation") {
+          return new Response(JSON.stringify({ content, japanese: null }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
         return new Response(
           JSON.stringify({ error: "Failed to parse AI response", raw: content }),
           { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
