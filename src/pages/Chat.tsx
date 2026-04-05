@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Send, Loader2, Check } from 'lucide-react';
+import { ArrowLeft, Send, Loader2, Check, BookOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ChatBubble } from '@/components/ChatBubble';
