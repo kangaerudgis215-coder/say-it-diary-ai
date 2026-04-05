@@ -18,6 +18,7 @@ import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
 import { useVocabularyLog } from '@/hooks/useVocabularyLog';
 import { normalizeForExpression } from '@/lib/textComparison';
+import { persistDiarySentences } from '@/lib/practiceBuilder';
 import { format, parseISO, isToday as isTodayFn } from 'date-fns';
 
 interface Message {
@@ -318,6 +319,13 @@ export default function Chat() {
               }))
             );
           }
+          // Also persist diary_sentences for quiz
+          const sentencesForPersist = importantSentences.map((s: any) => ({
+            english: s.english,
+            japanese: s.japanese,
+            expressions: s.expressions || [],
+          }));
+          await persistDiarySentences(supabase, user.id, diaryEntry.id, sentencesForPersist);
         }
       }
       // Profile streak is now auto-updated by database trigger on diary_entries changes
