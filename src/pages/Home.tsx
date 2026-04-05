@@ -85,7 +85,7 @@ export default function Home() {
 
   const handleReviewLatest = () => {
     if (latestDiaryId && latestDiaryDate) {
-      navigate(`/review?diaryId=${latestDiaryId}&date=${latestDiaryDate}`);
+      navigate(`/quiz?diaryId=${latestDiaryId}`);
     }
   };
 
