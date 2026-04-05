@@ -1,9 +1,9 @@
 /**
- * Review Hub - Diary review page showing diary content and expressions
+ * Review Hub - Diary review page from calendar (same layout as DiaryReview)
  */
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Volume2, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
+import { ArrowLeft, Volume2, Loader2, BookOpen, ChevronDown, ChevronUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -21,9 +21,8 @@ export function ReviewHub() {
   const diaryDateParam = searchParams.get('date');
 
   const [diaryEntry, setDiaryEntry] = useState<any>(null);
-  const [expressions, setExpressions] = useState<string[]>([]);
+  const [expressions, setExpressions] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isEnglishExpanded, setIsEnglishExpanded] = useState(false);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
 
   useEffect(() => {
@@ -54,8 +53,7 @@ export function ReviewHub() {
 
     const { data: exprs } = await supabase.from('expressions').select('*').eq('diary_entry_id', entry.id);
     const { valid } = partitionExpressionsForText(exprs || [], entry.content || '');
-    const exprStrings = valid.map((e: any) => e.expression);
-    setExpressions(exprStrings);
+    setExpressions(valid);
 
     setIsLoading(false);
   };
@@ -75,10 +73,6 @@ export function ReviewHub() {
     speechSynthesis.cancel();
     setIsPlayingAudio(false);
   }, []);
-
-  const handleDone = useCallback(() => {
-    navigate('/calendar');
-  }, [navigate]);
 
   const dateLabel = diaryDateParam ? format(new Date(diaryDateParam), 'MMMM d, yyyy') : 'Today';
 
@@ -113,71 +107,85 @@ export function ReviewHub() {
       </header>
 
       <div className="flex-1 space-y-4 overflow-y-auto">
-        {/* Japanese summary */}
-        {diaryEntry.japanese_summary && (
-          <Card className="bg-muted/30">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm text-muted-foreground">🇯🇵 What this diary was about</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm font-japanese">{diaryEntry.japanese_summary}</p>
-            </CardContent>
-          </Card>
-        )}
+        {/* 1. English Diary (primary) */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center justify-between">
+              📝 English Diary
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={isPlayingAudio ? handleStopAudio : handlePlayAudio}
+                disabled={!diaryEntry.content}
+              >
+                {isPlayingAudio ? <Loader2 className="w-4 h-4 animate-spin" /> : <Volume2 className="w-4 h-4" />}
+                <span className="ml-1 text-xs">{isPlayingAudio ? 'Stop' : 'Listen'}</span>
+              </Button>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm leading-relaxed">{diaryEntry.content}</p>
+          </CardContent>
+        </Card>
 
-        {/* Collapsible English diary */}
-        <Collapsible open={isEnglishExpanded} onOpenChange={setIsEnglishExpanded}>
-          <Card>
-            <CardHeader className="pb-2">
-              <CollapsibleTrigger asChild>
-                <button className="flex items-center justify-between w-full">
-                  <CardTitle className="text-sm flex items-center gap-2">
-                    📝 English Diary
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        isPlayingAudio ? handleStopAudio() : handlePlayAudio();
-                      }}
-                    >
-                      {isPlayingAudio ? <Loader2 className="w-4 h-4 animate-spin" /> : <Volume2 className="w-4 h-4" />}
-                    </Button>
-                  </CardTitle>
-                  {isEnglishExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                </button>
-              </CollapsibleTrigger>
-            </CardHeader>
-            <CollapsibleContent>
-              <CardContent>
-                <p className="text-sm leading-relaxed">{diaryEntry.content}</p>
-              </CardContent>
-            </CollapsibleContent>
-          </Card>
-        </Collapsible>
-
-        {/* Key expressions */}
+        {/* 2. Key Expressions */}
         {expressions.length > 0 && (
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm">💡 Key Expressions</CardTitle>
+              <CardTitle className="text-base flex items-center justify-between">
+                💡 Key Expressions ({expressions.length})
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => navigate('/expressions')}
+                  className="text-xs"
+                >
+                  <BookOpen className="w-4 h-4 mr-1" />
+                  View All
+                </Button>
+              </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="flex flex-wrap gap-2">
-                {expressions.filter((e, i, arr) => arr.indexOf(e) === i).map((expr, i) => (
-                  <span key={i} className="px-2 py-1 rounded-full text-xs bg-primary/10 text-primary border border-primary/15">
-                    {expr}
-                  </span>
+              <div className="space-y-3">
+                {expressions.map((exp: any) => (
+                  <div key={exp.id} className="bg-muted rounded-lg p-3">
+                    <p className="font-medium text-sm text-primary">{exp.expression}</p>
+                    {exp.meaning && <p className="text-xs text-muted-foreground mt-1">{exp.meaning}</p>}
+                    {exp.example_sentence && (
+                      <p className="text-xs text-muted-foreground/70 mt-1 italic">e.g. {exp.example_sentence}</p>
+                    )}
+                  </div>
                 ))}
               </div>
             </CardContent>
           </Card>
         )}
+
+        {/* 3. Japanese Translation */}
+        {diaryEntry.japanese_summary && (
+          <Card className="bg-muted/30">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm text-muted-foreground">🇯🇵 日本語訳</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm font-japanese leading-relaxed text-muted-foreground">
+                {diaryEntry.japanese_summary}
+              </p>
+            </CardContent>
+          </Card>
+        )}
       </div>
 
-      {/* Action buttons */}
-      <div className="mt-6">
-        <Button variant="ghost" size="sm" className="w-full" onClick={handleDone}>
+      {/* 4. Quiz button + back */}
+      <div className="mt-6 space-y-2">
+        <Button
+          className="w-full gap-2"
+          size="lg"
+          onClick={() => navigate(`/quiz?diaryId=${diaryId}&date=${diaryDateParam}`)}
+        >
+          🏋️ 並び替え問題に挑戦
+        </Button>
+        <Button variant="ghost" size="sm" className="w-full" onClick={() => navigate('/calendar')}>
           Back to Calendar
         </Button>
       </div>
