@@ -4,6 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
+import { ThemeProvider } from "@/components/ThemeProvider";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Chat from "./pages/Chat";
@@ -22,25 +23,27 @@ const queryClient = new QueryClient();
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <AuthProvider>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
-          <Routes>
-            <Route path="/" element={<Index />} />
-            <Route path="/auth" element={<Auth />} />
-            <Route path="/chat" element={<Chat />} />
-            <Route path="/recall" element={<Recall />} />
-            <Route path="/calendar" element={<Calendar />} />
-            <Route path="/expressions" element={<Expressions />} />
-            <Route path="/review" element={<ReviewHub />} />
-            <Route path="/quiz" element={<QuizPage />} />
-            <Route path="/instant" element={<InstantComposition />} />
-            <Route path="/progress" element={<Progress />} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </BrowserRouter>
-      </TooltipProvider>
+      <ThemeProvider>
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
+          <BrowserRouter>
+            <Routes>
+              <Route path="/" element={<Index />} />
+              <Route path="/auth" element={<Auth />} />
+              <Route path="/chat" element={<Chat />} />
+              <Route path="/recall" element={<Recall />} />
+              <Route path="/calendar" element={<Calendar />} />
+              <Route path="/expressions" element={<Expressions />} />
+              <Route path="/review" element={<ReviewHub />} />
+              <Route path="/quiz" element={<QuizPage />} />
+              <Route path="/instant" element={<InstantComposition />} />
+              <Route path="/progress" element={<Progress />} />
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </BrowserRouter>
+        </TooltipProvider>
+      </ThemeProvider>
     </AuthProvider>
   </QueryClientProvider>
 );
