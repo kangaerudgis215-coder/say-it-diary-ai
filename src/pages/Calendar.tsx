@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, X, Brain, Shuffle, Plus, Edit, Star } from 'lucide-react';
+import { ArrowLeft, X, Brain, Shuffle, Plus, BookOpen, Star } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DiaryCalendar } from '@/components/DiaryCalendar';
 import { RecallHistory } from '@/components/RecallHistory';
