@@ -265,3 +265,27 @@
     padding-bottom: max(1rem, env(safe-area-inset-bottom));
   }
 }
+
+/* Quiz animations */
+@keyframes star-burst {
+  0% { opacity: 0; transform: scale(0) rotate(0deg); }
+  50% { opacity: 1; transform: scale(1.5) rotate(180deg); }
+  100% { opacity: 0; transform: scale(0.5) rotate(360deg) translateY(-30px); }
+}
+
+@keyframes wave {
+  0%, 100% { transform: translateY(0); }
+  25% { transform: translateY(-4px); }
+  75% { transform: translateY(2px); }
+}
+
+@keyframes twinkle {
+  0% { opacity: 0.2; transform: scale(0.8); }
+  100% { opacity: 1; transform: scale(1.2); }
+}
+
+@keyframes shooting-star {
+  0% { transform: translateX(0) translateY(0) rotate(35deg); opacity: 0; }
+  10% { opacity: 0.7; }
+  100% { transform: translateX(300px) translateY(600px) rotate(35deg); opacity: 0; }
+}
