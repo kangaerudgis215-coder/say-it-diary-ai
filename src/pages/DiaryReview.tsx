@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Volume2, Loader2 } from 'lucide-react';
+import { ArrowLeft, Volume2, Loader2, BookOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { SelectableText } from '@/components/SelectableText';
@@ -26,7 +26,6 @@ export default function DiaryReview() {
   const [expressions, setExpressions] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
-  const [didGlobalCleanup, setDidGlobalCleanup] = useState(false);
 
   useEffect(() => {
     if (user && diaryId) {
@@ -38,10 +37,7 @@ export default function DiaryReview() {
     if (!user || !diaryId) return;
     setIsLoading(true);
 
-    if (!didGlobalCleanup) {
-      await cleanupInvalidDiaryLinkedExpressions(supabase, user.id);
-      setDidGlobalCleanup(true);
-    }
+    await cleanupInvalidDiaryLinkedExpressions(supabase, user.id);
 
     const { data: entry } = await supabase
       .from('diary_entries')
@@ -69,27 +65,21 @@ export default function DiaryReview() {
     setIsLoading(false);
   };
 
-  const handlePlayAudio = async () => {
+  const handlePlayAudio = useCallback(() => {
     if (!diaryEntry?.content || isPlayingAudio) return;
     setIsPlayingAudio(true);
-    try {
-      const utterance = new SpeechSynthesisUtterance(diaryEntry.content);
-      utterance.lang = 'en-US';
-      utterance.rate = 0.9;
-      utterance.onend = () => setIsPlayingAudio(false);
-      utterance.onerror = () => setIsPlayingAudio(false);
-      speechSynthesis.speak(utterance);
-    } catch (error) {
-      console.error('TTS error:', error);
-      setIsPlayingAudio(false);
-      toast({ variant: 'destructive', title: 'Audio Error', description: 'Could not play audio.' });
-    }
-  };
+    const u = new SpeechSynthesisUtterance(diaryEntry.content);
+    u.lang = 'en-US';
+    u.rate = 0.9;
+    u.onend = () => setIsPlayingAudio(false);
+    u.onerror = () => setIsPlayingAudio(false);
+    speechSynthesis.speak(u);
+  }, [diaryEntry, isPlayingAudio]);
 
-  const handleStopAudio = () => {
+  const handleStopAudio = useCallback(() => {
     speechSynthesis.cancel();
     setIsPlayingAudio(false);
-  };
+  }, []);
 
   if (isLoading) {
     return (
@@ -118,13 +108,13 @@ export default function DiaryReview() {
           <ArrowLeft className="w-5 h-5" />
         </Button>
         <div>
-          <h1 className="font-bold text-xl">Review Today's Diary</h1>
+          <h1 className="font-bold text-xl">Review Diary</h1>
           <p className="text-sm text-muted-foreground">{dateLabel}</p>
         </div>
       </header>
 
       <div className="flex-1 space-y-4 overflow-y-auto">
-        {/* English Diary */}
+        {/* 1. English Diary (primary) */}
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-base flex items-center justify-between">
@@ -150,25 +140,22 @@ export default function DiaryReview() {
           </CardContent>
         </Card>
 
-        {/* Japanese Translation */}
-        {diaryEntry.japanese_summary && (
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base">🇯🇵 Japanese Translation</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm font-japanese leading-relaxed text-muted-foreground">
-                {diaryEntry.japanese_summary}
-              </p>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Expressions */}
+        {/* 2. Key Expressions (linked to expression list) */}
         {expressions.length > 0 && (
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-base">💡 Key Expressions ({expressions.length})</CardTitle>
+              <CardTitle className="text-base flex items-center justify-between">
+                💡 Key Expressions ({expressions.length})
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => navigate('/expressions')}
+                  className="text-xs"
+                >
+                  <BookOpen className="w-4 h-4 mr-1" />
+                  View All
+                </Button>
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
@@ -185,9 +172,31 @@ export default function DiaryReview() {
             </CardContent>
           </Card>
         )}
+
+        {/* 3. Japanese Translation */}
+        {diaryEntry.japanese_summary && (
+          <Card className="bg-muted/30">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm text-muted-foreground">🇯🇵 日本語訳</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm font-japanese leading-relaxed text-muted-foreground">
+                {diaryEntry.japanese_summary}
+              </p>
+            </CardContent>
+          </Card>
+        )}
       </div>
 
-      <div className="mt-6">
+      {/* 4. Quiz button */}
+      <div className="mt-6 space-y-2">
+        <Button
+          className="w-full gap-2"
+          size="lg"
+          onClick={() => navigate(`/quiz?diaryId=${diaryId}&date=${diaryDate}`)}
+        >
+          🏋️ 並び替え問題に挑戦
+        </Button>
         <Button variant="ghost" size="sm" className="w-full" onClick={() => navigate('/')}>
           Back to Home
         </Button>
