@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, X, Brain, Shuffle, Plus, Edit, Star } from 'lucide-react';
+import { ArrowLeft, X, Brain, Shuffle, Plus, BookOpen, Star } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DiaryCalendar } from '@/components/DiaryCalendar';
 import { RecallHistory } from '@/components/RecallHistory';
@@ -197,28 +197,25 @@ export default function Calendar() {
           {/* Expressions from this diary */}
           <DiaryExpressions diaryEntryId={selectedEntry.id} />
 
-          {/* Edit Diary Button */}
+          {/* Review Button */}
           <Button
             variant="outline"
             className="w-full mt-4 gap-2"
-            onClick={() => navigate(`/chat?date=${selectedEntry.date}`)}
+            onClick={() => navigate(`/review?diaryId=${selectedEntry.id}&date=${selectedEntry.date}`)}
           >
-            <Edit className="w-4 h-4" />
-            Edit this diary
+            <BookOpen className="w-4 h-4" />
+            日記をレビューする
           </Button>
 
-          {/* Review Quiz Button */}
+          {/* Quiz Button */}
           <Button
             variant="glow"
             className="w-full mt-2 gap-2"
-            onClick={() => navigate(`/review?diaryId=${selectedEntry.id}&date=${selectedEntry.date}`)}
+            onClick={() => navigate(`/quiz?diaryId=${selectedEntry.id}&date=${selectedEntry.date}`)}
           >
             <Brain className="w-4 h-4" />
-            Review this diary
+            並び替え問題へ
           </Button>
-          <p className="text-xs text-muted-foreground text-center mt-2">
-            Practice key expressions and full sentences.
-          </p>
 
           {/* Recall History */}
           <RecallHistory attempts={recallHistory} />
