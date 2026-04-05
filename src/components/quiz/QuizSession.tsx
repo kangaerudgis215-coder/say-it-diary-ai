@@ -4,7 +4,7 @@ import { ArrowLeft, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
-import { buildPracticeSentences, PracticeSentence } from '@/lib/practiceBuilder';
+import { buildPracticeSentences, loadDiarySentences, PracticeSentence } from '@/lib/practiceBuilder';
 import { ProgressDots } from './ProgressDots';
 import { WordReorderQuiz } from './WordReorderQuiz';
 import { ReadAloudPrompt } from './ReadAloudPrompt';
@@ -56,35 +56,31 @@ export function QuizSession() {
     const exprStrings = (exprs || []).map((e: any) => e.expression);
     setExpressions(exprStrings);
 
-    // Build sentences
-    const importantSentences = entry.important_sentences as any[] | null;
-    const allSentences = buildPracticeSentences(
-      entry.content,
-      entry.japanese_summary,
-      exprStrings,
-      importantSentences
-    );
+    // Load sentences from diary_sentences table first, fallback to building from content
+    let allSentences = await loadDiarySentences(supabase, user.id, entry.id);
+    
+    if (!allSentences || allSentences.length === 0) {
+      const importantSentences = entry.important_sentences as any[] | null;
+      allSentences = buildPracticeSentences(
+        entry.content,
+        entry.japanese_summary,
+        exprStrings,
+        importantSentences
+      );
+    }
 
-    // Select 3-5 based on diary length
-    const wordCount = (entry.content || '').split(/\s+/).length;
-    let quizCount = 3;
-    if (wordCount > 60) quizCount = 4;
-    if (wordCount > 100) quizCount = 5;
-
-    // Pick sentences (prefer ones with expressions, then fill with others)
-    const withExpr = allSentences.filter(s => s.expressions.length > 0);
-    const withoutExpr = allSentences.filter(s => s.expressions.length === 0);
-    let selected: PracticeSentence[] = [];
-
-    if (withExpr.length >= quizCount) {
-      selected = withExpr.slice(0, quizCount);
-    } else {
-      selected = [...withExpr, ...withoutExpr].slice(0, quizCount);
+    // Use ALL sentences - quiz count matches diary sentence count
+    let selected = allSentences;
+    
+    // Cap at 5 max just in case
+    if (selected.length > 5) {
+      selected = selected.slice(0, 5);
     }
 
     // Ensure at least 1 sentence
-    if (selected.length === 0 && allSentences.length > 0) {
-      selected = allSentences.slice(0, Math.min(3, allSentences.length));
+    if (selected.length === 0) {
+      const fallback = buildPracticeSentences(entry.content, entry.japanese_summary, exprStrings, null);
+      selected = fallback.slice(0, Math.min(3, fallback.length));
     }
 
     setSentences(selected);
