@@ -1,16 +1,18 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Mic, BookOpen, Sparkles, LogOut, Shuffle, TrendingUp, Brain } from 'lucide-react';
+import { Mic, BookOpen, Sparkles, LogOut, Shuffle, TrendingUp, Brain, Sun, Moon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { StreakBadge } from '@/components/StreakBadge';
 import { ActionCard } from '@/components/ActionCard';
 import { MasteredDiariesBadge } from '@/components/MasteredDiariesBadge';
 import { useAuth } from '@/hooks/useAuth';
+import { useTheme } from '@/components/ThemeProvider';
 import { supabase } from '@/lib/supabase';
-import { format, isToday } from 'date-fns';
+import { format, isToday, startOfDay } from 'date-fns';
 
 export default function Home() {
+  const { theme, toggleTheme } = useTheme();
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const [profile, setProfile] = useState<any>(null);
@@ -81,8 +83,12 @@ export default function Home() {
     return 'Good evening';
   };
 
+  // Recent Recall: only enabled if latest diary is from a previous day (next-day review)
+  const isLatestDiaryFromToday = latestDiaryDate ? isToday(new Date(latestDiaryDate + 'T00:00:00')) : false;
+  const canDoRecall = !!latestDiaryId && !isLatestDiaryFromToday;
+
   const handleReviewLatest = () => {
-    if (latestDiaryId && latestDiaryDate) {
+    if (canDoRecall && latestDiaryId) {
       navigate(`/quiz?diaryId=${latestDiaryId}`);
     }
   };
@@ -103,12 +109,17 @@ export default function Home() {
           </div>
         </div>
         
-        <Button variant="ghost" size="icon" onClick={async () => {
-          await signOut();
-          navigate('/auth');
-        }}>
-          <LogOut className="w-5 h-5" />
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button variant="ghost" size="icon" onClick={toggleTheme}>
+            {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+          </Button>
+          <Button variant="ghost" size="icon" onClick={async () => {
+            await signOut();
+            navigate('/auth');
+          }}>
+            <LogOut className="w-5 h-5" />
+          </Button>
+        </div>
       </header>
 
       {/* Streak Badge */}
@@ -148,19 +159,21 @@ export default function Home() {
           badge={!todayComplete ? "MUST" : undefined}
         />
 
-        {/* 2. Recent Recall - Review latest diary */}
+        {/* 2. Recent Recall - Next-day review only */}
         <ActionCard
           icon={<Brain className="w-8 h-8" />}
           title="Recent Recall"
           description={
-            latestDiaryId
-              ? "最新の日記を並び替えで復習しよう"
-              : "まず日記を書こう"
+            canDoRecall
+              ? "前回の日記を並び替えで復習しよう"
+              : isLatestDiaryFromToday
+                ? "🌙 明日また挑戦してね！"
+                : "まず日記を書こう"
           }
           onClick={handleReviewLatest}
           variant="secondary"
-          badge={latestDiaryId ? "NEXT" : undefined}
-          disabled={!latestDiaryId}
+          badge={canDoRecall ? "NEXT" : undefined}
+          disabled={!canDoRecall}
           hoverColor="hsl(220, 90%, 56%)"
         />
 
