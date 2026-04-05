@@ -319,15 +319,26 @@ export default function Chat() {
               }))
             );
           }
-          // Also persist diary_sentences for quiz
-          const sentencesForPersist = importantSentences.map((s: any) => ({
-            english: s.english,
-            japanese: s.japanese,
-            expressions: s.expressions || [],
-          }));
-          await persistDiarySentences(supabase, user.id, diaryEntry.id, sentencesForPersist);
         }
       }
+
+      // Persist diary_sentences for quiz (always, even without expressions)
+      const { data: savedDiaryForSentences } = await supabase
+        .from('diary_entries')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('date', diaryDate)
+        .single();
+      
+      if (savedDiaryForSentences && importantSentences.length > 0) {
+        const sentencesForPersist = importantSentences.map((s: any) => ({
+          english: s.english,
+          japanese: s.japanese,
+          expressions: s.expressions || [],
+        }));
+        await persistDiarySentences(supabase, user.id, savedDiaryForSentences.id, sentencesForPersist);
+      }
+
       // Profile streak is now auto-updated by database trigger on diary_entries changes
 
       // Update conversation status
