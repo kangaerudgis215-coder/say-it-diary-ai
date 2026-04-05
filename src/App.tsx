@@ -15,6 +15,7 @@ import InstantComposition from "./pages/InstantComposition";
 import Progress from "./pages/Progress";
 import NotFound from "./pages/NotFound";
 import ReviewHub from "./components/review/ReviewHub";
+import QuizPage from "./pages/Quiz";
 
 const queryClient = new QueryClient();
 
@@ -33,6 +34,7 @@ const App = () => (
             <Route path="/calendar" element={<Calendar />} />
             <Route path="/expressions" element={<Expressions />} />
             <Route path="/review" element={<ReviewHub />} />
+            <Route path="/quiz" element={<QuizPage />} />
             <Route path="/instant" element={<InstantComposition />} />
             <Route path="/progress" element={<Progress />} />
             <Route path="*" element={<NotFound />} />

@@ -85,7 +85,7 @@ export default function Home() {
 
   const handleReviewLatest = () => {
     if (latestDiaryId && latestDiaryDate) {
-      navigate(`/review?diaryId=${latestDiaryId}&date=${latestDiaryDate}`);
+      navigate(`/quiz?diaryId=${latestDiaryId}`);
     }
   };
 
@@ -153,11 +153,11 @@ export default function Home() {
         {/* 2. Latest Quiz - Review latest diary */}
         <ActionCard
           icon={<Brain className="w-8 h-8" />}
-          title="Latest Quiz"
+          title="並び替えクイズ"
           description={
             latestDiaryId
-              ? "Review your latest diary with cloze & full sentence practice"
-              : "Write a diary first to unlock"
+              ? "日記の文を並び替えて復習しよう"
+              : "まず日記を書こう"
           }
           onClick={handleReviewLatest}
           variant="secondary"
