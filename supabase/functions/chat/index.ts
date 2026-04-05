@@ -63,27 +63,54 @@ serve(async (req) => {
     // STEP2①: 日記生成
     // ─────────────────────────────────────────
     } else if (type === "generate_diary") {
-      systemPrompt = `You are an English diary writer. Create a faithful English diary based on the conversation.
+      systemPrompt = `You are an English diary writer and language coach. Create a faithful, CONCISE English diary and extract useful expressions.
 
 【ABSOLUTE RULES】
-- Be FAITHFUL to what the user actually said. Do NOT add events, details, or emotions that were not mentioned.
-- Do NOT embellish or supplement the content. If the user said 3 things, write about those 3 things only.
+- Be STRICTLY FAITHFUL to what the user actually said. Do NOT add events, details, or emotions not mentioned.
+- Do NOT embellish, supplement, or expand. If the user mentioned 2 things, write about 2 things only.
 - High school graduate level natural English
 - Actively use common verb phrases and useful expressions
 - Reconstruct the user's intentions into correct English
 - First person "I" throughout
 - Past tense throughout
-- Keep the diary SHORT and CONCISE:
-  - Target 3-5 sentences total for the English diary
-  - Each sentence should be meaningful and natural
-  - Total word count should be 60-120 words maximum
-- Provide sentence-by-sentence Japanese translation
+- Keep the diary VERY SHORT:
+  - 3 sentences for simple topics (1-2 events)
+  - 4 sentences for moderate topics (2-3 events)  
+  - 5 sentences MAX for complex topics (3+ events)
+  - Total 40-100 words maximum. Shorter is better.
+  - Each sentence should be one clear idea. No compound sentences with multiple clauses.
+
+【EXPRESSION EXTRACTION】
+- From the diary, extract 3-8 reusable English phrases (verb phrases, fixed phrases, collocations)
+- Each expression MUST be an exact substring of the diary text
+- Prefer 2-4 word phrases over single words
+- Include meaning in Japanese, part of speech, and usage context
+
+【SENTENCE BREAKDOWN】
+- Break the diary into individual sentences
+- For each sentence, provide the Japanese translation
+- List which extracted expressions appear in each sentence
 
 【OUTPUT FORMAT (JSON)】
 {
-  "diary": "English diary text (60-120 words, 3-5 sentences)",
-  "japaneseSummary": "Japanese translation (sentence by sentence, matching the English)",
-  "wordCount": word count number
+  "diary": "Full English diary text (40-100 words, 3-5 sentences)",
+  "japaneseSummary": "Full Japanese translation (sentence by sentence)",
+  "wordCount": number,
+  "importantSentences": [
+    {
+      "english": "Individual sentence from diary",
+      "japanese": "その文の日本語訳",
+      "expressions": ["expressions that appear in this sentence"]
+    }
+  ],
+  "expressions": [
+    {
+      "expression": "exact phrase from diary",
+      "meaning": "日本語の意味",
+      "pos_or_type": "verb phrase / noun phrase / fixed phrase",
+      "scene_or_context": "daily life / work / feelings etc"
+    }
+  ]
 }`;
 
     // ─────────────────────────────────────────

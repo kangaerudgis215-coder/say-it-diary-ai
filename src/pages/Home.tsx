@@ -45,13 +45,11 @@ export default function Home() {
       }
     }
 
-    // Get the latest diary excluding today AND excluding full_diary_challenge_completed
+    // Get the latest diary entry (including today) for Recent Recall
     const { data: latestEntry } = await supabase
       .from('diary_entries')
       .select('id, date')
       .eq('user_id', user.id)
-      .lt('date', today)
-      .eq('full_diary_challenge_completed', false)
       .order('date', { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -150,18 +148,18 @@ export default function Home() {
           badge={!todayComplete ? "MUST" : undefined}
         />
 
-        {/* 2. Latest Quiz - Review latest diary */}
+        {/* 2. Recent Recall - Review latest diary */}
         <ActionCard
           icon={<Brain className="w-8 h-8" />}
-          title="並び替えクイズ"
+          title="Recent Recall"
           description={
             latestDiaryId
-              ? "日記の文を並び替えて復習しよう"
+              ? "最新の日記を並び替えで復習しよう"
               : "まず日記を書こう"
           }
           onClick={handleReviewLatest}
           variant="secondary"
-          badge={todayComplete && latestDiaryId ? "NEXT" : undefined}
+          badge={latestDiaryId ? "NEXT" : undefined}
           disabled={!latestDiaryId}
           hoverColor="hsl(220, 90%, 56%)"
         />
