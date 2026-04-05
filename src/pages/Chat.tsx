@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Send, Loader2, Check } from 'lucide-react';
+import { ArrowLeft, Send, Loader2, Check, BookOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ChatBubble } from '@/components/ChatBubble';
@@ -42,6 +42,7 @@ export default function Chat() {
   const [isGeneratingDiary, setIsGeneratingDiary] = useState(false);
   const [diaryDate, setDiaryDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
   const [showHelp, setShowHelp] = useState(false);
+  const [diaryAlreadyExists, setDiaryAlreadyExists] = useState(false);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -64,6 +65,18 @@ export default function Chat() {
 
   const initConversation = async () => {
     if (!user) return;
+
+    // Check if a diary entry already exists for this date
+    const { data: existingDiary } = await supabase
+      .from('diary_entries')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('date', diaryDate)
+      .maybeSingle();
+
+    if (existingDiary) {
+      setDiaryAlreadyExists(true);
+    }
 
     // Check for existing conversation for this diary date
     const { data: existing } = await supabase
@@ -196,7 +209,7 @@ export default function Chat() {
   };
 
   const handleGenerateDiary = async () => {
-    if (!conversationId || !user) return;
+    if (!conversationId || !user || diaryAlreadyExists) return;
 
     setIsGeneratingDiary(true);
 
@@ -435,28 +448,52 @@ export default function Chat() {
             </h1>
           </div>
           
-          <Button
-            variant="success"
-            size="sm"
-            onClick={handleGenerateDiary}
-            disabled={!hasEnoughContent || isGeneratingDiary}
-            className={hasEnoughContent ? 'animate-pulse' : ''}
-          >
-            {isGeneratingDiary ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <>
-                <Check className="w-4 h-4" />
-                Done
-              </>
-            )}
-          </Button>
+          {diaryAlreadyExists ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={async () => {
+                const { data: entry } = await supabase
+                  .from('diary_entries')
+                  .select('id')
+                  .eq('user_id', user!.id)
+                  .eq('date', diaryDate)
+                  .single();
+                if (entry) navigate(`/review?diaryId=${entry.id}&date=${diaryDate}`);
+              }}
+            >
+              <BookOpen className="w-4 h-4" />
+              Review
+            </Button>
+          ) : (
+            <Button
+              variant="success"
+              size="sm"
+              onClick={handleGenerateDiary}
+              disabled={!hasEnoughContent || isGeneratingDiary}
+              className={hasEnoughContent ? 'animate-pulse' : ''}
+            >
+              {isGeneratingDiary ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <>
+                  <Check className="w-4 h-4" />
+                  Done
+                </>
+              )}
+            </Button>
+          )}
         </div>
         
         {/* Prompt to finish when ready */}
-        {hasEnoughContent && !isGeneratingDiary && (
+        {hasEnoughContent && !isGeneratingDiary && !diaryAlreadyExists && (
           <p className="text-xs text-center text-primary mt-2 animate-pulse">
             Ready? Tap Done to create your diary! ✨
+          </p>
+        )}
+        {diaryAlreadyExists && (
+          <p className="text-xs text-center text-muted-foreground mt-2">
+            ✅ この日の日記は作成済みです
           </p>
         )}
       </header>
@@ -482,7 +519,7 @@ export default function Chat() {
         )}
 
         {/* Prominent CTA to finish diary */}
-        {hasEnoughContent && !isGeneratingDiary && !isLoading && (
+        {hasEnoughContent && !isGeneratingDiary && !isLoading && !diaryAlreadyExists && (
           <div className="flex justify-center py-4">
             <Button
               variant="glow"
