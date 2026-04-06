@@ -20,6 +20,7 @@ export default function Home() {
   const [hasPastDiaries, setHasPastDiaries] = useState(false);
   const [latestDiaryId, setLatestDiaryId] = useState<string | null>(null);
   const [latestDiaryDate, setLatestDiaryDate] = useState<string | null>(null);
+  const [latestDiaryReviewed, setLatestDiaryReviewed] = useState(false);
 
   useEffect(() => {
     if (user) {
