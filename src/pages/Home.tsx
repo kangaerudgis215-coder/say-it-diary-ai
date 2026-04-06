@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { StreakBadge } from '@/components/StreakBadge';
 import { ActionCard } from '@/components/ActionCard';
-import { MasteredDiariesBadge } from '@/components/MasteredDiariesBadge';
+import { useSuccessSound } from '@/hooks/useSuccessSound';
 import { useAuth } from '@/hooks/useAuth';
 import { useTheme } from '@/components/ThemeProvider';
 import { supabase } from '@/lib/supabase';
