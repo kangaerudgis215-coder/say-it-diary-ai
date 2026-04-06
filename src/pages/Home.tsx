@@ -86,9 +86,14 @@ export default function Home() {
     return 'Good evening';
   };
 
-  // Recent Recall: only enabled if latest diary is from a previous day (next-day review)
+  // Recent Recall: only enabled if latest diary is from a previous day AND not yet reviewed
   const isLatestDiaryFromToday = latestDiaryDate ? isToday(new Date(latestDiaryDate + 'T00:00:00')) : false;
-  const canDoRecall = !!latestDiaryId && !isLatestDiaryFromToday;
+  const canDoRecall = !!latestDiaryId && !isLatestDiaryFromToday && !latestDiaryReviewed;
+
+  // Progress: step 1 = today's diary, step 2 = recall review of previous diary
+  const todayStepDone = todayComplete;
+  const recallStepDone = latestDiaryReviewed;
+  const stepsCompleted = (todayStepDone ? 1 : 0) + (recallStepDone ? 1 : 0);
 
   const handleReviewLatest = () => {
     if (canDoRecall && latestDiaryId) {
