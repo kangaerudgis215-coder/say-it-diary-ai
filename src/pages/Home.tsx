@@ -143,14 +143,25 @@ export default function Home() {
         <MasteredDiariesBadge />
       </div>
 
-      {/* Completion message */}
-      {todayComplete && (
-        <div className="bg-primary/10 border border-primary/20 rounded-2xl p-4 mb-6 text-center">
-          <p className="text-sm text-primary font-medium">
-            🎉 Great job! You completed today's diary.
+      {/* Daily progress indicator */}
+      <div className="bg-card border border-border rounded-2xl p-4 mb-6">
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-sm font-medium text-foreground">今日の進捗</p>
+          <span className="text-sm font-bold text-primary">{stepsCompleted} / 2</span>
+        </div>
+        <div className="flex gap-2">
+          <div className={`flex-1 h-2 rounded-full transition-colors ${todayStepDone ? 'bg-primary' : 'bg-muted'}`} />
+          <div className={`flex-1 h-2 rounded-full transition-colors ${recallStepDone ? 'bg-primary' : 'bg-muted'}`} />
+        </div>
+        <div className="flex gap-2 mt-1">
+          <p className="flex-1 text-[10px] text-muted-foreground text-center">
+            {todayStepDone ? '✅ 日記' : '📝 日記'}
+          </p>
+          <p className="flex-1 text-[10px] text-muted-foreground text-center">
+            {recallStepDone ? '✅ 復習' : '🧠 復習'}
           </p>
         </div>
-      )}
+      </div>
 
       {/* Main Actions */}
       <div className="space-y-4 flex-1">
