@@ -5,11 +5,11 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { StreakBadge } from '@/components/StreakBadge';
 import { ActionCard } from '@/components/ActionCard';
-import { useSuccessSound } from '@/hooks/useSuccessSound';
+
 import { useAuth } from '@/hooks/useAuth';
 import { useTheme } from '@/components/ThemeProvider';
 import { supabase } from '@/lib/supabase';
-import { format, isToday, startOfDay } from 'date-fns';
+import { format, isToday } from 'date-fns';
 
 export default function Home() {
   const { theme, toggleTheme } = useTheme();
