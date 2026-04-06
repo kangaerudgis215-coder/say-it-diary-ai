@@ -110,11 +110,22 @@ export function QuizSession() {
     }
   };
 
+  const markReviewCompleted = async () => {
+    if (!user || !diaryId) return;
+    await supabase
+      .from('diary_entries')
+      .update({ sentences_review_completed: true })
+      .eq('id', diaryId)
+      .eq('user_id', user.id);
+  };
+
   const handleReadAloudComplete = () => {
+    markReviewCompleted();
     setPhase('complete');
   };
 
   const handleReadAloudSkip = () => {
+    markReviewCompleted();
     setPhase('complete');
   };
 

@@ -20,6 +20,7 @@ export default function Home() {
   const [hasPastDiaries, setHasPastDiaries] = useState(false);
   const [latestDiaryId, setLatestDiaryId] = useState<string | null>(null);
   const [latestDiaryDate, setLatestDiaryDate] = useState<string | null>(null);
+  const [latestDiaryReviewed, setLatestDiaryReviewed] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -50,7 +51,7 @@ export default function Home() {
     // Get the latest diary entry (including today) for Recent Recall
     const { data: latestEntry } = await supabase
       .from('diary_entries')
-      .select('id, date')
+      .select('id, date, sentences_review_completed')
       .eq('user_id', user.id)
       .order('date', { ascending: false })
       .limit(1)
@@ -59,9 +60,11 @@ export default function Home() {
     if (latestEntry) {
       setLatestDiaryId(latestEntry.id);
       setLatestDiaryDate(latestEntry.date);
+      setLatestDiaryReviewed(latestEntry.sentences_review_completed ?? false);
     } else {
       setLatestDiaryId(null);
       setLatestDiaryDate(null);
+      setLatestDiaryReviewed(false);
     }
 
     // Check if there are any past diary entries (before today)
@@ -83,9 +86,14 @@ export default function Home() {
     return 'Good evening';
   };
 
-  // Recent Recall: only enabled if latest diary is from a previous day (next-day review)
+  // Recent Recall: only enabled if latest diary is from a previous day AND not yet reviewed
   const isLatestDiaryFromToday = latestDiaryDate ? isToday(new Date(latestDiaryDate + 'T00:00:00')) : false;
-  const canDoRecall = !!latestDiaryId && !isLatestDiaryFromToday;
+  const canDoRecall = !!latestDiaryId && !isLatestDiaryFromToday && !latestDiaryReviewed;
+
+  // Progress: step 1 = today's diary, step 2 = recall review of previous diary
+  const todayStepDone = todayComplete;
+  const recallStepDone = latestDiaryReviewed;
+  const stepsCompleted = (todayStepDone ? 1 : 0) + (recallStepDone ? 1 : 0);
 
   const handleReviewLatest = () => {
     if (canDoRecall && latestDiaryId) {
@@ -135,14 +143,25 @@ export default function Home() {
         <MasteredDiariesBadge />
       </div>
 
-      {/* Completion message */}
-      {todayComplete && (
-        <div className="bg-primary/10 border border-primary/20 rounded-2xl p-4 mb-6 text-center">
-          <p className="text-sm text-primary font-medium">
-            🎉 Great job! You completed today's diary.
+      {/* Daily progress indicator */}
+      <div className="bg-card border border-border rounded-2xl p-4 mb-6">
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-sm font-medium text-foreground">今日の進捗</p>
+          <span className="text-sm font-bold text-primary">{stepsCompleted} / 2</span>
+        </div>
+        <div className="flex gap-2">
+          <div className={`flex-1 h-2 rounded-full transition-colors ${todayStepDone ? 'bg-primary' : 'bg-muted'}`} />
+          <div className={`flex-1 h-2 rounded-full transition-colors ${recallStepDone ? 'bg-primary' : 'bg-muted'}`} />
+        </div>
+        <div className="flex gap-2 mt-1">
+          <p className="flex-1 text-[10px] text-muted-foreground text-center">
+            {todayStepDone ? '✅ 日記' : '📝 日記'}
+          </p>
+          <p className="flex-1 text-[10px] text-muted-foreground text-center">
+            {recallStepDone ? '✅ 復習' : '🧠 復習'}
           </p>
         </div>
-      )}
+      </div>
 
       {/* Main Actions */}
       <div className="space-y-4 flex-1">
@@ -162,17 +181,19 @@ export default function Home() {
         {/* 2. Recent Recall - Next-day review only */}
         <ActionCard
           icon={<Brain className="w-8 h-8" />}
-          title="Recent Recall"
+          title={latestDiaryReviewed && !isLatestDiaryFromToday ? "Recent Recall ✓" : "Recent Recall"}
           description={
-            canDoRecall
-              ? "前回の日記を並び替えで復習しよう"
-              : isLatestDiaryFromToday
-                ? "🌙 明日また挑戦してね！"
-                : "まず日記を書こう"
+            latestDiaryReviewed && !isLatestDiaryFromToday
+              ? "✅ 復習完了！よく頑張りました！"
+              : canDoRecall
+                ? "前回の日記を並び替えで復習しよう"
+                : isLatestDiaryFromToday
+                  ? "🌙 明日また挑戦してね！"
+                  : "まず日記を書こう"
           }
           onClick={handleReviewLatest}
           variant="secondary"
-          badge={canDoRecall ? "NEXT" : undefined}
+          badge={canDoRecall ? "NEXT" : latestDiaryReviewed && !isLatestDiaryFromToday ? "DONE" : undefined}
           disabled={!canDoRecall}
           hoverColor="hsl(220, 90%, 56%)"
         />
