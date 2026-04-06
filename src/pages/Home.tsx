@@ -51,7 +51,7 @@ export default function Home() {
     // Get the latest diary entry (including today) for Recent Recall
     const { data: latestEntry } = await supabase
       .from('diary_entries')
-      .select('id, date')
+      .select('id, date, sentences_review_completed')
       .eq('user_id', user.id)
       .order('date', { ascending: false })
       .limit(1)
@@ -60,9 +60,11 @@ export default function Home() {
     if (latestEntry) {
       setLatestDiaryId(latestEntry.id);
       setLatestDiaryDate(latestEntry.date);
+      setLatestDiaryReviewed(latestEntry.sentences_review_completed ?? false);
     } else {
       setLatestDiaryId(null);
       setLatestDiaryDate(null);
+      setLatestDiaryReviewed(false);
     }
 
     // Check if there are any past diary entries (before today)
