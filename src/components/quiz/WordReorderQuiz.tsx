@@ -358,8 +358,6 @@ export function WordReorderQuiz({ sentence, japaneseSentence, onCorrect }: WordR
                 'active:scale-90',
                 isHinted && 'ring-2 ring-primary border-primary bg-primary/10 animate-pulse'
               )}
-              >
-            >
               {item.word}
             </button>
           );
