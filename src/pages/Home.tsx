@@ -66,7 +66,7 @@ export default function Home() {
       setLatestDiaryDate(null);
       setLatestDiaryReviewed(false);
     }
-
+  };
 
   const getGreeting = () => {
     const hour = new Date().getHours();
