@@ -83,9 +83,15 @@ export default function Calendar() {
     }
   };
 
-
-
-
+  return (
+    <div className="min-h-screen flex flex-col p-6 safe-bottom">
+      {/* Header */}
+      <header className="flex items-center gap-4 mb-6">
+        <Button variant="ghost" size="icon" onClick={() => navigate('/')}>
+          <ArrowLeft className="w-5 h-5" />
+        </Button>
+        <h1 className="font-bold text-xl">My Diary Collection</h1>
+      </header>
 
       {/* Calendar */}
       <DiaryCalendar
