@@ -138,10 +138,6 @@ export default function Home() {
         />
       </div>
 
-      {/* Mastered Diaries Badge */}
-      <div className="mb-6">
-        <MasteredDiariesBadge />
-      </div>
 
       {/* Daily progress indicator */}
       <div className="bg-card border border-border rounded-2xl p-4 mb-6">
