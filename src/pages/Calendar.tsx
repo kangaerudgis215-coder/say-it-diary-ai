@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, X, Brain, Shuffle, Plus, BookOpen, Star } from 'lucide-react';
+import { ArrowLeft, X, Brain, Plus, BookOpen, Star } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DiaryCalendar } from '@/components/DiaryCalendar';
 import { RecallHistory } from '@/components/RecallHistory';
@@ -84,36 +84,8 @@ export default function Calendar() {
   };
 
 
-  const hasPastEntries = allEntries.some(e => e.date !== format(new Date(), 'yyyy-MM-dd'));
 
-  return (
-    <div className="min-h-screen flex flex-col p-6 safe-bottom">
-      {/* Header */}
-      <header className="flex items-center gap-4 mb-6">
-        <Button variant="ghost" size="icon" onClick={() => navigate('/')}>
-          <ArrowLeft className="w-5 h-5" />
-        </Button>
-        <h1 className="font-bold text-xl">My Diary Collection</h1>
-      </header>
 
-      {/* Random Quiz Button */}
-      <Button
-        variant="outline"
-        className="w-full mb-4 gap-2 h-auto py-3"
-        onClick={handleRandomQuiz}
-        disabled={!hasPastEntries}
-      >
-        <Shuffle className="w-5 h-5" />
-        <div className="text-left">
-          <p className="font-medium">Random past quiz</p>
-          <p className="text-xs text-muted-foreground">
-            {hasPastEntries 
-              ? "Start a recall quiz using a random past diary"
-              : "Complete some diaries first to unlock this"
-            }
-          </p>
-        </div>
-      </Button>
 
       {/* Calendar */}
       <DiaryCalendar
