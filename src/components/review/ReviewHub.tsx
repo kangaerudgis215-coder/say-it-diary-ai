@@ -3,14 +3,15 @@
  */
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Volume2, Loader2, BookOpen, ChevronDown, ChevronUp } from 'lucide-react';
+import { ArrowLeft, Volume2, Loader2, BookOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { HighlightableText } from '@/components/HighlightableText';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
 import { format } from 'date-fns';
 import { cleanupInvalidDiaryLinkedExpressions, partitionExpressionsForText } from '@/lib/expressionValidation';
+import { cn } from '@/lib/utils';
 
 export function ReviewHub() {
   const { user } = useAuth();
@@ -24,6 +25,7 @@ export function ReviewHub() {
   const [expressions, setExpressions] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
+  const [highlightedExpression, setHighlightedExpression] = useState<string | null>(null);
 
   useEffect(() => {
     if (user && diaryId) {
@@ -74,6 +76,13 @@ export function ReviewHub() {
     setIsPlayingAudio(false);
   }, []);
 
+  const handleExpressionTap = (expression: string) => {
+    setHighlightedExpression(prev => prev === expression ? null : expression);
+    setTimeout(() => {
+      document.getElementById('highlight-target')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 50);
+  };
+
   const dateLabel = diaryDateParam ? format(new Date(diaryDateParam), 'MMMM d, yyyy') : 'Today';
 
   if (isLoading) {
@@ -107,7 +116,6 @@ export function ReviewHub() {
       </header>
 
       <div className="flex-1 space-y-4 overflow-y-auto">
-        {/* 1. English Diary (primary) */}
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-base flex items-center justify-between">
@@ -124,11 +132,10 @@ export function ReviewHub() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-sm leading-relaxed">{diaryEntry.content}</p>
+            <HighlightableText text={diaryEntry.content} highlightTerm={highlightedExpression} />
           </CardContent>
         </Card>
 
-        {/* 2. Key Expressions */}
         {expressions.length > 0 && (
           <Card>
             <CardHeader className="pb-2">
@@ -146,22 +153,31 @@ export function ReviewHub() {
               </CardTitle>
             </CardHeader>
             <CardContent>
+              <p className="text-xs text-muted-foreground mb-2">タップで本文中の該当箇所をハイライト</p>
               <div className="space-y-3">
                 {expressions.map((exp: any) => (
-                  <div key={exp.id} className="bg-muted rounded-lg p-3">
+                  <button
+                    key={exp.id}
+                    className={cn(
+                      "w-full text-left bg-muted rounded-lg p-3 transition-all duration-200",
+                      highlightedExpression === exp.expression
+                        ? "ring-2 ring-primary bg-primary/10"
+                        : "hover:bg-muted/80"
+                    )}
+                    onClick={() => handleExpressionTap(exp.expression)}
+                  >
                     <p className="font-medium text-sm text-primary">{exp.expression}</p>
                     {exp.meaning && <p className="text-xs text-muted-foreground mt-1">{exp.meaning}</p>}
                     {exp.example_sentence && (
                       <p className="text-xs text-muted-foreground/70 mt-1 italic">e.g. {exp.example_sentence}</p>
                     )}
-                  </div>
+                  </button>
                 ))}
               </div>
             </CardContent>
           </Card>
         )}
 
-        {/* 3. Japanese Translation */}
         {diaryEntry.japanese_summary && (
           <Card className="bg-muted/30">
             <CardHeader className="pb-2">
@@ -176,7 +192,6 @@ export function ReviewHub() {
         )}
       </div>
 
-      {/* 4. Quiz button + back */}
       <div className="mt-6 space-y-2">
         <Button
           className="w-full gap-2"

@@ -355,7 +355,6 @@ export function WordReorderQuiz({ sentence, japaneseSentence, onCorrect }: WordR
               className={cn(
                 'px-4 py-2.5 rounded-xl text-sm font-medium border transition-all duration-200',
                 'bg-card border-border text-foreground shadow-sm',
-                'hover:bg-primary/10 hover:border-primary/30 hover:shadow-md',
                 'active:scale-90',
                 isHinted && 'ring-2 ring-primary border-primary bg-primary/10 animate-pulse'
               )}
