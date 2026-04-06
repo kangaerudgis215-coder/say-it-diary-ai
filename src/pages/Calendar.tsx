@@ -83,24 +83,6 @@ export default function Calendar() {
     }
   };
 
-  const handleRandomQuiz = () => {
-    if (allEntries.length === 0) return;
-    
-    // Filter out today's entry
-    const today = format(new Date(), 'yyyy-MM-dd');
-    const pastEntries = allEntries.filter(e => e.date !== today);
-    
-    if (pastEntries.length === 0) {
-      // No past entries available
-      return;
-    }
-
-    // Pick a random entry
-    const randomIndex = Math.floor(Math.random() * pastEntries.length);
-    const randomEntry = pastEntries[randomIndex];
-    
-    navigate(`/recall?diaryId=${randomEntry.id}&mode=random`);
-  };
 
   const hasPastEntries = allEntries.some(e => e.date !== format(new Date(), 'yyyy-MM-dd'));
 
