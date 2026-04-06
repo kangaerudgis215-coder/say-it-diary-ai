@@ -181,17 +181,19 @@ export default function Home() {
         {/* 2. Recent Recall - Next-day review only */}
         <ActionCard
           icon={<Brain className="w-8 h-8" />}
-          title="Recent Recall"
+          title={latestDiaryReviewed && !isLatestDiaryFromToday ? "Recent Recall ✓" : "Recent Recall"}
           description={
-            canDoRecall
-              ? "前回の日記を並び替えで復習しよう"
-              : isLatestDiaryFromToday
-                ? "🌙 明日また挑戦してね！"
-                : "まず日記を書こう"
+            latestDiaryReviewed && !isLatestDiaryFromToday
+              ? "✅ 復習完了！よく頑張りました！"
+              : canDoRecall
+                ? "前回の日記を並び替えで復習しよう"
+                : isLatestDiaryFromToday
+                  ? "🌙 明日また挑戦してね！"
+                  : "まず日記を書こう"
           }
           onClick={handleReviewLatest}
           variant="secondary"
-          badge={canDoRecall ? "NEXT" : undefined}
+          badge={canDoRecall ? "NEXT" : latestDiaryReviewed && !isLatestDiaryFromToday ? "DONE" : undefined}
           disabled={!canDoRecall}
           hoverColor="hsl(220, 90%, 56%)"
         />
