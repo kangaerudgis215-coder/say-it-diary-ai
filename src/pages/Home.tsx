@@ -17,7 +17,7 @@ export default function Home() {
   const navigate = useNavigate();
   const [profile, setProfile] = useState<any>(null);
   const [todayComplete, setTodayComplete] = useState(false);
-  const [hasPastDiaries, setHasPastDiaries] = useState(false);
+  
   const [latestDiaryId, setLatestDiaryId] = useState<string | null>(null);
   const [latestDiaryDate, setLatestDiaryDate] = useState<string | null>(null);
   const [latestDiaryReviewed, setLatestDiaryReviewed] = useState(false);
@@ -67,17 +67,6 @@ export default function Home() {
       setLatestDiaryReviewed(false);
     }
 
-    // Check if there are any past diary entries (before today)
-    const { data: pastEntries } = await supabase
-      .from('diary_entries')
-      .select('id, date')
-      .eq('user_id', user.id)
-      .lt('date', today)
-      .order('date', { ascending: false })
-      .limit(1);
-    
-    setHasPastDiaries(!!(pastEntries && pastEntries.length > 0));
-  };
 
   const getGreeting = () => {
     const hour = new Date().getHours();
