@@ -5,11 +5,11 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { StreakBadge } from '@/components/StreakBadge';
 import { ActionCard } from '@/components/ActionCard';
-import { MasteredDiariesBadge } from '@/components/MasteredDiariesBadge';
+
 import { useAuth } from '@/hooks/useAuth';
 import { useTheme } from '@/components/ThemeProvider';
 import { supabase } from '@/lib/supabase';
-import { format, isToday, startOfDay } from 'date-fns';
+import { format, isToday } from 'date-fns';
 
 export default function Home() {
   const { theme, toggleTheme } = useTheme();
@@ -17,7 +17,7 @@ export default function Home() {
   const navigate = useNavigate();
   const [profile, setProfile] = useState<any>(null);
   const [todayComplete, setTodayComplete] = useState(false);
-  const [hasPastDiaries, setHasPastDiaries] = useState(false);
+  
   const [latestDiaryId, setLatestDiaryId] = useState<string | null>(null);
   const [latestDiaryDate, setLatestDiaryDate] = useState<string | null>(null);
   const [latestDiaryReviewed, setLatestDiaryReviewed] = useState(false);
@@ -66,17 +66,6 @@ export default function Home() {
       setLatestDiaryDate(null);
       setLatestDiaryReviewed(false);
     }
-
-    // Check if there are any past diary entries (before today)
-    const { data: pastEntries } = await supabase
-      .from('diary_entries')
-      .select('id, date')
-      .eq('user_id', user.id)
-      .lt('date', today)
-      .order('date', { ascending: false })
-      .limit(1);
-    
-    setHasPastDiaries(!!(pastEntries && pastEntries.length > 0));
   };
 
   const getGreeting = () => {
@@ -138,10 +127,6 @@ export default function Home() {
         />
       </div>
 
-      {/* Mastered Diaries Badge */}
-      <div className="mb-6">
-        <MasteredDiariesBadge />
-      </div>
 
       {/* Daily progress indicator */}
       <div className="bg-card border border-border rounded-2xl p-4 mb-6">

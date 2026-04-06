@@ -1,7 +1,9 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
+import { Lightbulb } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { StarParticles } from './StarParticles';
 import { useSuccessSound } from '@/hooks/useSuccessSound';
+import { Button } from '@/components/ui/button';
 
 interface WordReorderQuizProps {
   sentence: string;
@@ -35,16 +37,26 @@ export function WordReorderQuiz({ sentence, japaneseSentence, onCorrect }: WordR
   const [available, setAvailable] = useState<WordItem[]>(shuffled);
   const [isCorrect, setIsCorrect] = useState(false);
   const [isWrong, setIsWrong] = useState(false);
-  const [hintIndices, setHintIndices] = useState<Set<number>>(new Set());
+  const [hintIndex, setHintIndex] = useState<number | null>(null);
   const [showNice, setShowNice] = useState(false);
-  const [dragIdx, setDragIdx] = useState<number | null>(null);
-  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
   const { playSuccess } = useSuccessSound();
+
+  // Touch drag state for reordering placed words
+  const touchDragRef = useRef<{
+    idx: number;
+    startX: number;
+    startY: number;
+    el: HTMLElement | null;
+    clone: HTMLElement | null;
+    moved: boolean;
+  } | null>(null);
+  const placedContainerRef = useRef<HTMLDivElement>(null);
+  const placedRefs = useRef<(HTMLElement | null)[]>([]);
 
   const handleTapAvailable = useCallback((item: WordItem) => {
     if (isCorrect) return;
     setIsWrong(false);
-    setHintIndices(new Set());
+    setHintIndex(null);
     setPlaced((prev) => [...prev, item]);
     setAvailable((prev) => prev.filter((x) => x !== item));
   }, [isCorrect]);
@@ -52,67 +64,10 @@ export function WordReorderQuiz({ sentence, japaneseSentence, onCorrect }: WordR
   const handleTapPlaced = useCallback((item: WordItem, idx: number) => {
     if (isCorrect) return;
     setIsWrong(false);
-    setHintIndices(new Set());
+    setHintIndex(null);
     setPlaced((prev) => prev.filter((_, i) => i !== idx));
     setAvailable((prev) => [...prev, item]);
   }, [isCorrect]);
-
-  // Drag handlers for reordering placed words
-  const handleDragStart = (idx: number) => {
-    if (isCorrect) return;
-    setDragIdx(idx);
-  };
-
-  const handleDragOver = (e: React.DragEvent, idx: number) => {
-    e.preventDefault();
-    setDragOverIdx(idx);
-  };
-
-  const handleDrop = (idx: number) => {
-    if (dragIdx === null || dragIdx === idx) {
-      setDragIdx(null);
-      setDragOverIdx(null);
-      return;
-    }
-    setIsWrong(false);
-    setHintIndices(new Set());
-    setPlaced((prev) => {
-      const newPlaced = [...prev];
-      const [dragged] = newPlaced.splice(dragIdx, 1);
-      newPlaced.splice(idx, 0, dragged);
-      return newPlaced;
-    });
-    setDragIdx(null);
-    setDragOverIdx(null);
-  };
-
-  const handleDragEnd = () => {
-    setDragIdx(null);
-    setDragOverIdx(null);
-  };
-
-  // Touch drag state
-  const touchState = useRef<{ idx: number; startY: number; startX: number } | null>(null);
-
-  const handleTouchStart = (idx: number, e: React.TouchEvent) => {
-    if (isCorrect) return;
-    const touch = e.touches[0];
-    touchState.current = { idx, startX: touch.clientX, startY: touch.clientY };
-  };
-
-  const handleTouchEnd = (idx: number, e: React.TouchEvent) => {
-    if (!touchState.current) return;
-    const touch = e.changedTouches[0];
-    const dx = touch.clientX - touchState.current.startX;
-    const dy = touch.clientY - touchState.current.startY;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-    
-    // If it was a short tap (not drag), remove the word
-    if (dist < 10) {
-      handleTapPlaced(placed[idx], idx);
-    }
-    touchState.current = null;
-  };
 
   // Check answer when all words are placed
   useEffect(() => {
@@ -131,30 +86,174 @@ export function WordReorderQuiz({ sentence, japaneseSentence, onCorrect }: WordR
       } else {
         setIsWrong(true);
         if (navigator.vibrate) navigator.vibrate([50, 50, 50]);
-        const hints = new Set<number>();
-        for (let i = 0; i < correctWords.length; i++) {
-          if (placed[i]?.origIdx === i) {
-            hints.add(i);
-          } else {
-            hints.add(i);
-            if (i + 1 < correctWords.length) hints.add(i + 1);
-            break;
-          }
-        }
-        setHintIndices(hints);
       }
     }
   }, [placed, correctWords, isCorrect, onCorrect, playSuccess]);
+
+  // Hint button: find the first incorrect position and highlight next correct word
+  const handleHint = () => {
+    if (isCorrect) return;
+    // Find first wrong position in placed
+    let firstWrongIdx = -1;
+    for (let i = 0; i < placed.length; i++) {
+      if (placed[i].origIdx !== i) {
+        firstWrongIdx = i;
+        break;
+      }
+    }
+    if (firstWrongIdx === -1 && placed.length < correctWords.length) {
+      // All placed so far are correct, hint the next one needed
+      const nextOrigIdx = placed.length;
+      // Find in available
+      const availIdx = available.findIndex(a => a.origIdx === nextOrigIdx);
+      if (availIdx !== -1) {
+        setHintIndex(nextOrigIdx);
+      }
+    } else if (firstWrongIdx >= 0) {
+      // Highlight which origIdx should be at firstWrongIdx
+      setHintIndex(firstWrongIdx);
+    }
+    // Auto-clear hint after 3 seconds
+    setTimeout(() => setHintIndex(null), 3000);
+  };
 
   const handleRetry = () => {
     setAvailable([...available, ...placed]);
     setPlaced([]);
     setIsWrong(false);
-    setHintIndices(new Set());
+    setHintIndex(null);
+  };
+
+  // Touch drag handlers for mobile reordering of placed words
+  const handlePlacedTouchStart = (idx: number, e: React.TouchEvent) => {
+    if (isCorrect) return;
+    const touch = e.touches[0];
+    const el = placedRefs.current[idx];
+    touchDragRef.current = {
+      idx,
+      startX: touch.clientX,
+      startY: touch.clientY,
+      el,
+      clone: null,
+      moved: false,
+    };
+  };
+
+  const handlePlacedTouchMove = (e: React.TouchEvent) => {
+    const state = touchDragRef.current;
+    if (!state || !state.el) return;
+    const touch = e.touches[0];
+    const dx = touch.clientX - state.startX;
+    const dy = touch.clientY - state.startY;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+
+    if (dist > 8) {
+      state.moved = true;
+      e.preventDefault();
+
+      // Create floating clone on first move
+      if (!state.clone) {
+        const rect = state.el.getBoundingClientRect();
+        const clone = state.el.cloneNode(true) as HTMLElement;
+        clone.style.position = 'fixed';
+        clone.style.width = `${rect.width}px`;
+        clone.style.height = `${rect.height}px`;
+        clone.style.zIndex = '9999';
+        clone.style.pointerEvents = 'none';
+        clone.style.opacity = '0.9';
+        clone.style.transform = 'scale(1.05)';
+        document.body.appendChild(clone);
+        state.clone = clone;
+        state.el.style.opacity = '0.3';
+      }
+
+      state.clone.style.left = `${touch.clientX - state.clone.offsetWidth / 2}px`;
+      state.clone.style.top = `${touch.clientY - state.clone.offsetHeight / 2}px`;
+    }
+  };
+
+  const handlePlacedTouchEnd = (idx: number, e: React.TouchEvent) => {
+    const state = touchDragRef.current;
+    if (!state) return;
+
+    if (state.el) state.el.style.opacity = '1';
+    if (state.clone) {
+      document.body.removeChild(state.clone);
+    }
+
+    if (!state.moved) {
+      // It was a tap, remove word
+      handleTapPlaced(placed[idx], idx);
+      touchDragRef.current = null;
+      return;
+    }
+
+    // Find drop target
+    const touch = e.changedTouches[0];
+    let dropIdx = -1;
+    for (let i = 0; i < placedRefs.current.length; i++) {
+      const ref = placedRefs.current[i];
+      if (!ref || i === state.idx) continue;
+      const rect = ref.getBoundingClientRect();
+      if (touch.clientX >= rect.left && touch.clientX <= rect.right && touch.clientY >= rect.top && touch.clientY <= rect.bottom) {
+        dropIdx = i;
+        break;
+      }
+    }
+
+    if (dropIdx >= 0 && dropIdx !== state.idx) {
+      setIsWrong(false);
+      setHintIndex(null);
+      setPlaced((prev) => {
+        const arr = [...prev];
+        const [dragged] = arr.splice(state.idx, 1);
+        arr.splice(dropIdx, 0, dragged);
+        return arr;
+      });
+    }
+
+    touchDragRef.current = null;
+  };
+
+  // Desktop drag handlers
+  const [dragIdx, setDragIdx] = useState<number | null>(null);
+  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
+
+  const handleDragStart = (idx: number) => {
+    if (isCorrect) return;
+    setDragIdx(idx);
+  };
+
+  const handleDragOver = (e: React.DragEvent, idx: number) => {
+    e.preventDefault();
+    setDragOverIdx(idx);
+  };
+
+  const handleDrop = (idx: number) => {
+    if (dragIdx === null || dragIdx === idx) {
+      setDragIdx(null);
+      setDragOverIdx(null);
+      return;
+    }
+    setIsWrong(false);
+    setHintIndex(null);
+    setPlaced((prev) => {
+      const newPlaced = [...prev];
+      const [dragged] = newPlaced.splice(dragIdx, 1);
+      newPlaced.splice(idx, 0, dragged);
+      return newPlaced;
+    });
+    setDragIdx(null);
+    setDragOverIdx(null);
+  };
+
+  const handleDragEnd = () => {
+    setDragIdx(null);
+    setDragOverIdx(null);
   };
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full" onTouchMove={handlePlacedTouchMove as any}>
       <StarParticles active={isCorrect} />
 
       {showNice && (
@@ -174,41 +273,40 @@ export function WordReorderQuiz({ sentence, japaneseSentence, onCorrect }: WordR
       </div>
 
       {/* Answer area */}
-      <div className={cn(
-        'min-h-[120px] rounded-xl border-2 border-dashed p-3 mb-6 flex flex-wrap gap-2 content-start transition-all duration-300',
-        isCorrect && 'border-primary bg-primary/10 animate-pulse',
-        isWrong && 'border-destructive/50 bg-destructive/5',
-        !isCorrect && !isWrong && 'border-border bg-card/50'
-      )}>
+      <div
+        ref={placedContainerRef}
+        className={cn(
+          'min-h-[120px] rounded-xl border-2 border-dashed p-3 mb-4 flex flex-wrap gap-2 content-start transition-all duration-300',
+          isCorrect && 'border-primary bg-primary/10 animate-pulse',
+          isWrong && 'border-destructive/50 bg-destructive/5',
+          !isCorrect && !isWrong && 'border-border bg-card/50'
+        )}
+      >
         {placed.length === 0 && (
           <p className="text-sm text-muted-foreground/50 w-full text-center mt-8">
             下のカードをタップして並べよう
           </p>
         )}
         {placed.map((item, idx) => {
-          const isHinted = hintIndices.has(idx);
-          const isInCorrectPos = placed[idx]?.origIdx === idx;
           const isDragging = dragIdx === idx;
           const isDragOver = dragOverIdx === idx;
           return (
             <button
               key={`placed-${idx}-${item.origIdx}`}
+              ref={(el) => { placedRefs.current[idx] = el; }}
               onClick={() => handleTapPlaced(item, idx)}
               draggable={!isCorrect}
               onDragStart={() => handleDragStart(idx)}
               onDragOver={(e) => handleDragOver(e, idx)}
               onDrop={() => handleDrop(idx)}
               onDragEnd={handleDragEnd}
-              onTouchStart={(e) => handleTouchStart(idx, e)}
-              onTouchEnd={(e) => handleTouchEnd(idx, e)}
+              onTouchStart={(e) => handlePlacedTouchStart(idx, e)}
+              onTouchEnd={(e) => handlePlacedTouchEnd(idx, e)}
               disabled={isCorrect}
               className={cn(
-                'px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 active:scale-95 cursor-grab',
+                'px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 active:scale-95 cursor-grab touch-none',
                 isCorrect && 'bg-primary/20 text-primary border border-primary/30',
-                isWrong && isHinted && isInCorrectPos && 'bg-accent/20 text-accent-foreground border border-accent/40',
-                isWrong && isHinted && !isInCorrectPos && 'bg-destructive/10 text-destructive border border-destructive/30',
-                !isCorrect && !isWrong && 'bg-muted text-foreground border border-border hover:bg-muted/80',
-                !isHinted && isWrong && 'bg-muted text-foreground border border-border',
+                !isCorrect && 'bg-muted text-foreground border border-border hover:bg-muted/80',
                 isDragging && 'opacity-40 scale-90',
                 isDragOver && 'border-primary border-2',
               )}
@@ -223,35 +321,49 @@ export function WordReorderQuiz({ sentence, japaneseSentence, onCorrect }: WordR
         })}
       </div>
 
-      {/* Wrong message + retry */}
-      {isWrong && (
-        <div className="flex items-center justify-between mb-4 animate-fade-in">
-          <p className="text-sm text-destructive">順番が違うよ。ヒントを見て再挑戦！</p>
-          <button
-            onClick={handleRetry}
-            className="text-xs text-primary underline"
+      {/* Hint + Wrong message row */}
+      <div className="flex items-center justify-between mb-4 min-h-[32px]">
+        {isWrong ? (
+          <>
+            <p className="text-sm text-destructive">順番が違うよ。ヒントを見て再挑戦！</p>
+            <button onClick={handleRetry} className="text-xs text-primary underline">やり直す</button>
+          </>
+        ) : (
+          <div className="flex-1" />
+        )}
+        {!isCorrect && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="ml-2 gap-1 text-xs text-muted-foreground"
+            onClick={handleHint}
           >
-            やり直す
-          </button>
-        </div>
-      )}
+            <Lightbulb className="w-3.5 h-3.5" />
+            ヒント
+          </Button>
+        )}
+      </div>
 
       {/* Word cards */}
       <div className="flex flex-wrap gap-2 justify-center mt-auto">
-        {available.map((item, idx) => (
-          <button
-            key={`avail-${idx}-${item.origIdx}`}
-            onClick={() => handleTapAvailable(item)}
-            className={cn(
-              'px-4 py-2.5 rounded-xl text-sm font-medium border transition-all duration-200',
-              'bg-card border-border text-foreground shadow-sm',
-              'hover:bg-primary/10 hover:border-primary/30 hover:shadow-md',
-              'active:scale-90'
-            )}
-          >
-            {item.word}
-          </button>
-        ))}
+        {available.map((item, idx) => {
+          const isHinted = hintIndex !== null && item.origIdx === hintIndex;
+          return (
+            <button
+              key={`avail-${idx}-${item.origIdx}`}
+              onClick={() => handleTapAvailable(item)}
+              className={cn(
+                'px-4 py-2.5 rounded-xl text-sm font-medium border transition-all duration-200',
+                'bg-card border-border text-foreground shadow-sm',
+                'hover:bg-primary/10 hover:border-primary/30 hover:shadow-md',
+                'active:scale-90',
+                isHinted && 'ring-2 ring-primary border-primary bg-primary/10 animate-pulse'
+              )}
+            >
+              {item.word}
+            </button>
+          );
+        })}
       </div>
     </div>
   );

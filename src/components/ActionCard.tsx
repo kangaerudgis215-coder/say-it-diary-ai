@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
+import { useUISound } from '@/hooks/useUISound';
 
 interface ActionCardProps {
   icon: ReactNode;
@@ -26,9 +27,16 @@ export function ActionCard({
   className,
   hoverColor,
 }: ActionCardProps) {
+  const { playNavigate } = useUISound();
+
+  const handleClick = () => {
+    playNavigate();
+    onClick();
+  };
+
   return (
     <button
-      onClick={onClick}
+      onClick={handleClick}
       disabled={disabled}
       style={hoverColor ? { '--hover-glow': hoverColor } as React.CSSProperties : undefined}
       className={cn(

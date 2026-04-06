@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, X, Brain, Shuffle, Plus, BookOpen, Star } from 'lucide-react';
+import { ArrowLeft, X, Brain, Plus, BookOpen, Star } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DiaryCalendar } from '@/components/DiaryCalendar';
 import { RecallHistory } from '@/components/RecallHistory';
@@ -83,27 +83,6 @@ export default function Calendar() {
     }
   };
 
-  const handleRandomQuiz = () => {
-    if (allEntries.length === 0) return;
-    
-    // Filter out today's entry
-    const today = format(new Date(), 'yyyy-MM-dd');
-    const pastEntries = allEntries.filter(e => e.date !== today);
-    
-    if (pastEntries.length === 0) {
-      // No past entries available
-      return;
-    }
-
-    // Pick a random entry
-    const randomIndex = Math.floor(Math.random() * pastEntries.length);
-    const randomEntry = pastEntries[randomIndex];
-    
-    navigate(`/recall?diaryId=${randomEntry.id}&mode=random`);
-  };
-
-  const hasPastEntries = allEntries.some(e => e.date !== format(new Date(), 'yyyy-MM-dd'));
-
   return (
     <div className="min-h-screen flex flex-col p-6 safe-bottom">
       {/* Header */}
@@ -113,25 +92,6 @@ export default function Calendar() {
         </Button>
         <h1 className="font-bold text-xl">My Diary Collection</h1>
       </header>
-
-      {/* Random Quiz Button */}
-      <Button
-        variant="outline"
-        className="w-full mb-4 gap-2 h-auto py-3"
-        onClick={handleRandomQuiz}
-        disabled={!hasPastEntries}
-      >
-        <Shuffle className="w-5 h-5" />
-        <div className="text-left">
-          <p className="font-medium">Random past quiz</p>
-          <p className="text-xs text-muted-foreground">
-            {hasPastEntries 
-              ? "Start a recall quiz using a random past diary"
-              : "Complete some diaries first to unlock this"
-            }
-          </p>
-        </div>
-      </Button>
 
       {/* Calendar */}
       <DiaryCalendar
