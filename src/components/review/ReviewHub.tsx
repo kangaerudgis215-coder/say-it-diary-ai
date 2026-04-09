@@ -3,13 +3,17 @@
  */
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Volume2, Loader2, BookOpen } from 'lucide-react';
+import { ArrowLeft, Volume2, Loader2, BookOpen, PenLine } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Textarea } from '@/components/ui/textarea';
 import { HighlightableText } from '@/components/HighlightableText';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
+import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
+import { normalizeForExpression } from '@/lib/textComparison';
+import { persistDiarySentences } from '@/lib/practiceBuilder';
 import { cleanupInvalidDiaryLinkedExpressions, partitionExpressionsForText } from '@/lib/expressionValidation';
 import { cn } from '@/lib/utils';
 
@@ -17,6 +21,7 @@ export function ReviewHub() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const { toast } = useToast();
 
   const diaryId = searchParams.get('diaryId');
   const diaryDateParam = searchParams.get('date');
@@ -26,6 +31,11 @@ export function ReviewHub() {
   const [isLoading, setIsLoading] = useState(true);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const [highlightedExpression, setHighlightedExpression] = useState<string | null>(null);
+
+  // Correction state
+  const [showCorrection, setShowCorrection] = useState(false);
+  const [correctionText, setCorrectionText] = useState('');
+  const [isRegenerating, setIsRegenerating] = useState(false);
 
   useEffect(() => {
     if (user && diaryId) {
@@ -83,6 +93,119 @@ export function ReviewHub() {
     }, 50);
   };
 
+  const handleRegenerate = async () => {
+    if (!user || !diaryEntry || !correctionText.trim()) return;
+    setIsRegenerating(true);
+
+    try {
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          },
+          body: JSON.stringify({
+            type: 'regenerate_diary',
+            diary: diaryEntry.content,
+            correction: correctionText.trim(),
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to regenerate diary');
+      }
+
+      const data = await response.json();
+
+      const importantSentences = Array.isArray(data.importantSentences)
+        ? data.importantSentences.map((s: any) => {
+            const sentNorm = normalizeForExpression(String(s?.english ?? ''));
+            const exprs = Array.isArray(s?.expressions)
+              ? s.expressions
+                  .map((x: any) => String(x ?? '').trim())
+                  .filter(Boolean)
+                  .filter((x: string) => sentNorm.includes(normalizeForExpression(x)))
+              : [];
+            return {
+              english: String(s?.english ?? '').trim(),
+              japanese: String(s?.japanese ?? '').trim(),
+              expressions: exprs,
+            };
+          })
+        : [];
+
+      await supabase
+        .from('diary_entries')
+        .update({
+          content: data.diary,
+          japanese_summary: data.japaneseSummary,
+          word_count: data.diary.split(/\s+/).length,
+          important_sentences: importantSentences,
+          sentences_review_completed: false,
+        })
+        .eq('id', diaryEntry.id);
+
+      const diaryNorm = normalizeForExpression(String(data.diary ?? ''));
+      const candidates = Array.isArray(data.expressions) ? data.expressions : [];
+      const validExprs = candidates
+        .map((exp: any) => ({
+          expression: String(exp?.expression ?? '').trim(),
+          meaning: exp?.meaning ?? null,
+          example: exp?.example ?? null,
+          scene_or_context: exp?.scene_or_context ?? null,
+          pos_or_type: exp?.pos_or_type ?? null,
+        }))
+        .filter((exp: any) => exp.expression.length > 0)
+        .filter((exp: any) => diaryNorm.includes(normalizeForExpression(exp.expression)));
+
+      await supabase
+        .from('expressions')
+        .delete()
+        .eq('user_id', user.id)
+        .eq('diary_entry_id', diaryEntry.id)
+        .eq('is_user_added', false);
+
+      if (validExprs.length > 0) {
+        await supabase.from('expressions').insert(
+          validExprs.map((exp: any) => ({
+            user_id: user.id,
+            diary_entry_id: diaryEntry.id,
+            expression: exp.expression,
+            meaning: exp.meaning,
+            example_sentence: exp.example,
+            scene_or_context: exp.scene_or_context,
+            pos_or_type: exp.pos_or_type,
+          }))
+        );
+      }
+
+      if (importantSentences.length > 0) {
+        await persistDiarySentences(supabase, user.id, diaryEntry.id, importantSentences.map((s: any) => ({
+          english: s.english,
+          japanese: s.japanese,
+          expressions: s.expressions || [],
+        })));
+      }
+
+      toast({ title: '日記を修正しました ✨' });
+      setCorrectionText('');
+      setShowCorrection(false);
+      await loadDiary();
+    } catch (error: any) {
+      toast({
+        variant: 'destructive',
+        title: 'エラー',
+        description: error.message || '再生成に失敗しました',
+      });
+    } finally {
+      setIsRegenerating(false);
+    }
+  };
+
   const dateLabel = diaryDateParam ? format(new Date(diaryDateParam), 'MMMM d, yyyy') : 'Today';
 
   if (isLoading) {
@@ -120,19 +243,59 @@ export function ReviewHub() {
           <CardHeader className="pb-2">
             <CardTitle className="text-base flex items-center justify-between">
               📝 English Diary
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={isPlayingAudio ? handleStopAudio : handlePlayAudio}
-                disabled={!diaryEntry.content}
-              >
-                {isPlayingAudio ? <Loader2 className="w-4 h-4 animate-spin" /> : <Volume2 className="w-4 h-4" />}
-                <span className="ml-1 text-xs">{isPlayingAudio ? 'Stop' : 'Listen'}</span>
-              </Button>
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowCorrection(prev => !prev)}
+                >
+                  <PenLine className="w-4 h-4" />
+                  <span className="ml-1 text-xs">修正</span>
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={isPlayingAudio ? handleStopAudio : handlePlayAudio}
+                  disabled={!diaryEntry.content}
+                >
+                  {isPlayingAudio ? <Loader2 className="w-4 h-4 animate-spin" /> : <Volume2 className="w-4 h-4" />}
+                  <span className="ml-1 text-xs">{isPlayingAudio ? 'Stop' : 'Listen'}</span>
+                </Button>
+              </div>
             </CardTitle>
           </CardHeader>
           <CardContent>
             <HighlightableText text={diaryEntry.content} highlightTerm={highlightedExpression} />
+
+            {showCorrection && (
+              <div className="mt-4 space-y-2 border-t pt-3">
+                <p className="text-xs text-muted-foreground">
+                  修正したい箇所を入力してください（日本語OK）
+                </p>
+                <Textarea
+                  value={correctionText}
+                  onChange={e => setCorrectionText(e.target.value)}
+                  placeholder="例：最初にカフェに行って、その後に買い物をしました（順番が逆です）"
+                  className="text-sm min-h-[80px]"
+                  disabled={isRegenerating}
+                />
+                <Button
+                  size="sm"
+                  className="w-full"
+                  onClick={handleRegenerate}
+                  disabled={!correctionText.trim() || isRegenerating}
+                >
+                  {isRegenerating ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin mr-1" />
+                      再生成中...
+                    </>
+                  ) : (
+                    '✏️ この内容で日記を修正する'
+                  )}
+                </Button>
+              </div>
+            )}
           </CardContent>
         </Card>
 
