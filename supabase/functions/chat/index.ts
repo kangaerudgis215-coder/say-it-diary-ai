@@ -11,7 +11,7 @@ serve(async (req) => {
   }
 
   try {
-    const { messages, type, diary, wordCount, existingExpressions } = await req.json();
+    const { messages, type, diary, wordCount, existingExpressions, correction } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
 
     if (!LOVABLE_API_KEY) {
@@ -240,6 +240,14 @@ serve(async (req) => {
         {
           role: "user",
           content: `【日記本文】\n${diary}\n【語数】${wordCount ?? "不明"}${existingList}`,
+        },
+      ];
+    } else if (type === "regenerate_diary") {
+      aiMessages = [
+        { role: "system", content: systemPrompt },
+        {
+          role: "user",
+          content: `【現在の日記】\n${diary}\n\n【修正リクエスト】\n${correction}`,
         },
       ];
     } else if (type === "generate_quiz") {
