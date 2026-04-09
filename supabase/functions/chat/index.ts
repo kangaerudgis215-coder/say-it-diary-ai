@@ -11,7 +11,7 @@ serve(async (req) => {
   }
 
   try {
-    const { messages, type, diary, wordCount, existingExpressions } = await req.json();
+    const { messages, type, diary, wordCount, existingExpressions, correction } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
 
     if (!LOVABLE_API_KEY) {
@@ -67,6 +67,7 @@ serve(async (req) => {
 
 【ABSOLUTE RULES】
 - Be STRICTLY FAITHFUL to what the user actually said. Do NOT add events, details, or emotions not mentioned.
+- PRESERVE THE EXACT ORDER of events as described by the user. If the user said A happened before B, write A before B.
 - Do NOT embellish, supplement, or expand. If the user mentioned 2 things, write about 2 things only.
 - High school graduate level natural English
 - Actively use common verb phrases and useful expressions
@@ -157,6 +158,53 @@ serve(async (req) => {
     // ─────────────────────────────────────────
     // STEP4: 並び替え問題生成
     // ─────────────────────────────────────────
+    // ─────────────────────────────────────────
+    // STEP: 日記修正・再生成
+    // ─────────────────────────────────────────
+    } else if (type === "regenerate_diary") {
+      systemPrompt = `You are an English diary editor. The user has an existing diary entry and wants to correct specific parts of it.
+
+【ABSOLUTE RULES】
+- Apply ONLY the corrections the user specifies. Do NOT change anything else.
+- Preserve the original tone, style, and structure as much as possible.
+- Keep the diary concise: 3-5 sentences, 40-100 words maximum.
+- High school graduate level natural English.
+- First person "I" throughout, past tense throughout.
+- The corrections may be in Japanese — understand them and apply in English.
+- Preserve the order of events as the user specifies. If the user says the order is wrong, fix it.
+
+【EXPRESSION EXTRACTION】
+- From the corrected diary, extract 3-8 reusable English phrases
+- Each expression MUST be an exact substring of the corrected diary text
+- Prefer 2-4 word phrases over single words
+
+【SENTENCE BREAKDOWN】
+- Break the corrected diary into individual sentences
+- For each sentence, provide the Japanese translation
+- List which extracted expressions appear in each sentence
+
+【OUTPUT FORMAT (JSON)】
+{
+  "diary": "Corrected English diary text",
+  "japaneseSummary": "Full Japanese translation",
+  "wordCount": number,
+  "importantSentences": [
+    {
+      "english": "Individual sentence",
+      "japanese": "その文の日本語訳",
+      "expressions": ["expressions in this sentence"]
+    }
+  ],
+  "expressions": [
+    {
+      "expression": "exact phrase from diary",
+      "meaning": "日本語の意味",
+      "pos_or_type": "verb phrase / noun phrase / fixed phrase",
+      "scene_or_context": "daily life / work / feelings etc"
+    }
+  ]
+}`;
+
     } else if (type === "generate_quiz") {
       systemPrompt = `あなたは英語学習アプリの問題作成者です。
 以下の文から並び替え問題を作成してください。
@@ -195,6 +243,14 @@ serve(async (req) => {
           content: `【日記本文】\n${diary}\n【語数】${wordCount ?? "不明"}${existingList}`,
         },
       ];
+    } else if (type === "regenerate_diary") {
+      aiMessages = [
+        { role: "system", content: systemPrompt },
+        {
+          role: "user",
+          content: `【現在の日記】\n${diary}\n\n【修正リクエスト】\n${correction}`,
+        },
+      ];
     } else if (type === "generate_quiz") {
       aiMessages = [
         { role: "system", content: systemPrompt },
@@ -214,7 +270,7 @@ serve(async (req) => {
       ];
     }
 
-    const isJsonType = ["generate_diary", "select_sentences", "generate_quiz", "conversation"].includes(type);
+    const isJsonType = ["generate_diary", "select_sentences", "generate_quiz", "conversation", "regenerate_diary"].includes(type);
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
