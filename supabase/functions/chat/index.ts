@@ -157,6 +157,53 @@ serve(async (req) => {
     // ─────────────────────────────────────────
     // STEP4: 並び替え問題生成
     // ─────────────────────────────────────────
+    // ─────────────────────────────────────────
+    // STEP: 日記修正・再生成
+    // ─────────────────────────────────────────
+    } else if (type === "regenerate_diary") {
+      systemPrompt = `You are an English diary editor. The user has an existing diary entry and wants to correct specific parts of it.
+
+【ABSOLUTE RULES】
+- Apply ONLY the corrections the user specifies. Do NOT change anything else.
+- Preserve the original tone, style, and structure as much as possible.
+- Keep the diary concise: 3-5 sentences, 40-100 words maximum.
+- High school graduate level natural English.
+- First person "I" throughout, past tense throughout.
+- The corrections may be in Japanese — understand them and apply in English.
+- Preserve the order of events as the user specifies. If the user says the order is wrong, fix it.
+
+【EXPRESSION EXTRACTION】
+- From the corrected diary, extract 3-8 reusable English phrases
+- Each expression MUST be an exact substring of the corrected diary text
+- Prefer 2-4 word phrases over single words
+
+【SENTENCE BREAKDOWN】
+- Break the corrected diary into individual sentences
+- For each sentence, provide the Japanese translation
+- List which extracted expressions appear in each sentence
+
+【OUTPUT FORMAT (JSON)】
+{
+  "diary": "Corrected English diary text",
+  "japaneseSummary": "Full Japanese translation",
+  "wordCount": number,
+  "importantSentences": [
+    {
+      "english": "Individual sentence",
+      "japanese": "その文の日本語訳",
+      "expressions": ["expressions in this sentence"]
+    }
+  ],
+  "expressions": [
+    {
+      "expression": "exact phrase from diary",
+      "meaning": "日本語の意味",
+      "pos_or_type": "verb phrase / noun phrase / fixed phrase",
+      "scene_or_context": "daily life / work / feelings etc"
+    }
+  ]
+}`;
+
     } else if (type === "generate_quiz") {
       systemPrompt = `あなたは英語学習アプリの問題作成者です。
 以下の文から並び替え問題を作成してください。
