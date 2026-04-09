@@ -269,7 +269,7 @@ serve(async (req) => {
       ];
     }
 
-    const isJsonType = ["generate_diary", "select_sentences", "generate_quiz", "conversation"].includes(type);
+    const isJsonType = ["generate_diary", "select_sentences", "generate_quiz", "conversation", "regenerate_diary"].includes(type);
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
