@@ -67,6 +67,7 @@ serve(async (req) => {
 
 【ABSOLUTE RULES】
 - Be STRICTLY FAITHFUL to what the user actually said. Do NOT add events, details, or emotions not mentioned.
+- PRESERVE THE EXACT ORDER of events as described by the user. If the user said A happened before B, write A before B.
 - Do NOT embellish, supplement, or expand. If the user mentioned 2 things, write about 2 things only.
 - High school graduate level natural English
 - Actively use common verb phrases and useful expressions
