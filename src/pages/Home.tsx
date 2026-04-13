@@ -18,9 +18,8 @@ export default function Home() {
   const [profile, setProfile] = useState<any>(null);
   const [todayComplete, setTodayComplete] = useState(false);
   
-  const [latestDiaryId, setLatestDiaryId] = useState<string | null>(null);
-  const [latestDiaryDate, setLatestDiaryDate] = useState<string | null>(null);
-  const [latestDiaryReviewed, setLatestDiaryReviewed] = useState(false);
+  // Unreviewed past diaries queue
+  const [unreviewedDiaries, setUnreviewedDiaries] = useState<{ id: string; date: string }[]>([]);
 
   useEffect(() => {
     if (user) {
@@ -42,30 +41,21 @@ export default function Home() {
     
     if (profileData) {
       setProfile(profileData);
-      // Check if today's diary is done
       if (profileData.last_diary_date) {
         setTodayComplete(isToday(new Date(profileData.last_diary_date)));
       }
     }
 
-    // Get the latest diary entry (including today) for Recent Recall
-    const { data: latestEntry } = await supabase
+    // Get ALL unreviewed past diaries (excluding today), oldest first
+    const { data: unreviewedEntries } = await supabase
       .from('diary_entries')
-      .select('id, date, sentences_review_completed')
+      .select('id, date')
       .eq('user_id', user.id)
-      .order('date', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+      .eq('sentences_review_completed', false)
+      .lt('date', today)
+      .order('date', { ascending: true });
 
-    if (latestEntry) {
-      setLatestDiaryId(latestEntry.id);
-      setLatestDiaryDate(latestEntry.date);
-      setLatestDiaryReviewed(latestEntry.sentences_review_completed ?? false);
-    } else {
-      setLatestDiaryId(null);
-      setLatestDiaryDate(null);
-      setLatestDiaryReviewed(false);
-    }
+    setUnreviewedDiaries(unreviewedEntries || []);
   };
 
   const getGreeting = () => {
@@ -75,18 +65,19 @@ export default function Home() {
     return 'Good evening';
   };
 
-  // Recent Recall: only enabled if latest diary is from a previous day AND not yet reviewed
-  const isLatestDiaryFromToday = latestDiaryDate ? isToday(new Date(latestDiaryDate + 'T00:00:00')) : false;
-  const canDoRecall = !!latestDiaryId && !isLatestDiaryFromToday && !latestDiaryReviewed;
+  // Recent Recall: enabled if there are unreviewed past diaries
+  const unreviewedCount = unreviewedDiaries.length;
+  const canDoRecall = unreviewedCount > 0;
+  const nextUnreviewed = unreviewedDiaries[0] || null;
 
-  // Progress: step 1 = today's diary, step 2 = recall review of previous diary
+  // Progress: step 1 = today's diary, step 2 = all past diaries reviewed
   const todayStepDone = todayComplete;
-  const recallStepDone = latestDiaryReviewed;
+  const recallStepDone = unreviewedCount === 0;
   const stepsCompleted = (todayStepDone ? 1 : 0) + (recallStepDone ? 1 : 0);
 
   const handleReviewLatest = () => {
-    if (canDoRecall && latestDiaryId) {
-      navigate(`/quiz?diaryId=${latestDiaryId}`);
+    if (canDoRecall && nextUnreviewed) {
+      navigate(`/quiz?diaryId=${nextUnreviewed.id}`);
     }
   };
 
@@ -163,22 +154,22 @@ export default function Home() {
           badge={!todayComplete ? "MUST" : undefined}
         />
 
-        {/* 2. Recent Recall - Next-day review only */}
+        {/* 2. Recent Recall - Past diary review queue */}
         <ActionCard
           icon={<Brain className="w-8 h-8" />}
-          title={latestDiaryReviewed && !isLatestDiaryFromToday ? "Recent Recall ✓" : "Recent Recall"}
+          title={recallStepDone ? "Recent Recall ✓" : "Recent Recall"}
           description={
-            latestDiaryReviewed && !isLatestDiaryFromToday
-              ? "✅ 復習完了！よく頑張りました！"
+            recallStepDone
+              ? "🌙 明日また挑戦してね！"
               : canDoRecall
-                ? "前回の日記を並び替えで復習しよう"
-                : isLatestDiaryFromToday
-                  ? "🌙 明日また挑戦してね！"
-                  : "まず日記を書こう"
+                ? unreviewedCount === 1
+                  ? "前回の日記を並び替えで復習しよう"
+                  : `${unreviewedCount}件の復習が残っています`
+                : "まず日記を書こう"
           }
           onClick={handleReviewLatest}
           variant="secondary"
-          badge={canDoRecall ? "NEXT" : latestDiaryReviewed && !isLatestDiaryFromToday ? "DONE" : undefined}
+          badge={canDoRecall ? `${unreviewedCount}件` : recallStepDone ? "DONE" : undefined}
           disabled={!canDoRecall}
           hoverColor="hsl(220, 90%, 56%)"
         />
