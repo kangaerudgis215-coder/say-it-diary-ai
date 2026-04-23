@@ -74,8 +74,13 @@ serve(async (req) => {
       const prompt = `You are an expert at categorizing English expressions for language learners.
 
 For each expression below, assign:
-1. scene_or_context: A 1-2 word label for when this expression is typically used.
-   Options: "daily life", "small talk", "school", "work", "feelings", "travel", "health", "hobbies", "food", "weather", "relationships", "other"
+1. scene_or_context: Choose EXACTLY ONE from these 6 Japanese categories (return the Japanese label as-is):
+   "日常" (daily life, food, weather, health, hobbies, travel, small talk)
+   "仕事" (work, business, office)
+   "学習" (school, study, learning, education)
+   "感情" (feelings, emotions, mood)
+   "人間関係" (family, friends, relationships, social)
+   "その他" (anything that doesn't clearly fit above)
    
 2. pos_or_type: A simple grammatical/phrase type label.
    Options: "verb phrase", "adjective phrase", "noun phrase", "fixed phrase", "adverb phrase", "idiom", "other"
@@ -135,12 +140,14 @@ Only return the JSON array, nothing else.`;
         // Update each expression with its tags
         for (let j = 0; j < batch.length; j++) {
           const exp = batch[j];
-          const tag = tags[j] || { scene_or_context: "other", pos_or_type: "other" };
+          const tag = tags[j] || { scene_or_context: "その他", pos_or_type: "other" };
+          const allowedScenes = ["日常", "仕事", "学習", "感情", "人間関係", "その他"];
+          const scene = allowedScenes.includes(tag.scene_or_context) ? tag.scene_or_context : "その他";
 
           const { error: updateError } = await supabase
             .from('expressions')
             .update({
-              scene_or_context: tag.scene_or_context || "other",
+              scene_or_context: scene,
               pos_or_type: tag.pos_or_type || "other"
             })
             .eq('id', exp.id);
@@ -158,7 +165,7 @@ Only return the JSON array, nothing else.`;
           await supabase
             .from('expressions')
             .update({
-              scene_or_context: "other",
+              scene_or_context: "その他",
               pos_or_type: "other"
             })
             .eq('id', exp.id);
