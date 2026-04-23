@@ -17,6 +17,7 @@ interface DiaryRow {
   content: string;
   created_at: string;
   full_diary_challenge_completed: boolean;
+  sentences_review_completed: boolean;
 }
 
 export default function Home() {
@@ -36,7 +37,7 @@ export default function Home() {
     if (!user) return;
     const { data } = await supabase
       .from('diary_entries')
-      .select('id, date, content, created_at, full_diary_challenge_completed')
+      .select('id, date, content, created_at, full_diary_challenge_completed, sentences_review_completed')
       .eq('user_id', user.id)
       .order('date', { ascending: false });
     setEntries((data || []) as DiaryRow[]);
@@ -47,6 +48,7 @@ export default function Home() {
       entries.map((e) => ({
         date: e.date,
         mastered: e.full_diary_challenge_completed,
+        reviewed: e.sentences_review_completed,
       })),
     [entries],
   );

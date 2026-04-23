@@ -10,6 +10,7 @@ import {
 export interface StampEntry {
   date: string; // yyyy-MM-dd
   mastered?: boolean;
+  reviewed?: boolean;
 }
 
 interface StampCalendarProps {
@@ -38,6 +39,14 @@ export function StampCalendar({ entries, onDateSelect, selectedDate }: StampCale
 
   const entryFor = (date: Date) =>
     entries.find((e) => e.date === format(date, 'yyyy-MM-dd'));
+
+  // Rainbow palette (HSL) — deterministic by date so each stamp has a stable hue.
+  const RAINBOW_HUES = [0, 30, 50, 130, 200, 250, 290];
+  const hueFor = (dateStr: string) => {
+    let h = 0;
+    for (let i = 0; i < dateStr.length; i++) h = (h * 31 + dateStr.charCodeAt(i)) >>> 0;
+    return RAINBOW_HUES[h % RAINBOW_HUES.length];
+  };
 
   const dayLabels = ['日', '月', '火', '水', '木', '金', '土'];
 
@@ -132,17 +141,32 @@ export function StampCalendar({ entries, onDateSelect, selectedDate }: StampCale
                 'hover:bg-muted/40',
               )}
             >
-              {/* Stamp disc */}
-              {hasEntry && (
-                <span
-                  className={cn(
-                    'absolute inset-1.5 rounded-full',
-                    entry?.mastered
-                      ? 'bg-primary/70'
-                      : 'bg-muted-foreground/40',
-                  )}
-                />
-              )}
+              {/* Stamp disc — rainbow hue, ring vs filled distinguishes review state */}
+              {hasEntry && (() => {
+                const hue = hueFor(entry!.date);
+                const mastered = entry?.mastered;
+                const reviewed = entry?.reviewed;
+                // Mastered = fully filled vivid stamp.
+                // Reviewed = filled but lighter.
+                // Unreviewed = ring-only outline (so the user "sees" what's pending).
+                const style = mastered
+                  ? {
+                      background: `hsl(${hue} 80% 60%)`,
+                      boxShadow: `0 2px 6px hsl(${hue} 80% 50% / 0.45)`,
+                    }
+                  : reviewed
+                    ? { background: `hsl(${hue} 75% 70% / 0.55)` }
+                    : {
+                        background: 'transparent',
+                        border: `2px solid hsl(${hue} 70% 60%)`,
+                      };
+                return (
+                  <span
+                    className="absolute inset-1.5 rounded-full"
+                    style={style}
+                  />
+                );
+              })()}
               {/* Selected ring */}
               {isSelected && (
                 <span className="absolute inset-1 rounded-md ring-2 ring-foreground/90 pointer-events-none" />
@@ -154,7 +178,7 @@ export function StampCalendar({ entries, onDateSelect, selectedDate }: StampCale
               <span
                 className={cn(
                   'relative text-sm font-medium',
-                  hasEntry ? 'text-foreground' : 'text-foreground/80',
+                  hasEntry && entry?.mastered ? 'text-white drop-shadow-sm' : 'text-foreground/85',
                   dim && 'text-foreground/30',
                   !hasEntry && dow === 0 && 'text-destructive/80',
                   !hasEntry && dow === 6 && 'text-accent-foreground/80',
