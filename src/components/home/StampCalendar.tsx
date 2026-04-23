@@ -84,8 +84,8 @@ export function StampCalendar({ entries, onDateSelect, selectedDate }: StampCale
             key={d}
             className={cn(
               'text-center text-[11px] font-medium py-1.5 bg-muted/30 border-r border-border/40 last:border-r-0',
-              i === 0 && 'text-red-400',
-              i === 6 && 'text-blue-400',
+              i === 0 && 'text-destructive/80',
+              i === 6 && 'text-accent-foreground/80',
             )}
           >
             {d}
@@ -156,8 +156,8 @@ export function StampCalendar({ entries, onDateSelect, selectedDate }: StampCale
                   'relative text-sm font-medium',
                   hasEntry ? 'text-foreground' : 'text-foreground/80',
                   dim && 'text-foreground/30',
-                  !hasEntry && dow === 0 && 'text-red-400',
-                  !hasEntry && dow === 6 && 'text-blue-400',
+                  !hasEntry && dow === 0 && 'text-destructive/80',
+                  !hasEntry && dow === 6 && 'text-accent-foreground/80',
                 )}
               >
                 {format(day, 'd')}
