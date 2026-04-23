@@ -10,6 +10,7 @@ import {
 export interface StampEntry {
   date: string; // yyyy-MM-dd
   mastered?: boolean;
+  reviewed?: boolean;
 }
 
 interface StampCalendarProps {
@@ -38,6 +39,14 @@ export function StampCalendar({ entries, onDateSelect, selectedDate }: StampCale
 
   const entryFor = (date: Date) =>
     entries.find((e) => e.date === format(date, 'yyyy-MM-dd'));
+
+  // Rainbow palette (HSL) — deterministic by date so each stamp has a stable hue.
+  const RAINBOW_HUES = [0, 30, 50, 130, 200, 250, 290];
+  const hueFor = (dateStr: string) => {
+    let h = 0;
+    for (let i = 0; i < dateStr.length; i++) h = (h * 31 + dateStr.charCodeAt(i)) >>> 0;
+    return RAINBOW_HUES[h % RAINBOW_HUES.length];
+  };
 
   const dayLabels = ['日', '月', '火', '水', '木', '金', '土'];
 
