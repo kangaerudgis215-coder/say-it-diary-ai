@@ -191,7 +191,7 @@ export default function Expressions() {
           <ArrowLeft className="w-5 h-5" />
         </Button>
         <div className="flex-1">
-          <h1 className="font-bold text-xl">My Expressions</h1>
+          <h1 className="text-lg font-semibold tracking-tight text-foreground/90">Phrases</h1>
           <p className="text-sm text-muted-foreground">
             {filteredExpressions.length} of {expressions.length} phrases
             {' · '}{activeCount} active, {archivedCount} archived

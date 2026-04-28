@@ -57,7 +57,7 @@ export function PendingRecallList() {
         <Button variant="ghost" size="icon" onClick={() => navigate('/')}>
           <ArrowLeft className="w-5 h-5" />
         </Button>
-        <h1 className="font-bold text-lg">過去の復習</h1>
+        <h1 className="text-lg font-semibold tracking-tight text-foreground/90">Recall</h1>
       </header>
 
       {pending.length === 0 ? (

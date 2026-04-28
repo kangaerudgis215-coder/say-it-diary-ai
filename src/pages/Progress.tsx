@@ -166,7 +166,7 @@
            <ArrowLeft className="w-5 h-5" />
          </Button>
          <div className="flex-1">
-           <h1 className="font-bold text-xl">Speaking Progress</h1>
+          <h1 className="text-lg font-semibold tracking-tight text-foreground/90">Progress</h1>
            <p className="text-xs text-muted-foreground">Track your vocabulary growth</p>
          </div>
          <Button

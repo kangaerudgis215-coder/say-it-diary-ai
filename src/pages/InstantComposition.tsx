@@ -197,7 +197,7 @@ export default function InstantComposition() {
           <ArrowLeft className="w-5 h-5" />
         </Button>
         <div className="flex-1">
-          <h1 className="font-bold text-lg">フレーズ神経衰弱</h1>
+          <h1 className="text-lg font-semibold tracking-tight text-foreground/90">Memory Game</h1>
           <p className="text-xs text-muted-foreground">{matched.size / 2} / {totalPairs} ペア • {moves} 回</p>
         </div>
         <Button variant="ghost" size="sm" onClick={handleRestart}>
