@@ -41,14 +41,14 @@ export function BottomTabBar({ homeTab, onHomeTabChange }: BottomTabBarProps) {
   }> = [
     {
       key: 'calendar',
-      label: 'カレンダー',
+      label: 'Home',
       icon: CalendarDays,
       onClick: () => switchHome('calendar'),
       active: isHome && homeTab === 'calendar',
     },
     {
       key: 'list',
-      label: 'リスト',
+      label: 'Entries',
       icon: List,
       onClick: () => switchHome('list'),
       active: isHome && homeTab === 'list',
@@ -62,21 +62,21 @@ export function BottomTabBar({ homeTab, onHomeTabChange }: BottomTabBarProps) {
     },
     {
       key: 'expressions',
-      label: '表現',
+      label: 'Phrases',
       icon: Sparkles,
       onClick: () => go('/expressions'),
       active: location.pathname.startsWith('/expressions'),
     },
     {
       key: 'game',
-      label: 'ゲーム',
+      label: 'Game',
       icon: Shuffle,
       onClick: () => go('/instant'),
       active: location.pathname.startsWith('/instant'),
     },
     {
       key: 'progress',
-      label: '進捗',
+      label: 'Progress',
       icon: TrendingUp,
       onClick: () => go('/progress'),
       active: location.pathname.startsWith('/progress'),

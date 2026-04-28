@@ -5,11 +5,12 @@ import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
 import { useTheme } from '@/components/ThemeProvider';
 import { supabase } from '@/lib/supabase';
-import { format, parseISO, isSameDay } from 'date-fns';
+import { format, parseISO, isSameDay, differenceInCalendarDays } from 'date-fns';
 import { StampCalendar } from '@/components/home/StampCalendar';
 import { DiaryListView } from '@/components/home/DiaryListView';
 import { BottomTabBar } from '@/components/home/BottomTabBar';
 import { ComposeFAB } from '@/components/home/ComposeFAB';
+import { StreakHero } from '@/components/home/StreakHero';
 
 interface DiaryRow {
   id: string;
@@ -53,6 +54,23 @@ export default function Home() {
     [entries],
   );
 
+  // Compute current streak from entry dates (consecutive days ending today or yesterday).
+  const streak = useMemo(() => {
+    if (entries.length === 0) return 0;
+    const dates = Array.from(new Set(entries.map((e) => e.date))).sort().reverse();
+    const today = new Date();
+    const newest = parseISO(dates[0]);
+    const gap = differenceInCalendarDays(today, newest);
+    if (gap > 1) return 0;
+    let count = 1;
+    for (let i = 1; i < dates.length; i++) {
+      const diff = differenceInCalendarDays(parseISO(dates[i - 1]), parseISO(dates[i]));
+      if (diff === 1) count++;
+      else break;
+    }
+    return count;
+  }, [entries]);
+
   // Entries visible underneath the calendar (selected day + earlier)
   const calendarListEntries = useMemo(() => {
     if (tab !== 'calendar') return [];
@@ -63,22 +81,22 @@ export default function Home() {
     <div className="min-h-screen flex flex-col bg-background pb-24">
       {/* Header */}
       <header className="flex items-center justify-between px-5 pt-5 pb-3">
-        <h1 className="text-xl font-bold">
-          {tab === 'calendar' ? 'カレンダー' : '日記'}
+        <h1 className="text-lg font-semibold tracking-tight text-foreground/90">
+          {tab === 'calendar' ? 'Home' : 'Entries'}
         </h1>
         <div className="flex items-center gap-1">
           {tab === 'list' && (
-            <Button variant="ghost" size="icon" aria-label="検索">
+            <Button variant="ghost" size="icon" aria-label="Search">
               <Search className="w-5 h-5" />
             </Button>
           )}
-          <Button variant="ghost" size="icon" onClick={toggleTheme} aria-label="テーマ切替">
+          <Button variant="ghost" size="icon" onClick={toggleTheme} aria-label="Toggle theme">
             {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
           </Button>
           <Button
             variant="ghost"
             size="icon"
-            aria-label="ログアウト"
+            aria-label="Sign out"
             onClick={async () => {
               await signOut();
               navigate('/auth');
@@ -92,6 +110,7 @@ export default function Home() {
       <main className="flex-1 px-4 space-y-4">
         {tab === 'calendar' ? (
           <>
+            <StreakHero streak={streak} />
             <StampCalendar
               entries={stamps}
               onDateSelect={setSelectedDate}
@@ -100,10 +119,10 @@ export default function Home() {
 
             {/* Selected day header */}
             <div className="px-1 pt-2 text-sm text-muted-foreground">
-              {format(selectedDate, 'yyyy年M月d日')}
+              {format(selectedDate, 'EEEE, MMM d')}
               {entries.some((e) => isSameDay(parseISO(e.date), selectedDate))
                 ? ''
-                : ' （日記なし）'}
+                : ' · No entry'}
             </div>
 
             <DiaryListView entries={calendarListEntries} />
