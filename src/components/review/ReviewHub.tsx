@@ -1,9 +1,9 @@
 /**
  * Review Hub - Diary review page from calendar (same layout as DiaryReview)
  */
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef, type TouchEvent } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Volume2, Loader2, BookOpen, PenLine } from 'lucide-react';
+import { ArrowLeft, Volume2, Loader2, BookOpen, PenLine, ChevronLeft, ChevronRight, CalendarDays } from 'lucide-react';
 import { SandyLoader } from '@/components/lottie/SandyLoader';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -12,7 +12,7 @@ import { HighlightableText } from '@/components/HighlightableText';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { normalizeForExpression } from '@/lib/textComparison';
 import { persistDiarySentences } from '@/lib/practiceBuilder';
 import { cleanupInvalidDiaryLinkedExpressions, partitionExpressionsForText } from '@/lib/expressionValidation';
@@ -32,6 +32,9 @@ export function ReviewHub() {
   const [isLoading, setIsLoading] = useState(true);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const [highlightedExpression, setHighlightedExpression] = useState<string | null>(null);
+  const [allEntries, setAllEntries] = useState<{ id: string; date: string; created_at: string }[]>([]);
+  const [swipeDx, setSwipeDx] = useState(0);
+  const touchRef = useRef<{ x: number; y: number; dx: number; locked: 'h' | 'v' | null } | null>(null);
 
   // Correction state
   const [showCorrection, setShowCorrection] = useState(false);
@@ -42,6 +45,20 @@ export function ReviewHub() {
     if (user && diaryId) {
       loadDiary();
     }
+  }, [user, diaryId]);
+
+  useEffect(() => {
+    (async () => {
+      if (!user) return;
+      const { data } = await supabase
+        .from('diary_entries')
+        .select('id, date, created_at')
+        .eq('user_id', user.id)
+        .order('date', { ascending: false })
+        .order('created_at', { ascending: false });
+
+      setAllEntries((data || []) as { id: string; date: string; created_at: string }[]);
+    })();
   }, [user, diaryId]);
 
   const loadDiary = async () => {
@@ -92,6 +109,48 @@ export function ReviewHub() {
     setTimeout(() => {
       document.getElementById('highlight-target')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }, 50);
+  };
+
+  const currentIdx = allEntries.findIndex((e) => e.id === diaryId);
+  const olderEntry = currentIdx >= 0 ? allEntries[currentIdx + 1] : undefined;
+  const newerEntry = currentIdx > 0 ? allEntries[currentIdx - 1] : undefined;
+
+  const goSibling = useCallback(
+    (target?: { id: string; date: string }) => {
+      if (!target) return;
+      navigate(`/review?diaryId=${target.id}&date=${target.date}`);
+    },
+    [navigate],
+  );
+
+  const handleTouchStart = (e: TouchEvent) => {
+    const t = e.touches[0];
+    touchRef.current = { x: t.clientX, y: t.clientY, dx: 0, locked: null };
+  };
+
+  const handleTouchMove = (e: TouchEvent) => {
+    const s = touchRef.current;
+    if (!s) return;
+    const t = e.touches[0];
+    const dx = t.clientX - s.x;
+    const dy = t.clientY - s.y;
+    if (s.locked === null && (Math.abs(dx) > 12 || Math.abs(dy) > 12)) {
+      s.locked = Math.abs(dx) > Math.abs(dy) * 1.15 ? 'h' : 'v';
+    }
+    if (s.locked === 'h') {
+      s.dx = dx;
+      setSwipeDx(Math.max(-140, Math.min(140, dx)));
+    }
+  };
+
+  const handleTouchEnd = () => {
+    const dx = touchRef.current?.dx ?? 0;
+    const locked = touchRef.current?.locked;
+    touchRef.current = null;
+    setSwipeDx(0);
+    if (locked !== 'h' || Math.abs(dx) < 72) return;
+    if (dx > 0) goSibling(olderEntry);
+    if (dx < 0) goSibling(newerEntry);
   };
 
   const handleRegenerate = async () => {
@@ -207,7 +266,12 @@ export function ReviewHub() {
     }
   };
 
-  const dateLabel = diaryDateParam ? format(new Date(diaryDateParam), 'MMMM d, yyyy') : 'Today';
+  const displayDate = diaryEntry?.date || diaryDateParam;
+  const parsedDate = displayDate ? parseISO(displayDate) : new Date();
+  const monthLabel = format(parsedDate, 'MMM').toUpperCase();
+  const dayLabel = format(parsedDate, 'd');
+  const yearLabel = format(parsedDate, 'yyyy');
+  const weekdayLabel = format(parsedDate, 'EEEE');
 
   if (isLoading) {
     return <SandyLoader fullscreen label="Loading diary..." />;
@@ -223,18 +287,46 @@ export function ReviewHub() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col p-6 safe-bottom">
-      <header className="flex items-center gap-4 mb-6">
+    <div className="min-h-screen flex flex-col p-5 safe-bottom overflow-hidden">
+      <header className="mb-5 space-y-4">
+        <div className="flex items-center justify-between">
         <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
           <ArrowLeft className="w-5 h-5" />
         </Button>
-        <div>
-          <h1 className="font-bold text-xl">Review Diary</h1>
-          <p className="text-sm text-muted-foreground">{dateLabel}</p>
+          <div className="flex items-center gap-1">
+            <Button variant="ghost" size="icon" disabled={!olderEntry} onClick={() => goSibling(olderEntry)} aria-label="Previous diary">
+              <ChevronLeft className="w-5 h-5" />
+            </Button>
+            <Button variant="ghost" size="icon" disabled={!newerEntry} onClick={() => goSibling(newerEntry)} aria-label="Next diary">
+              <ChevronRight className="w-5 h-5" />
+            </Button>
+          </div>
+        </div>
+        <div className="relative overflow-hidden rounded-2xl border border-border/70 bg-card/70 px-4 py-4 shadow-sm">
+          <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(ellipse_at_top,hsl(var(--primary)/0.20),transparent_62%)]" />
+          <div className="relative flex items-center gap-4">
+            <div className="flex h-16 w-16 shrink-0 flex-col items-center justify-center rounded-2xl border border-primary/30 bg-primary/10 text-primary shadow-[0_0_24px_hsl(var(--primary)/0.18)]">
+              <span className="text-[10px] font-black tracking-[0.18em]">{monthLabel}</span>
+              <span className="text-3xl font-black leading-none tabular-nums">{dayLabel}</span>
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-primary/90">
+                <CalendarDays className="h-3.5 w-3.5" /> Diary Date
+              </div>
+              <h1 className="mt-1 text-2xl font-black leading-tight text-foreground">{weekdayLabel}</h1>
+              <p className="text-sm font-medium text-muted-foreground">{monthLabel} {dayLabel}, {yearLabel}</p>
+            </div>
+          </div>
         </div>
       </header>
 
-      <div className="flex-1 space-y-4 overflow-y-auto">
+      <div
+        className="flex-1 space-y-4 overflow-y-auto touch-pan-y transition-transform duration-200"
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        style={{ transform: `translateX(${swipeDx}px)` }}
+      >
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-base flex items-center justify-between">
@@ -358,9 +450,6 @@ export function ReviewHub() {
           onClick={() => navigate(`/quiz?diaryId=${diaryId}&date=${diaryDateParam}`)}
         >
           🏋️ 並び替え問題に挑戦
-        </Button>
-        <Button variant="ghost" size="sm" className="w-full" onClick={() => navigate('/calendar')}>
-          Back to Calendar
         </Button>
       </div>
     </div>

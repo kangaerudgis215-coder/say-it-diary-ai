@@ -11,7 +11,7 @@ serve(async (req) => {
   }
 
   try {
-    const { messages, type, diary, wordCount, existingExpressions, correction } = await req.json();
+    const { messages, type, diary, diaries, streak, wordCount, existingExpressions, correction } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
 
     if (!LOVABLE_API_KEY) {
@@ -205,6 +205,26 @@ serve(async (req) => {
   ]
 }`;
 
+    } else if (type === "cat_comments") {
+      systemPrompt = `You write short Japanese speech-bubble lines for a lazy, gentle cat companion in an English diary app.
+
+【ROLE】
+- The cat reacts to one or more past diary entries and encourages the user to speak today's diary.
+- Character: sleepy, slightly laid-back, warm, ends naturally with にゃ / にゃ〜 sometimes.
+
+【SAFETY】
+- Do not infer sensitive attributes, medical diagnoses, politics, religion, or private facts not stated.
+- If the diary mentions heavy or unsafe topics, respond gently and neutrally without advice beyond self-care.
+
+【RULES】
+- Output exactly 3 different Japanese comments.
+- Each comment must be short: 22-42 Japanese characters if possible.
+- Each comment = one tiny reaction to diary content OR streak + one soft prompt/encouragement.
+- Do not quote private details too specifically. Keep it casual.
+
+【OUTPUT FORMAT】
+{"comments":["comment 1","comment 2","comment 3"]}`;
+
     } else if (type === "generate_quiz") {
       systemPrompt = `あなたは英語学習アプリの問題作成者です。
 以下の文から並び替え問題を作成してください。
@@ -251,6 +271,17 @@ serve(async (req) => {
           content: `【現在の日記】\n${diary}\n\n【修正リクエスト】\n${correction}`,
         },
       ];
+    } else if (type === "cat_comments") {
+      const diaryLines = Array.isArray(diaries)
+        ? diaries.slice(0, 5).map((d: any, i: number) => `${i + 1}. ${String(d?.date ?? "unknown")}: ${String(d?.content ?? "").slice(0, 500)}`).join("\n")
+        : String(diary ?? "");
+      aiMessages = [
+        { role: "system", content: systemPrompt },
+        {
+          role: "user",
+          content: `【Current streak】${Number(streak ?? 0)} days\n【Past diary samples】\n${diaryLines}`,
+        },
+      ];
     } else if (type === "generate_quiz") {
       aiMessages = [
         { role: "system", content: systemPrompt },
@@ -266,11 +297,11 @@ serve(async (req) => {
     } else {
       aiMessages = [
         { role: "system", content: systemPrompt },
-        ...messages,
+        ...(Array.isArray(messages) ? messages : []),
       ];
     }
 
-    const isJsonType = ["generate_diary", "select_sentences", "generate_quiz", "conversation", "regenerate_diary"].includes(type);
+    const isJsonType = ["generate_diary", "select_sentences", "generate_quiz", "conversation", "regenerate_diary", "cat_comments"].includes(type);
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
