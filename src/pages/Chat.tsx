@@ -414,6 +414,12 @@ export default function Chat() {
 
   return (
     <div className="min-h-screen flex flex-col">
+      {/* Full-screen loader while generating the diary */}
+      {isGeneratingDiary && (
+        <div className="fixed inset-0 z-50 bg-background/85 backdrop-blur-sm flex items-center justify-center">
+          <SandyLoader label="日記を生成中..." />
+        </div>
+      )}
       {/* Header */}
       <header className="sticky top-0 z-10 glass border-b border-border p-4">
         <div className="flex items-center justify-between">
