@@ -35,12 +35,21 @@ serve(async (req) => {
         streakInfo = `The user "${profile.display_name || 'learner'}" has a ${profile.current_streak || 0}-day streak and ${profile.total_diary_entries || 0} total diary entries.`;
       }
 
+      // Unified mastery scale (0-100): mastered ≥ 80, learning 30-79, new < 30.
       const { count: masteredCount } = await supabase
         .from("expressions")
         .select("id", { count: "exact", head: true })
         .eq("user_id", userId)
         .eq("status", "active")
-        .gte("mastery_level", 5);
+        .gte("mastery_level", 80);
+
+      const { count: learningCount } = await supabase
+        .from("expressions")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", userId)
+        .eq("status", "active")
+        .gte("mastery_level", 30)
+        .lt("mastery_level", 80);
 
       const { count: totalCount } = await supabase
         .from("expressions")
@@ -48,7 +57,11 @@ serve(async (req) => {
         .eq("user_id", userId)
         .eq("status", "active");
 
-      expressionInfo = `They have mastered ${masteredCount || 0} out of ${totalCount || 0} active expressions.`;
+      const pct = totalCount && totalCount > 0
+        ? Math.round(((masteredCount || 0) / totalCount) * 100)
+        : 0;
+
+      expressionInfo = `They have encountered ${totalCount || 0} unique English phrases through their diaries: ${masteredCount || 0} mastered (〇), ${learningCount || 0} in progress (△). Overall mastery rate: ${pct}%.`;
     }
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {

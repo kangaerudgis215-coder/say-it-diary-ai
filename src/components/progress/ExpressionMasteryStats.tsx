@@ -5,6 +5,7 @@ import { Progress } from '@/components/ui/progress';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
 import { cn } from '@/lib/utils';
+import { bucketOf } from '@/lib/mastery';
 
 interface MasteryBreakdown {
   total: number;
@@ -34,9 +35,9 @@ export function ExpressionMasteryStats() {
     if (data) {
       const active = data.filter(e => e.status === 'active');
       const archived = data.filter(e => e.status === 'archived');
-      const newCount = active.filter(e => !e.mastery_level || e.mastery_level === 0).length;
-      const inProgress = active.filter(e => e.mastery_level && e.mastery_level >= 1 && e.mastery_level <= 2).length;
-      const mastered = active.filter(e => e.mastery_level && e.mastery_level >= 3).length;
+      const newCount = active.filter(e => bucketOf(e.mastery_level) === 'new').length;
+      const inProgress = active.filter(e => bucketOf(e.mastery_level) === 'learning').length;
+      const mastered = active.filter(e => bucketOf(e.mastery_level) === 'mastered').length;
 
       setStats({
         total: data.length,
@@ -55,9 +56,9 @@ export function ExpressionMasteryStats() {
   if (isLoading) return null;
 
   const categories = [
-    { label: 'New', count: stats.newCount, icon: Sparkles, color: 'text-blue-400', bg: 'bg-blue-400/10' },
-    { label: 'In Progress', count: stats.inProgress, icon: TrendingUp, color: 'text-orange-400', bg: 'bg-orange-400/10' },
-    { label: 'Mastered', count: stats.mastered, icon: Award, color: 'text-emerald-400', bg: 'bg-emerald-400/10' },
+    { label: '✕ New', count: stats.newCount, icon: Sparkles, color: 'text-sky-400', bg: 'bg-sky-400/10' },
+    { label: '△ Learning', count: stats.inProgress, icon: TrendingUp, color: 'text-amber-400', bg: 'bg-amber-400/10' },
+    { label: '〇 Mastered', count: stats.mastered, icon: Award, color: 'text-emerald-400', bg: 'bg-emerald-400/10' },
     { label: 'Archived', count: stats.archived, icon: Archive, color: 'text-muted-foreground', bg: 'bg-muted/40' },
   ];
 
