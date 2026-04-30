@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { LogOut, Sun, Moon, Search } from 'lucide-react';
+import { LogOut, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
-import { useTheme } from '@/components/ThemeProvider';
+import { ThemeToggleLottie } from '@/components/ThemeToggleLottie';
 import { supabase } from '@/lib/supabase';
 import { format, parseISO, isSameDay, differenceInCalendarDays } from 'date-fns';
 import { StampCalendar } from '@/components/home/StampCalendar';
@@ -22,7 +22,6 @@ interface DiaryRow {
 }
 
 export default function Home() {
-  const { theme, toggleTheme } = useTheme();
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
 
@@ -90,9 +89,7 @@ export default function Home() {
               <Search className="w-5 h-5" />
             </Button>
           )}
-          <Button variant="ghost" size="icon" onClick={toggleTheme} aria-label="Toggle theme">
-            {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-          </Button>
+          <ThemeToggleLottie />
           <Button
             variant="ghost"
             size="icon"
