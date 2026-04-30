@@ -122,20 +122,22 @@ export default function Calendar() {
               {selectedEntry.full_diary_challenge_completed && (
                 <span className="text-yellow-500 text-sm">⭐ Mastered</span>
               )}
-              {recallHistory.length > 0 && (
-                <div
-                  className="ml-auto -my-2 -mr-1 shrink-0 drop-shadow-[0_0_12px_hsl(var(--primary)/0.45)]"
-                  aria-label="Recall completed"
-                  title="Recall completed"
-                >
-                  <DotLottieReact
-                    src="/anim/winner.lottie"
-                    autoplay
-                    loop
-                    style={{ width: 72, height: 72 }}
-                  />
-                </div>
-              )}
+              <div
+                className={
+                  recallHistory.length > 0
+                    ? "ml-auto -my-2 -mr-1 shrink-0 drop-shadow-[0_0_14px_hsl(var(--primary)/0.6)]"
+                    : "ml-auto -my-2 -mr-1 shrink-0 opacity-60"
+                }
+                aria-label={recallHistory.length > 0 ? "Recall completed" : "Diary entry"}
+                title={recallHistory.length > 0 ? "Recall completed" : "Diary"}
+              >
+                <DotLottieReact
+                  src="/anim/winner.lottie"
+                  autoplay
+                  loop
+                  style={{ width: 84, height: 84 }}
+                />
+              </div>
             </div>
             <Button
               variant="ghost"
