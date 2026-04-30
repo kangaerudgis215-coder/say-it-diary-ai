@@ -342,7 +342,7 @@ serve(async (req) => {
 
     if (isJsonType) {
       try {
-        const parsed = JSON.parse(content);
+        const parsed = extractJson(content);
         
         // For conversation type, return reply and japanese separately
         if (type === "conversation") {
