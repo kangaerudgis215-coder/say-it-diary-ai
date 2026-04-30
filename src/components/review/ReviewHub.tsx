@@ -326,20 +326,23 @@ export function ReviewHub() {
               <h1 className="mt-1 text-2xl font-black leading-tight text-foreground">{weekdayLabel}</h1>
               <p className="text-sm font-medium text-muted-foreground">{monthLabel} {dayLabel}, {yearLabel}</p>
             </div>
-            {recallCompleted && (
-              <div
-                className="ml-auto shrink-0 drop-shadow-[0_0_14px_hsl(var(--primary)/0.55)]"
-                aria-label="Recall completed"
-                title="Recall completed"
-              >
-                <DotLottieReact
-                  src="/anim/winner.lottie"
-                  autoplay
-                  loop
-                  style={{ width: 84, height: 84 }}
-                />
-              </div>
-            )}
+            <div
+              className={cn(
+                "ml-auto shrink-0 transition-all",
+                recallCompleted
+                  ? "drop-shadow-[0_0_18px_hsl(var(--primary)/0.7)] opacity-100"
+                  : "opacity-60",
+              )}
+              aria-label={recallCompleted ? "Recall completed" : "Diary entry"}
+              title={recallCompleted ? "Recall completed" : "Diary"}
+            >
+              <DotLottieReact
+                src="/anim/winner.lottie"
+                autoplay
+                loop
+                style={{ width: 96, height: 96 }}
+              />
+            </div>
           </div>
         </div>
       </header>
