@@ -1,25 +1,77 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { DotLottieReact } from '@lottiefiles/dotlottie-react';
+
+interface CatDiaryEntry {
+  id: string;
+  date: string;
+  content: string;
+}
 
 interface CatBuddyProps {
   /** Most recent diary content (English) used to flavor the cat's comment. */
   recentDiary?: string | null;
+  entries?: CatDiaryEntry[];
+  streak?: number;
 }
 
 /**
  * Tiny laid-back cat companion that comments on the user's recent diary
- * with a short reaction + encouragement, nyaa~. Pure client-side keyword
- * matching — no AI calls, no PII leaving the device.
+ * with a short reaction + encouragement, nyaa~.
  */
-export function CatBuddy({ recentDiary }: CatBuddyProps) {
-  const [bubble, setBubble] = useState<string>('');
+export function CatBuddy({ recentDiary, entries = [], streak = 0 }: CatBuddyProps) {
+  const [comments, setComments] = useState<string[]>(() => pickFallbackBubbles(recentDiary ?? '', streak));
+  const [index, setIndex] = useState(0);
+
+  const diarySignature = useMemo(
+    () => entries.map((e) => `${e.id}:${e.date}:${e.content.length}`).join('|'),
+    [entries],
+  );
 
   useEffect(() => {
-    setBubble(pickBubble(recentDiary ?? ''));
-  }, [recentDiary]);
+    let cancelled = false;
+    const fallback = pickFallbackBubbles(recentDiary ?? entries[0]?.content ?? '', streak);
+    setComments(fallback);
+    setIndex(0);
+
+    const generate = async () => {
+      if (entries.length === 0) return;
+      const samples = pickDiarySamples(entries);
+      try {
+        const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          },
+          body: JSON.stringify({ type: 'cat_comments', diaries: samples, streak }),
+        });
+        if (!response.ok) throw new Error('failed');
+        const data = await response.json();
+        const next = Array.isArray(data.comments)
+          ? data.comments.map((x: unknown) => String(x).trim()).filter(Boolean).slice(0, 3)
+          : [];
+        if (!cancelled && next.length >= 3) setComments(next);
+      } catch {
+        if (!cancelled) setComments(fallback);
+      }
+    };
+
+    generate();
+    return () => {
+      cancelled = true;
+    };
+  }, [diarySignature, entries, recentDiary, streak]);
+
+  const bubble = comments[index % comments.length] || pickFallbackBubbles('', streak)[0];
+  const cycleComment = () => setIndex((prev) => (prev + 1) % Math.max(1, comments.length));
 
   return (
-    <div className="relative h-full flex flex-col items-center justify-end pb-1">
+    <button
+      type="button"
+      onClick={cycleComment}
+      className="relative h-full w-full flex flex-col items-center justify-end pb-1 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-2xl"
+      aria-label="猫のコメントを切り替える"
+    >
       {/* Speech bubble */}
       <div
         className="relative mb-1 max-w-[160px] rounded-2xl bg-card/90 border border-border/70 px-3 py-2 text-[11px] leading-snug text-foreground/90 shadow-sm font-japanese"
@@ -40,7 +92,7 @@ export function CatBuddy({ recentDiary }: CatBuddyProps) {
           style={{ width: '100%', height: '100%' }}
         />
       </div>
-    </div>
+    </button>
   );
 }
 
