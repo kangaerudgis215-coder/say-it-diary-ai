@@ -189,6 +189,20 @@ export default function Chat() {
 
       setMessages(prev => [...prev, assistantMessage]);
 
+      // Speak the AI reply aloud for an immersive feel
+      try {
+        if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+          window.speechSynthesis.cancel();
+          const u = new SpeechSynthesisUtterance(assistantMessage.content);
+          u.lang = 'en-US';
+          u.rate = 0.95;
+          u.pitch = 1.05;
+          window.speechSynthesis.speak(u);
+        }
+      } catch {
+        // ignore TTS errors
+      }
+
       // Save assistant message
       await supabase.from('messages').insert({
         conversation_id: conversationId,
