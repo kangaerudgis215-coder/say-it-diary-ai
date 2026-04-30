@@ -1,14 +1,23 @@
-import { Mic, MicOff } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Mic } from 'lucide-react';
+import Lottie from 'lottie-react';
+import voiceAnim from '@/assets/voice.json';
 import { useSpeechRecognition } from '@/hooks/useSpeechRecognition';
 import { cn } from '@/lib/utils';
 import { useEffect } from 'react';
 
 interface VoiceRecordButtonProps {
   onTranscript: (text: string) => void;
+  /** Tailwind size for the button. Defaults to a large, centered mic. */
+  className?: string;
+  /** Pixel size of the mic icon / lottie. */
+  iconSize?: number;
 }
 
-export function VoiceRecordButton({ onTranscript }: VoiceRecordButtonProps) {
+export function VoiceRecordButton({
+  onTranscript,
+  className,
+  iconSize = 36,
+}: VoiceRecordButtonProps) {
   const { isListening, transcript, isSupported, startListening, stopListening, resetTranscript } =
     useSpeechRecognition();
 
@@ -31,20 +40,34 @@ export function VoiceRecordButton({ onTranscript }: VoiceRecordButtonProps) {
   };
 
   return (
-    <Button
-      variant="ghost"
-      size="icon"
+    <button
+      type="button"
       onClick={handleClick}
+      aria-label={isListening ? 'Stop recording' : 'Start recording'}
       className={cn(
-        'rounded-full w-12 h-12 shrink-0',
-        isListening && 'bg-destructive/20 animate-pulse'
+        'relative inline-flex items-center justify-center rounded-full shrink-0',
+        'transition-all duration-200 active:scale-95',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        isListening
+          ? 'bg-primary/15 ring-2 ring-primary/50'
+          : 'bg-primary text-primary-foreground shadow-lg shadow-primary/30 hover:shadow-primary/50',
+        className,
       )}
     >
-      {isListening ? (
-        <MicOff className="w-5 h-5 text-destructive" />
-      ) : (
-        <Mic className="w-5 h-5 text-primary" />
+      {/* Glow ring when idle */}
+      {!isListening && (
+        <span className="absolute inset-0 rounded-full bg-primary/30 blur-xl -z-10" />
       )}
-    </Button>
+      {isListening ? (
+        <Lottie
+          animationData={voiceAnim}
+          loop
+          autoplay
+          style={{ width: iconSize * 1.6, height: iconSize * 1.6 }}
+        />
+      ) : (
+        <Mic style={{ width: iconSize, height: iconSize }} />
+      )}
+    </button>
   );
 }
