@@ -69,7 +69,7 @@ export function BottomTabBar({ homeTab, onHomeTabChange }: BottomTabBarProps) {
     },
     {
       key: 'game',
-      label: 'Game',
+      label: 'Flashcards',
       icon: Shuffle,
       onClick: () => go('/instant'),
       active: location.pathname.startsWith('/instant'),
