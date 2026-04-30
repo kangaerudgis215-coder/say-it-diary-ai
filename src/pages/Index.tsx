@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import Home from './Home';
-import { Loader2 } from 'lucide-react';
+import { SandyLoader } from '@/components/lottie/SandyLoader';
 
 export default function Index() {
   const { user, loading } = useAuth();
@@ -15,11 +15,7 @@ export default function Index() {
   }, [user, loading, navigate]);
 
   if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
-      </div>
-    );
+    return <SandyLoader fullscreen />;
   }
 
   if (!user) {

@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { Lightbulb } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { StarParticles } from './StarParticles';
+import { ConfettiBurst } from '@/components/lottie/ConfettiBurst';
 import { useSuccessSound } from '@/hooks/useSuccessSound';
 import { Button } from '@/components/ui/button';
 
@@ -255,6 +256,7 @@ export function WordReorderQuiz({ sentence, japaneseSentence, onCorrect }: WordR
   return (
     <div className="flex flex-col h-full" onTouchMove={handlePlacedTouchMove as any}>
       <StarParticles active={isCorrect} />
+      <ConfettiBurst active={isCorrect} />
 
       {showNice && (
         <div className="fixed inset-0 flex items-center justify-center z-50 pointer-events-none">

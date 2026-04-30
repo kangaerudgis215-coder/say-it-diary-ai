@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Loader2, RotateCcw, Trophy, ArrowLeftRight } from 'lucide-react';
+import { SandyLoader } from '@/components/lottie/SandyLoader';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
@@ -129,12 +130,7 @@ export default function InstantComposition() {
   };
 
   if (isLoading) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center p-6">
-        <Loader2 className="w-8 h-8 animate-spin text-primary mb-4" />
-        <p className="text-muted-foreground text-sm">Loading…</p>
-      </div>
-    );
+    return <SandyLoader fullscreen label="Loading…" />;
   }
 
   // ============ SELECT STAGE (default TOP) ============
