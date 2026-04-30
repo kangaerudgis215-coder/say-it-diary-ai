@@ -10,7 +10,8 @@ import { StampCalendar } from '@/components/home/StampCalendar';
 import { DiaryListView } from '@/components/home/DiaryListView';
 import { BottomTabBar } from '@/components/home/BottomTabBar';
 import { ComposeFAB } from '@/components/home/ComposeFAB';
-import { StreakHero } from '@/components/home/StreakHero';
+import { StreakHeroCompact } from '@/components/home/StreakHeroCompact';
+import { CatBuddy } from '@/components/home/CatBuddy';
 
 interface DiaryRow {
   id: string;
@@ -107,7 +108,21 @@ export default function Home() {
       <main className="flex-1 px-4 space-y-4">
         {tab === 'calendar' ? (
           <>
-            <StreakHero streak={streak} entryDates={entries.map((e) => e.date)} />
+            <div className="grid grid-cols-2 gap-3 rounded-3xl overflow-hidden bg-card/60 border border-border/50 px-3 py-3 relative">
+              <div
+                className="absolute inset-0 pointer-events-none opacity-80"
+                style={{
+                  background:
+                    'radial-gradient(ellipse at center top, hsl(var(--primary) / 0.18), transparent 60%)',
+                }}
+              />
+              <div className="relative">
+                <StreakHeroCompact streak={streak} />
+              </div>
+              <div className="relative">
+                <CatBuddy recentDiary={entries[0]?.content} />
+              </div>
+            </div>
             <StampCalendar
               entries={stamps}
               onDateSelect={setSelectedDate}
