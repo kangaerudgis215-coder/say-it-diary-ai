@@ -1,7 +1,7 @@
 /**
  * Review Hub - Diary review page from calendar (same layout as DiaryReview)
  */
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, type TouchEvent } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Volume2, Loader2, BookOpen, PenLine, ChevronLeft, ChevronRight, CalendarDays } from 'lucide-react';
 import { SandyLoader } from '@/components/lottie/SandyLoader';
@@ -123,12 +123,12 @@ export function ReviewHub() {
     [navigate],
   );
 
-  const handleTouchStart = (e: React.TouchEvent) => {
+  const handleTouchStart = (e: TouchEvent) => {
     const t = e.touches[0];
     touchRef.current = { x: t.clientX, y: t.clientY, dx: 0, locked: null };
   };
 
-  const handleTouchMove = (e: React.TouchEvent) => {
+  const handleTouchMove = (e: TouchEvent) => {
     const s = touchRef.current;
     if (!s) return;
     const t = e.touches[0];
