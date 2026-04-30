@@ -28,6 +28,7 @@ export default function Home() {
 
   const [tab, setTab] = useState<'calendar' | 'list'>('calendar');
   const [entries, setEntries] = useState<DiaryRow[]>([]);
+  const [recallCompletedIds, setRecallCompletedIds] = useState<Set<string>>(new Set());
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
 
   useEffect(() => {
@@ -42,16 +43,24 @@ export default function Home() {
       .eq('user_id', user.id)
       .order('date', { ascending: false });
     setEntries((data || []) as DiaryRow[]);
+
+    const { data: recalls } = await supabase
+      .from('recall_sessions')
+      .select('diary_entry_id')
+      .eq('user_id', user.id)
+      .eq('completed', true);
+    setRecallCompletedIds(new Set((recalls || []).map((r: any) => r.diary_entry_id)));
   };
 
   const stamps = useMemo(
     () =>
       entries.map((e) => ({
         date: e.date,
-        mastered: e.full_diary_challenge_completed,
+        // キラキラ光る日 = リコール（翌日以降の復習）まで完了した日記
+        mastered: recallCompletedIds.has(e.id),
         reviewed: e.sentences_review_completed,
       })),
-    [entries],
+    [entries, recallCompletedIds],
   );
 
   // Compute current streak from entry dates (consecutive days ending today or yesterday).
