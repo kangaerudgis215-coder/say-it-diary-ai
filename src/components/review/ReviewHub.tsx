@@ -1,9 +1,9 @@
 /**
  * Review Hub - Diary review page from calendar (same layout as DiaryReview)
  */
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Volume2, Loader2, BookOpen, PenLine } from 'lucide-react';
+import { ArrowLeft, Volume2, Loader2, BookOpen, PenLine, ChevronLeft, ChevronRight, CalendarDays } from 'lucide-react';
 import { SandyLoader } from '@/components/lottie/SandyLoader';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -12,7 +12,7 @@ import { HighlightableText } from '@/components/HighlightableText';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { normalizeForExpression } from '@/lib/textComparison';
 import { persistDiarySentences } from '@/lib/practiceBuilder';
 import { cleanupInvalidDiaryLinkedExpressions, partitionExpressionsForText } from '@/lib/expressionValidation';
@@ -32,6 +32,9 @@ export function ReviewHub() {
   const [isLoading, setIsLoading] = useState(true);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const [highlightedExpression, setHighlightedExpression] = useState<string | null>(null);
+  const [allEntries, setAllEntries] = useState<{ id: string; date: string; created_at: string }[]>([]);
+  const [swipeDx, setSwipeDx] = useState(0);
+  const touchRef = useRef<{ x: number; y: number; dx: number; locked: 'h' | 'v' | null } | null>(null);
 
   // Correction state
   const [showCorrection, setShowCorrection] = useState(false);
@@ -42,6 +45,20 @@ export function ReviewHub() {
     if (user && diaryId) {
       loadDiary();
     }
+  }, [user, diaryId]);
+
+  useEffect(() => {
+    (async () => {
+      if (!user) return;
+      const { data } = await supabase
+        .from('diary_entries')
+        .select('id, date, created_at')
+        .eq('user_id', user.id)
+        .order('date', { ascending: false })
+        .order('created_at', { ascending: false });
+
+      setAllEntries((data || []) as { id: string; date: string; created_at: string }[]);
+    })();
   }, [user, diaryId]);
 
   const loadDiary = async () => {
