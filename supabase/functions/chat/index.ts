@@ -297,7 +297,7 @@ serve(async (req) => {
     } else {
       aiMessages = [
         { role: "system", content: systemPrompt },
-        ...messages,
+        ...(Array.isArray(messages) ? messages : []),
       ];
     }
 
