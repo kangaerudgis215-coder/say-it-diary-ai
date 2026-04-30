@@ -111,6 +111,48 @@ export function ReviewHub() {
     }, 50);
   };
 
+  const currentIdx = allEntries.findIndex((e) => e.id === diaryId);
+  const olderEntry = currentIdx >= 0 ? allEntries[currentIdx + 1] : undefined;
+  const newerEntry = currentIdx > 0 ? allEntries[currentIdx - 1] : undefined;
+
+  const goSibling = useCallback(
+    (target?: { id: string; date: string }) => {
+      if (!target) return;
+      navigate(`/review?diaryId=${target.id}&date=${target.date}`);
+    },
+    [navigate],
+  );
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    const t = e.touches[0];
+    touchRef.current = { x: t.clientX, y: t.clientY, dx: 0, locked: null };
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    const s = touchRef.current;
+    if (!s) return;
+    const t = e.touches[0];
+    const dx = t.clientX - s.x;
+    const dy = t.clientY - s.y;
+    if (s.locked === null && (Math.abs(dx) > 12 || Math.abs(dy) > 12)) {
+      s.locked = Math.abs(dx) > Math.abs(dy) * 1.15 ? 'h' : 'v';
+    }
+    if (s.locked === 'h') {
+      s.dx = dx;
+      setSwipeDx(Math.max(-140, Math.min(140, dx)));
+    }
+  };
+
+  const handleTouchEnd = () => {
+    const dx = touchRef.current?.dx ?? 0;
+    const locked = touchRef.current?.locked;
+    touchRef.current = null;
+    setSwipeDx(0);
+    if (locked !== 'h' || Math.abs(dx) < 72) return;
+    if (dx > 0) goSibling(olderEntry);
+    if (dx < 0) goSibling(newerEntry);
+  };
+
   const handleRegenerate = async () => {
     if (!user || !diaryEntry || !correctionText.trim()) return;
     setIsRegenerating(true);
@@ -224,7 +266,12 @@ export function ReviewHub() {
     }
   };
 
-  const dateLabel = diaryDateParam ? format(new Date(diaryDateParam), 'MMMM d, yyyy') : 'Today';
+  const displayDate = diaryEntry?.date || diaryDateParam;
+  const parsedDate = displayDate ? parseISO(displayDate) : new Date();
+  const monthLabel = format(parsedDate, 'MMM').toUpperCase();
+  const dayLabel = format(parsedDate, 'd');
+  const yearLabel = format(parsedDate, 'yyyy');
+  const weekdayLabel = format(parsedDate, 'EEEE');
 
   if (isLoading) {
     return <SandyLoader fullscreen label="Loading diary..." />;
