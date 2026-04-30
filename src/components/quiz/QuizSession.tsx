@@ -10,6 +10,8 @@ import { ProgressDots } from './ProgressDots';
 import { WordReorderQuiz } from './WordReorderQuiz';
 import { ReadAloudPrompt } from './ReadAloudPrompt';
 import { CompletionScreen } from './CompletionScreen';
+import { RecallCompletionScreen } from './RecallCompletionScreen';
+import { format } from 'date-fns';
 
 type Phase = 'loading' | 'reorder' | 'readAloud' | 'complete';
 
@@ -26,6 +28,8 @@ export function QuizSession() {
   const [expressions, setExpressions] = useState<string[]>([]);
   const [fullEnglish, setFullEnglish] = useState('');
   const [fullJapanese, setFullJapanese] = useState('');
+  const [diaryDate, setDiaryDate] = useState<string>('');
+  const [isPastDiary, setIsPastDiary] = useState(false);
 
   useEffect(() => {
     if (user && diaryId) loadData();
@@ -48,6 +52,9 @@ export function QuizSession() {
 
     setFullEnglish(entry.content || '');
     setFullJapanese(entry.japanese_summary || '');
+    setDiaryDate(entry.date || '');
+    const today = format(new Date(), 'yyyy-MM-dd');
+    setIsPastDiary(Boolean(entry.date) && entry.date < today);
 
     // Get expressions
     const { data: exprs } = await supabase
@@ -137,6 +144,9 @@ export function QuizSession() {
   }
 
   if (phase === 'complete') {
+    if (isPastDiary) {
+      return <RecallCompletionScreen diaryDate={diaryDate} />;
+    }
     return <CompletionScreen streak={streak} expressions={expressions} />;
   }
 

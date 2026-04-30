@@ -6,6 +6,9 @@ import { Button } from '@/components/ui/button';
 import { useSuccessSound } from '@/hooks/useSuccessSound';
 import { ConfettiBurst } from '@/components/lottie/ConfettiBurst';
 import fireAnimation from '@/assets/fire.json';
+import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/lib/supabase';
+import { format, subDays } from 'date-fns';
 
 interface CompletionScreenProps {
   streak: number;
@@ -50,15 +53,42 @@ const WEEK_LABELS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
 export function CompletionScreen({ streak, expressions }: CompletionScreenProps) {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const { playBigSuccess } = useSuccessSound();
   const [show, setShow] = useState(false);
   const display = useCountUp(streak);
   const todayDow = (new Date().getDay() + 6) % 7; // Mon=0..Sun=6
+  // Truthful per-day completion for the current Mon→Sun week.
+  const [weekDone, setWeekDone] = useState<boolean[]>(() => Array(7).fill(false));
 
   useEffect(() => {
     playBigSuccess();
     setTimeout(() => setShow(true), 100);
   }, [playBigSuccess]);
+
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    (async () => {
+      // Build the 7 dates of the current week (Mon..Sun).
+      const today = new Date();
+      const monday = subDays(today, todayDow);
+      const dates = Array.from({ length: 7 }, (_, i) =>
+        format(subDays(monday, -i), 'yyyy-MM-dd'),
+      );
+      const { data } = await supabase
+        .from('diary_entries')
+        .select('date')
+        .eq('user_id', user.id)
+        .in('date', dates);
+      if (cancelled) return;
+      const set = new Set((data || []).map((r: any) => r.date));
+      setWeekDone(dates.map((d) => set.has(d)));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user, todayDow]);
 
   const handleShare = async () => {
     const text = `Say It Diaryで${streak}日連続学習中！🔥 今日も英語日記を完了しました ✨ #SayItDiary #英語学習`;
@@ -127,7 +157,8 @@ export function CompletionScreen({ streak, expressions }: CompletionScreenProps)
         {/* Weekday checks */}
         <div className="mt-6 flex gap-2">
           {WEEK_LABELS.map((d, i) => {
-            const active = i <= todayDow;
+            const isToday = i === todayDow;
+            const active = weekDone[i] || isToday; // today implicitly counts (we just finished)
             return (
               <div
                 key={i}
