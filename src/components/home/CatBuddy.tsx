@@ -100,6 +100,25 @@ export function CatBuddy({ recentDiary, entries = [], streak = 0 }: CatBuddyProp
  * Map keywords in the recent diary to a chill, supportive cat comment.
  * Always end with a soft prompt about today.
  */
+function pickDiarySamples(entries: CatDiaryEntry[]): CatDiaryEntry[] {
+  const pool = entries.slice(0, 8);
+  const picked: CatDiaryEntry[] = [];
+  if (pool[0]) picked.push(pool[0]);
+  const rest = pool.slice(1).sort(() => Math.random() - 0.5);
+  return [...picked, ...rest].slice(0, 3);
+}
+
+function pickFallbackBubbles(text: string, streak: number): string[] {
+  const base = pickBubble(text);
+  const streakLine =
+    streak >= 7
+      ? `${streak}日続いてるの、さすがにすごいにゃ。今日も少し話すにゃ？`
+      : streak > 0
+        ? `${streak}日ストリーク中にゃ〜。今日のことも聞かせてにゃ。`
+        : 'まずは一言でいいにゃ〜。今日はどんな日だったにゃ？';
+  return [base, streakLine, '眠いけど聞く準備はできてるにゃ。今日も話してにゃ〜'];
+}
+
 function pickBubble(text: string): string {
   const t = text.toLowerCase();
 
