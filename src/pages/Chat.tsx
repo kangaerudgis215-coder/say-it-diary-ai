@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ChatBubble } from '@/components/ChatBubble';
 import { VoiceRecordButton } from '@/components/VoiceRecordButton';
+import { SandyLoader } from '@/components/lottie/SandyLoader';
 import { HelpCircle } from 'lucide-react';
 import {
   Dialog,
