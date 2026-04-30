@@ -6,45 +6,35 @@ export function useSuccessSound() {
 
   const playSuccess = useCallback(() => {
     try {
-      // Create audio context lazily
       if (!audioContextRef.current) {
         audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
       }
-      
       const ctx = audioContextRef.current;
-      
-      // Resume context if suspended (browser autoplay policy)
       if (ctx.state === 'suspended') {
         ctx.resume();
       }
 
       const now = ctx.currentTime;
 
-      // Create a gentle chime sound
-      const oscillator1 = ctx.createOscillator();
-      const oscillator2 = ctx.createOscillator();
-      const gainNode = ctx.createGain();
-
-      oscillator1.connect(gainNode);
-      oscillator2.connect(gainNode);
-      gainNode.connect(ctx.destination);
-
-      // Pleasant chord frequencies (C major-ish)
-      oscillator1.frequency.value = 523.25; // C5
-      oscillator2.frequency.value = 659.25; // E5
-
-      oscillator1.type = 'sine';
-      oscillator2.type = 'sine';
-
-      // Gentle envelope
-      gainNode.gain.setValueAtTime(0, now);
-      gainNode.gain.linearRampToValueAtTime(0.15, now + 0.05);
-      gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
-
-      oscillator1.start(now);
-      oscillator2.start(now);
-      oscillator1.stop(now + 0.5);
-      oscillator2.stop(now + 0.5);
+      // Bright "pikon!" — quick two-note ascending blip (game-style correct cue)
+      const notes = [
+        { freq: 988, start: 0, dur: 0.09, peak: 0.22 },   // B5
+        { freq: 1568, start: 0.07, dur: 0.18, peak: 0.28 }, // G6
+      ];
+      notes.forEach(({ freq, start, dur, peak }) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(freq, now + start);
+        // Tiny upward glide for the "pi" sparkle
+        osc.frequency.exponentialRampToValueAtTime(freq * 1.06, now + start + dur * 0.6);
+        gain.gain.setValueAtTime(0.0001, now + start);
+        gain.gain.exponentialRampToValueAtTime(peak, now + start + 0.012);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + start + dur);
+        osc.connect(gain).connect(ctx.destination);
+        osc.start(now + start);
+        osc.stop(now + start + dur + 0.02);
+      });
     } catch (error) {
       console.log('Could not play success sound:', error);
     }
