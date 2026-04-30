@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Volume2, Loader2, BookOpen, PenLine } from 'lucide-react';
+import { Volume2, Loader2, BookOpen, PenLine, ChevronLeft, ChevronRight } from 'lucide-react';
 import { SandyLoader } from '@/components/lottie/SandyLoader';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -10,7 +10,7 @@ import { HighlightableText } from '@/components/HighlightableText';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { normalizeForExpression } from '@/lib/textComparison';
 import { persistDiarySentences } from '@/lib/practiceBuilder';
 import {
@@ -33,6 +33,10 @@ export default function DiaryReview() {
   const [isLoading, setIsLoading] = useState(true);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const [highlightedExpression, setHighlightedExpression] = useState<string | null>(null);
+  // Sibling diaries for swipe navigation (sorted desc by date).
+  const [allEntries, setAllEntries] = useState<{ id: string; date: string }[]>([]);
+  const [swipeDx, setSwipeDx] = useState(0);
+  const touchRef = useRef<{ x: number; y: number; locked: 'h' | 'v' | null } | null>(null);
 
   // Correction state
   const [showCorrection, setShowCorrection] = useState(false);
@@ -44,6 +48,62 @@ export default function DiaryReview() {
       fetchDiaryEntry();
     }
   }, [user, diaryId]);
+
+  // Load sibling list once per user — used for swipe navigation.
+  useEffect(() => {
+    (async () => {
+      if (!user) return;
+      const { data } = await supabase
+        .from('diary_entries')
+        .select('id, date')
+        .eq('user_id', user.id)
+        .order('date', { ascending: false });
+      setAllEntries((data || []) as { id: string; date: string }[]);
+    })();
+  }, [user]);
+
+  const currentIdx = allEntries.findIndex((e) => e.id === diaryId);
+  const prevEntry = currentIdx >= 0 ? allEntries[currentIdx + 1] : undefined; // older
+  const nextEntry = currentIdx > 0 ? allEntries[currentIdx - 1] : undefined; // newer
+
+  const goSibling = useCallback(
+    (target?: { id: string; date: string }) => {
+      if (!target) return;
+      navigate(`/review?diaryId=${target.id}&date=${target.date}`);
+    },
+    [navigate],
+  );
+
+  // Touch handlers — horizontal swipe to flip between diaries.
+  const onTouchStart = (e: React.TouchEvent) => {
+    const t = e.touches[0];
+    touchRef.current = { x: t.clientX, y: t.clientY, locked: null };
+  };
+  const onTouchMove = (e: React.TouchEvent) => {
+    const s = touchRef.current;
+    if (!s) return;
+    const t = e.touches[0];
+    const dx = t.clientX - s.x;
+    const dy = t.clientY - s.y;
+    if (s.locked === null) {
+      if (Math.abs(dx) > 10 || Math.abs(dy) > 10) {
+        s.locked = Math.abs(dx) > Math.abs(dy) ? 'h' : 'v';
+      }
+    }
+    if (s.locked === 'h') {
+      setSwipeDx(Math.max(-160, Math.min(160, dx)));
+    }
+  };
+  const onTouchEnd = () => {
+    const s = touchRef.current;
+    touchRef.current = null;
+    if (!s) return;
+    if (s.locked === 'h') {
+      if (swipeDx > 80 && prevEntry) goSibling(prevEntry);
+      else if (swipeDx < -80 && nextEntry) goSibling(nextEntry);
+    }
+    setSwipeDx(0);
+  };
 
   const fetchDiaryEntry = async () => {
     if (!user || !diaryId) return;
@@ -230,18 +290,82 @@ export default function DiaryReview() {
     );
   }
 
-  const dateLabel = diaryDate ? format(new Date(diaryDate), 'MMMM d, yyyy') : 'Today';
+  const d = diaryDate ? parseISO(diaryDate) : new Date();
 
   return (
-    <div className="min-h-screen flex flex-col p-6 safe-bottom">
-      <header className="flex items-center gap-4 mb-6">
-        <Button variant="ghost" size="icon" onClick={() => navigate('/')}>
-          <ArrowLeft className="w-5 h-5" />
-        </Button>
-        <div>
-          <h1 className="font-bold text-xl">Review Diary</h1>
-          <p className="text-sm text-muted-foreground">{dateLabel}</p>
+    <div
+      className="min-h-screen flex flex-col px-6 pt-6 pb-24 safe-bottom"
+      onTouchStart={onTouchStart}
+      onTouchMove={onTouchMove}
+      onTouchEnd={onTouchEnd}
+      style={{
+        transform: swipeDx ? `translateX(${swipeDx * 0.5}px)` : undefined,
+        transition: swipeDx ? 'none' : 'transform 0.25s ease-out',
+      }}
+    >
+      {/* Stylish date header */}
+      <header className="relative mb-6 rounded-3xl overflow-hidden border border-border/60 bg-card/60 px-5 py-5">
+        <div
+          className="absolute inset-0 pointer-events-none opacity-70"
+          style={{
+            background:
+              'radial-gradient(circle at 20% 0%, hsl(var(--primary) / 0.22), transparent 55%)',
+          }}
+        />
+        <div className="relative flex items-center justify-between gap-3">
+          <button
+            type="button"
+            onClick={() => goSibling(prevEntry)}
+            disabled={!prevEntry}
+            aria-label="Older diary"
+            className={cn(
+              'shrink-0 w-9 h-9 rounded-full flex items-center justify-center border border-border/60 bg-background/40',
+              !prevEntry && 'opacity-30 pointer-events-none',
+              prevEntry && 'hover:bg-background/70 transition-colors',
+            )}
+          >
+            <ChevronLeft className="w-5 h-5" />
+          </button>
+
+          <div className="flex-1 text-center">
+            <p className="text-[10px] uppercase tracking-[0.25em] text-muted-foreground">
+              {format(d, 'EEEE')}
+            </p>
+            <div className="mt-1 flex items-baseline justify-center gap-2">
+              <span
+                className="text-5xl font-black leading-none text-foreground tabular-nums"
+                style={{ textShadow: '0 4px 18px hsl(var(--primary) / 0.35)' }}
+              >
+                {format(d, 'd')}
+              </span>
+              <span className="text-lg font-semibold text-muted-foreground tracking-wide">
+                {format(d, 'MMM')}
+              </span>
+            </div>
+            <p className="mt-1 text-[11px] text-muted-foreground tracking-widest">
+              {format(d, 'yyyy')}
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => goSibling(nextEntry)}
+            disabled={!nextEntry}
+            aria-label="Newer diary"
+            className={cn(
+              'shrink-0 w-9 h-9 rounded-full flex items-center justify-center border border-border/60 bg-background/40',
+              !nextEntry && 'opacity-30 pointer-events-none',
+              nextEntry && 'hover:bg-background/70 transition-colors',
+            )}
+          >
+            <ChevronRight className="w-5 h-5" />
+          </button>
         </div>
+        {(prevEntry || nextEntry) && (
+          <p className="relative mt-3 text-center text-[10px] text-muted-foreground/70">
+            ← swipe between diaries →
+          </p>
+        )}
       </header>
 
       <div className="flex-1 space-y-4 overflow-y-auto">
@@ -377,9 +501,6 @@ export default function DiaryReview() {
           onClick={() => navigate(`/quiz?diaryId=${diaryId}&date=${diaryDate}`)}
         >
           🏋️ 並び替え問題に挑戦
-        </Button>
-        <Button variant="ghost" size="sm" className="w-full" onClick={() => navigate('/')}>
-          Back to Home
         </Button>
       </div>
     </div>

@@ -16,7 +16,7 @@ interface VoiceRecordButtonProps {
 export function VoiceRecordButton({
   onTranscript,
   className,
-  iconSize = 36,
+  iconSize = 72,
 }: VoiceRecordButtonProps) {
   const { isListening, transcript, isSupported, startListening, stopListening, resetTranscript } =
     useSpeechRecognition();

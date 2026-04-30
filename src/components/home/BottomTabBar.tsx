@@ -2,6 +2,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { Brain, Sparkles, Shuffle, TrendingUp, List, CalendarDays } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useUISound } from '@/hooks/useUISound';
+import { usePendingRecallCount } from '@/hooks/usePendingRecallCount';
 
 interface BottomTabBarProps {
   /** Optional in-page tab (calendar/list) handlers for the home screen. */
@@ -18,6 +19,7 @@ export function BottomTabBar({ homeTab, onHomeTabChange }: BottomTabBarProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const { playNavigate } = useUISound();
+  const pendingRecall = usePendingRecallCount();
 
   const isHome = location.pathname === '/';
 
@@ -38,6 +40,7 @@ export function BottomTabBar({ homeTab, onHomeTabChange }: BottomTabBarProps) {
     icon: typeof Brain;
     onClick: () => void;
     active: boolean;
+    badge?: number;
   }> = [
     {
       key: 'calendar',
@@ -59,6 +62,7 @@ export function BottomTabBar({ homeTab, onHomeTabChange }: BottomTabBarProps) {
       icon: Brain,
       onClick: () => go('/quiz'),
       active: location.pathname.startsWith('/quiz'),
+      badge: pendingRecall,
     },
     {
       key: 'expressions',
@@ -107,7 +111,21 @@ export function BottomTabBar({ homeTab, onHomeTabChange }: BottomTabBarProps) {
                     : 'text-muted-foreground hover:text-foreground',
                 )}
               >
-                <Icon className="w-5 h-5" strokeWidth={item.active ? 2.4 : 2} />
+                <span className="relative inline-flex">
+                  <Icon className="w-5 h-5" strokeWidth={item.active ? 2.4 : 2} />
+                  {item.badge && item.badge > 0 ? (
+                    <span
+                      className={cn(
+                        'absolute -top-1.5 -right-2 min-w-[16px] h-[16px] px-1 rounded-full',
+                        'bg-destructive text-destructive-foreground',
+                        'text-[10px] font-bold leading-none flex items-center justify-center',
+                        'shadow-[0_0_8px_hsl(var(--destructive)/0.6)] animate-pulse ring-2 ring-background',
+                      )}
+                    >
+                      {item.badge > 9 ? '9+' : item.badge}
+                    </span>
+                  ) : null}
+                </span>
                 <span className="text-[10px] font-medium">{item.label}</span>
               </button>
             </li>

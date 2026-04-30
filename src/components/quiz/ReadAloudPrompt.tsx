@@ -1,5 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { Mic, SkipForward } from 'lucide-react';
+import Lottie from 'lottie-react';
+import voiceAnim from '@/assets/voice.json';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { useSpeechRecognition } from '@/hooks/useSpeechRecognition';
@@ -118,17 +120,26 @@ export function ReadAloudPrompt({ englishText, japaneseText, onComplete, onSkip 
         onClick={handleMicPress}
         disabled={passed || !isSupported}
         className={cn(
-          'w-20 h-20 rounded-full flex items-center justify-center transition-all duration-300 mb-6',
+          'relative w-40 h-40 rounded-full flex items-center justify-center transition-all duration-300 mb-6',
           isListening
-            ? 'bg-destructive/20 shadow-lg shadow-destructive/20 animate-pulse'
-            : 'bg-primary/20 hover:bg-primary/30 shadow-md',
+            ? 'bg-primary/15 ring-2 ring-primary/50'
+            : 'bg-primary text-primary-foreground shadow-lg shadow-primary/30 hover:shadow-primary/50',
           passed && 'opacity-50'
         )}
       >
-        <Mic className={cn(
-          'w-8 h-8',
-          isListening ? 'text-destructive' : 'text-primary'
-        )} />
+        {!isListening && (
+          <span className="absolute inset-0 rounded-full bg-primary/30 blur-xl -z-10" />
+        )}
+        {isListening ? (
+          <Lottie
+            animationData={voiceAnim}
+            loop
+            autoplay
+            style={{ width: 160, height: 160 }}
+          />
+        ) : (
+          <Mic style={{ width: 72, height: 72 }} />
+        )}
       </button>
 
       {/* Skip */}

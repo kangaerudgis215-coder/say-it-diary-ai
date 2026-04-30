@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ChatBubble } from '@/components/ChatBubble';
 import { VoiceRecordButton } from '@/components/VoiceRecordButton';
+import { SandyLoader } from '@/components/lottie/SandyLoader';
 import { HelpCircle } from 'lucide-react';
 import {
   Dialog,
@@ -188,6 +189,20 @@ export default function Chat() {
       };
 
       setMessages(prev => [...prev, assistantMessage]);
+
+      // Speak the AI reply aloud for an immersive feel
+      try {
+        if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+          window.speechSynthesis.cancel();
+          const u = new SpeechSynthesisUtterance(assistantMessage.content);
+          u.lang = 'en-US';
+          u.rate = 0.95;
+          u.pitch = 1.05;
+          window.speechSynthesis.speak(u);
+        }
+      } catch {
+        // ignore TTS errors
+      }
 
       // Save assistant message
       await supabase.from('messages').insert({
@@ -399,6 +414,12 @@ export default function Chat() {
 
   return (
     <div className="min-h-screen flex flex-col">
+      {/* Full-screen loader while generating the diary */}
+      {isGeneratingDiary && (
+        <div className="fixed inset-0 z-50 bg-background/85 backdrop-blur-sm flex items-center justify-center">
+          <SandyLoader label="日記を生成中..." />
+        </div>
+      )}
       {/* Header */}
       <header className="sticky top-0 z-10 glass border-b border-border p-4">
         <div className="flex items-center justify-between">
@@ -564,8 +585,8 @@ export default function Chat() {
         <div className="flex justify-center">
           <VoiceRecordButton
             onTranscript={handleVoiceTranscript}
-            className="h-20 w-20"
-            iconSize={36}
+            className="h-32 w-32"
+            iconSize={72}
           />
         </div>
       </div>
