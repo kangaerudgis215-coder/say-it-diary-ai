@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Loader2 } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
+import { SandyLoader } from '@/components/lottie/SandyLoader';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
@@ -131,10 +132,7 @@ export function QuizSession() {
 
   if (phase === 'loading') {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center p-6">
-        <Loader2 className="w-8 h-8 animate-spin text-primary mb-4" />
-        <p className="text-muted-foreground">問題を準備中...</p>
-      </div>
+      <SandyLoader fullscreen label="問題を準備中..." />
     );
   }
 
