@@ -290,7 +290,7 @@ export function ReviewHub() {
     <div className="min-h-screen flex flex-col p-5 safe-bottom overflow-hidden">
       <header className="mb-5 space-y-4">
         <div className="flex items-center justify-between">
-        <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
+        <Button variant="ghost" size="icon" onClick={() => navigate('/')} aria-label="Home">
           <ArrowLeft className="w-5 h-5" />
         </Button>
           <div className="flex items-center gap-1">

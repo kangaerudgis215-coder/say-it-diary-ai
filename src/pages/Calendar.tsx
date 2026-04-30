@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { DiaryCalendar } from '@/components/DiaryCalendar';
 import { RecallHistory } from '@/components/RecallHistory';
 import { DiaryExpressions } from '@/components/DiaryExpressions';
+import { DotLottieReact } from '@lottiefiles/dotlottie-react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
 import { format, isToday, isFuture, parseISO } from 'date-fns';
@@ -114,12 +115,26 @@ export default function Calendar() {
           )}
 
           <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3 flex-1 min-w-0">
               <h3 className="font-bold">
                 {format(new Date(selectedEntry.date), 'MMMM d, yyyy')}
               </h3>
               {selectedEntry.full_diary_challenge_completed && (
                 <span className="text-yellow-500 text-sm">⭐ Mastered</span>
+              )}
+              {recallHistory.length > 0 && (
+                <div
+                  className="ml-auto -my-2 -mr-1 shrink-0 drop-shadow-[0_0_12px_hsl(var(--primary)/0.45)]"
+                  aria-label="Recall completed"
+                  title="Recall completed"
+                >
+                  <DotLottieReact
+                    src="/anim/winner.lottie"
+                    autoplay
+                    loop
+                    style={{ width: 72, height: 72 }}
+                  />
+                </div>
               )}
             </div>
             <Button
