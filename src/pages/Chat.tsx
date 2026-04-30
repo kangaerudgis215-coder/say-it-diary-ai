@@ -536,32 +536,37 @@ export default function Chat() {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input Area */}
-      <div className="sticky bottom-0 glass border-t border-border p-4 safe-bottom">
-        <div className="flex items-center gap-3">
-          <VoiceRecordButton onTranscript={handleVoiceTranscript} />
-          
-          <div className="flex-1 relative">
-            <Input
-              ref={inputRef}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && sendMessage(input)}
-              placeholder="Type or speak in English..."
-              className="pr-12 h-12 rounded-xl bg-muted border-0"
-              disabled={isLoading}
-            />
-            
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => sendMessage(input)}
-              disabled={!input.trim() || isLoading}
-              className="absolute right-1 top-1/2 -translate-y-1/2"
-            >
-              <Send className="w-5 h-5" />
-            </Button>
-          </div>
+      {/* Input Area — speaking-first layout */}
+      <div className="sticky bottom-0 glass border-t border-border px-4 pt-3 pb-5 safe-bottom">
+        {/* Compact text input row (kept for typing fallback) */}
+        <div className="relative mb-4">
+          <Input
+            ref={inputRef}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && sendMessage(input)}
+            placeholder="Type or tap the mic to speak…"
+            className="pr-12 h-11 rounded-xl bg-muted border-0 text-sm"
+            disabled={isLoading}
+          />
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => sendMessage(input)}
+            disabled={!input.trim() || isLoading}
+            className="absolute right-1 top-1/2 -translate-y-1/2"
+          >
+            <Send className="w-5 h-5" />
+          </Button>
+        </div>
+
+        {/* Big centered mic — the primary action */}
+        <div className="flex justify-center">
+          <VoiceRecordButton
+            onTranscript={handleVoiceTranscript}
+            className="h-20 w-20"
+            iconSize={36}
+          />
         </div>
       </div>
     </div>
