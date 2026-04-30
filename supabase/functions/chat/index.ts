@@ -342,18 +342,27 @@ serve(async (req) => {
 
     const isJsonType = ["generate_diary", "select_sentences", "generate_quiz", "conversation", "regenerate_diary", "cat_comments"].includes(type);
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
-        messages: aiMessages,
-        ...(isJsonType && { response_format: { type: "json_object" } }),
-      }),
-    });
+    const callGateway = () =>
+      fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${LOVABLE_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "google/gemini-3-flash-preview",
+          messages: aiMessages,
+          ...(isJsonType && { response_format: { type: "json_object" } }),
+        }),
+      });
+
+    let response = await callGateway();
+    // Retry once on transient upstream errors (e.g., Cloudflare 502/503/504)
+    if (!response.ok && response.status >= 500) {
+      console.warn("AI gateway transient error, retrying:", response.status);
+      await new Promise((r) => setTimeout(r, 800));
+      response = await callGateway();
+    }
 
     if (!response.ok) {
       if (response.status === 429) {
@@ -369,11 +378,20 @@ serve(async (req) => {
         );
       }
       const errorText = await response.text();
-      console.error("AI gateway error:", response.status, errorText);
-      return new Response(JSON.stringify({ error: "AI service error" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      console.error("AI gateway error:", response.status, errorText.slice(0, 500));
+      const isUpstream = response.status >= 500;
+      return new Response(
+        JSON.stringify({
+          error: isUpstream
+            ? "AIサービスが一時的に応答していません。少し時間をおいて再度お試しください。"
+            : "AI service error",
+          fallback: isUpstream,
+        }),
+        {
+          status: isUpstream ? 503 : 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
     }
 
     const data = await response.json();
