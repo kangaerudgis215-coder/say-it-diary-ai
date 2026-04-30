@@ -1,8 +1,11 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import Lottie from 'lottie-react';
 import { BookOpen, Share2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useSuccessSound } from '@/hooks/useSuccessSound';
+import { ConfettiBurst } from '@/components/lottie/ConfettiBurst';
+import fireAnimation from '@/assets/fire.json';
 
 interface CompletionScreenProps {
   streak: number;
@@ -18,66 +21,39 @@ function getStreakMessage(streak: number): string {
   return '🌱 今日が新しいスタート！一歩ずつ進もう！';
 }
 
-interface Star {
-  id: number;
-  x: number;
-  y: number;
-  size: number;
-  speed: number;
-  opacity: number;
-  delay: number;
+function useCountUp(target: number, duration = 1400, startDelay = 350) {
+  const [value, setValue] = useState(0);
+  const startedRef = useRef(false);
+  useEffect(() => {
+    startedRef.current = false;
+    setValue(0);
+    const startTimer = setTimeout(() => {
+      startedRef.current = true;
+      let raf = 0;
+      let t0: number | null = null;
+      const step = (ts: number) => {
+        if (t0 === null) t0 = ts;
+        const p = Math.min(1, (ts - t0) / duration);
+        const eased = 1 - Math.pow(1 - p, 3);
+        setValue(Math.round(target * eased));
+        if (p < 1) raf = requestAnimationFrame(step);
+      };
+      raf = requestAnimationFrame(step);
+      return () => cancelAnimationFrame(raf);
+    }, startDelay);
+    return () => clearTimeout(startTimer);
+  }, [target, duration, startDelay]);
+  return value;
 }
 
-function ShootingStars() {
-  const stars = useMemo<Star[]>(() =>
-    Array.from({ length: 40 }).map((_, i) => ({
-      id: i,
-      x: Math.random() * 100,
-      y: Math.random() * 100,
-      size: Math.random() * 2 + 1,
-      speed: Math.random() * 3 + 2,
-      opacity: Math.random() * 0.7 + 0.3,
-      delay: Math.random() * 5,
-    })),
-  []);
-
-  return (
-    <div className="absolute inset-0 overflow-hidden">
-      {stars.map((star) => (
-        <div
-          key={star.id}
-          className="absolute rounded-full bg-white"
-          style={{
-            left: `${star.x}%`,
-            top: `${star.y}%`,
-            width: star.size,
-            height: star.size,
-            opacity: star.opacity,
-            animation: `twinkle ${star.speed}s ease-in-out ${star.delay}s infinite alternate`,
-          }}
-        />
-      ))}
-      {/* Shooting stars */}
-      {[0, 1, 2].map((i) => (
-        <div
-          key={`shoot-${i}`}
-          className="absolute w-0.5 h-8 bg-gradient-to-b from-white to-transparent"
-          style={{
-            left: `${20 + i * 30}%`,
-            top: '-10%',
-            animation: `shooting-star ${3 + i}s linear ${i * 2.5}s infinite`,
-            opacity: 0.6,
-          }}
-        />
-      ))}
-    </div>
-  );
-}
+const WEEK_LABELS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
 export function CompletionScreen({ streak, expressions }: CompletionScreenProps) {
   const navigate = useNavigate();
   const { playBigSuccess } = useSuccessSound();
   const [show, setShow] = useState(false);
+  const display = useCountUp(streak);
+  const todayDow = (new Date().getDay() + 6) % 7; // Mon=0..Sun=6
 
   useEffect(() => {
     playBigSuccess();
@@ -99,38 +75,84 @@ export function CompletionScreen({ streak, expressions }: CompletionScreenProps)
 
   return (
     <div
-      className="min-h-screen flex flex-col items-center justify-center p-6 relative"
-      style={{ background: 'linear-gradient(180deg, hsl(222 60% 8%) 0%, hsl(230 50% 12%) 50%, hsl(240 40% 6%) 100%)' }}
+      className="min-h-screen flex flex-col items-center justify-between p-6 relative overflow-hidden bg-background"
     >
-      <ShootingStars />
+      {/* Soft warm radial glow */}
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          background:
+            'radial-gradient(ellipse at 50% 35%, hsl(38 92% 55% / 0.28), transparent 60%)',
+        }}
+      />
+      <ConfettiBurst active={show} duration={2400} />
 
-      <div className={`relative z-10 flex flex-col items-center text-center transition-all duration-700 ${show ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
-        {/* Streak */}
-        <div className="mb-4">
-          <p className="text-sm text-muted-foreground mb-2">連続記録</p>
-          <p
-            className="text-7xl font-bold"
-            style={{
-              background: 'linear-gradient(135deg, hsl(38 92% 60%), hsl(45 100% 70%), hsl(38 92% 60%))',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              filter: 'drop-shadow(0 0 20px hsl(38 92% 60% / 0.4))',
-            }}
-          >
-            {streak}
-          </p>
-          <p className="text-lg text-muted-foreground">日</p>
+      <div className="flex-1" />
+
+      <div
+        className={`relative z-10 flex flex-col items-center text-center transition-all duration-700 ${
+          show ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-6 scale-95'
+        }`}
+      >
+        {/* Fire animation */}
+        <div className="w-48 h-48 streak-glow">
+          <Lottie animationData={fireAnimation} loop autoplay className="w-full h-full" />
+        </div>
+
+        {/* Big count-up number */}
+        <div
+          className="-mt-2 text-[7rem] leading-none font-black tabular-nums"
+          style={{
+            background:
+              'linear-gradient(135deg, hsl(38 95% 62%), hsl(20 95% 58%))',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            filter: 'drop-shadow(0 6px 24px hsl(38 92% 55% / 0.45))',
+          }}
+        >
+          {display}
+        </div>
+        <div
+          className="mt-1 text-xl font-extrabold tracking-widest uppercase"
+          style={{ color: 'hsl(38 92% 60%)' }}
+        >
+          {streak === 1 ? 'Day Streak!' : 'Day Streak!'}
         </div>
 
         {/* Message */}
-        <p className="text-lg font-medium text-foreground mb-8 max-w-xs">
+        <p className="mt-4 text-base font-medium text-foreground/90 max-w-xs">
           {getStreakMessage(streak)}
         </p>
 
+        {/* Weekday checks */}
+        <div className="mt-6 flex gap-2">
+          {WEEK_LABELS.map((d, i) => {
+            const active = i <= todayDow;
+            return (
+              <div
+                key={i}
+                className={`w-9 h-12 rounded-xl flex flex-col items-center justify-center text-[10px] font-bold transition-all ${
+                  active
+                    ? 'bg-gradient-to-b from-amber-400/90 to-orange-500/90 text-white shadow-[0_4px_14px_hsl(38_92%_55%/0.4)]'
+                    : 'bg-card/60 border border-border/60 text-muted-foreground'
+                }`}
+                style={{
+                  transform: show ? 'translateY(0)' : 'translateY(8px)',
+                  opacity: show ? 1 : 0,
+                  transition: `all 400ms ease-out ${600 + i * 70}ms`,
+                }}
+              >
+                <span>{d}</span>
+                <span className="mt-1 text-base leading-none">{active ? '✓' : '·'}</span>
+              </div>
+            );
+          })}
+        </div>
+
         {/* Expressions learned */}
         {expressions.length > 0 && (
-          <div className="w-full max-w-sm mb-8">
-            <p className="text-sm text-muted-foreground mb-3">今日の表現</p>
+          <div className="w-full max-w-sm mt-8">
+            <p className="text-xs text-muted-foreground mb-3 tracking-wider uppercase">今日の表現</p>
             <div className="flex flex-wrap gap-2 justify-center">
               {expressions.map((expr, i) => (
                 <span
@@ -143,9 +165,14 @@ export function CompletionScreen({ streak, expressions }: CompletionScreenProps)
             </div>
           </div>
         )}
+      </div>
 
-        {/* Actions */}
-        <div className="space-y-3 w-full max-w-xs">
+      {/* Actions */}
+      <div
+        className={`relative z-10 w-full max-w-xs space-y-3 mt-8 transition-all duration-700 delay-300 ${
+          show ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'
+        }`}
+      >
           <Button
             className="w-full"
             onClick={() => navigate('/expressions')}
@@ -170,7 +197,6 @@ export function CompletionScreen({ streak, expressions }: CompletionScreenProps)
           >
             ホームに戻る
           </Button>
-        </div>
       </div>
     </div>
   );
