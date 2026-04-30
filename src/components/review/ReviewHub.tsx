@@ -5,6 +5,7 @@ import { useState, useEffect, useCallback, useRef, type TouchEvent } from 'react
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Volume2, Loader2, BookOpen, PenLine, ChevronLeft, ChevronRight, CalendarDays } from 'lucide-react';
 import { SandyLoader } from '@/components/lottie/SandyLoader';
+import { DotLottieReact } from '@lottiefiles/dotlottie-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
@@ -34,6 +35,7 @@ export function ReviewHub() {
   const [highlightedExpression, setHighlightedExpression] = useState<string | null>(null);
   const [allEntries, setAllEntries] = useState<{ id: string; date: string; created_at: string }[]>([]);
   const [swipeDx, setSwipeDx] = useState(0);
+  const [recallCompleted, setRecallCompleted] = useState(false);
   const touchRef = useRef<{ x: number; y: number; dx: number; locked: 'h' | 'v' | null } | null>(null);
 
   // Correction state
@@ -84,6 +86,14 @@ export function ReviewHub() {
     const { data: exprs } = await supabase.from('expressions').select('*').eq('diary_entry_id', entry.id);
     const { valid } = partitionExpressionsForText(exprs || [], entry.content || '');
     setExpressions(valid);
+
+    // Check if user has completed at least one recall session for this diary
+    const { count } = await supabase
+      .from('recall_sessions')
+      .select('id', { count: 'exact', head: true })
+      .eq('diary_entry_id', entry.id)
+      .eq('completed', true);
+    setRecallCompleted((count ?? 0) > 0);
 
     setIsLoading(false);
   };
@@ -316,6 +326,20 @@ export function ReviewHub() {
               <h1 className="mt-1 text-2xl font-black leading-tight text-foreground">{weekdayLabel}</h1>
               <p className="text-sm font-medium text-muted-foreground">{monthLabel} {dayLabel}, {yearLabel}</p>
             </div>
+            {recallCompleted && (
+              <div
+                className="ml-auto shrink-0 drop-shadow-[0_0_14px_hsl(var(--primary)/0.55)]"
+                aria-label="Recall completed"
+                title="Recall completed"
+              >
+                <DotLottieReact
+                  src="/anim/winner.lottie"
+                  autoplay
+                  loop
+                  style={{ width: 84, height: 84 }}
+                />
+              </div>
+            )}
           </div>
         </div>
       </header>

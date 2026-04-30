@@ -1,65 +1,27 @@
-import { useCallback, useRef } from 'react';
+import { useCallback } from 'react';
 
-// Lightweight UI tap sound using Web Audio API
+function playFile(src: string, volume = 0.4) {
+  try {
+    const a = new Audio(src);
+    a.volume = volume;
+    void a.play().catch(() => {});
+  } catch {
+    /* no-op */
+  }
+}
+
+/**
+ * Universal tap/navigate sound — used for every interactive control
+ * (buttons, tab bar, FAB, theme toggle, etc.).
+ */
 export function useUISound() {
-  const audioContextRef = useRef<AudioContext | null>(null);
-
-  const getCtx = () => {
-    if (!audioContextRef.current) {
-      audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
-    }
-    const ctx = audioContextRef.current;
-    if (ctx.state === 'suspended') ctx.resume();
-    return ctx;
-  };
-
   const playTap = useCallback(() => {
-    try {
-      const ctx = getCtx();
-      const now = ctx.currentTime;
-
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-
-      osc.frequency.value = 880;
-      osc.type = 'sine';
-
-      gain.gain.setValueAtTime(0, now);
-      gain.gain.linearRampToValueAtTime(0.08, now + 0.01);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
-
-      osc.start(now);
-      osc.stop(now + 0.15);
-    } catch {
-      // silently fail
-    }
+    playFile('/sounds/tap.mp3', 0.4);
   }, []);
 
+  // Same sound for navigation, kept as alias for compatibility.
   const playNavigate = useCallback(() => {
-    try {
-      const ctx = getCtx();
-      const now = ctx.currentTime;
-
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-
-      osc.frequency.setValueAtTime(600, now);
-      osc.frequency.linearRampToValueAtTime(900, now + 0.08);
-      osc.type = 'sine';
-
-      gain.gain.setValueAtTime(0, now);
-      gain.gain.linearRampToValueAtTime(0.07, now + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
-
-      osc.start(now);
-      osc.stop(now + 0.18);
-    } catch {
-      // silently fail
-    }
+    playFile('/sounds/tap.mp3', 0.45);
   }, []);
 
   return { playTap, playNavigate };

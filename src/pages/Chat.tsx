@@ -380,6 +380,15 @@ export default function Chat() {
         description: "Now let's review and memorize it!",
       });
 
+      // Triumphant chime on diary completion
+      try {
+        const a = new Audio('/sounds/diary-complete.mp3');
+        a.volume = 0.75;
+        void a.play().catch(() => {});
+      } catch {
+        /* no-op */
+      }
+
       // Get the diary entry ID and navigate to review page
       const { data: savedEntry } = await supabase
         .from('diary_entries')
