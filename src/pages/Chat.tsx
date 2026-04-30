@@ -585,8 +585,8 @@ export default function Chat() {
         <div className="flex justify-center">
           <VoiceRecordButton
             onTranscript={handleVoiceTranscript}
-            className="h-20 w-20"
-            iconSize={36}
+            className="h-32 w-32"
+            iconSize={72}
           />
         </div>
       </div>
