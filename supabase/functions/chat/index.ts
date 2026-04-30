@@ -5,6 +5,45 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+function extractJson(response: string): unknown {
+  let cleaned = String(response ?? "")
+    .replace(/```json\s*/gi, "")
+    .replace(/```\s*/g, "")
+    .trim();
+
+  const startIdx = cleaned.search(/[\{\[]/);
+  if (startIdx === -1) throw new Error("No JSON found in response");
+  const startChar = cleaned[startIdx];
+  const endChar = startChar === "[" ? "]" : "}";
+
+  // Walk forward tracking string/escape state and brace depth to find true end
+  let depth = 0;
+  let inStr = false;
+  let escape = false;
+  let endIdx = -1;
+  for (let i = startIdx; i < cleaned.length; i++) {
+    const ch = cleaned[i];
+    if (escape) { escape = false; continue; }
+    if (ch === "\\") { escape = true; continue; }
+    if (ch === '"') { inStr = !inStr; continue; }
+    if (inStr) continue;
+    if (ch === "{" || ch === "[") depth++;
+    else if (ch === "}" || ch === "]") {
+      depth--;
+      if (depth === 0 && ch === endChar) { endIdx = i; break; }
+    }
+  }
+  if (endIdx === -1) throw new Error("Unbalanced JSON in response");
+
+  let json = cleaned.substring(startIdx, endIdx + 1);
+  try {
+    return JSON.parse(json);
+  } catch {
+    json = json.replace(/,\s*}/g, "}").replace(/,\s*]/g, "]").replace(/[\x00-\x1F\x7F]/g, "");
+    return JSON.parse(json);
+  }
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
