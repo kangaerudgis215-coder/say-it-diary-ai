@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { ExpressionListItem } from '@/components/expressions/ExpressionListItem';
 import { ExpressionDetail } from '@/components/ExpressionDetail';
-import { bucketOf, BUCKET_META, SCENE_CATEGORIES } from '@/lib/mastery';
+import { bucketOf, SCENE_CATEGORIES } from '@/lib/mastery';
 import { Input } from '@/components/ui/input';
 
 export interface ExpressionWithDiary {
