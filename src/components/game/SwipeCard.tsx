@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { MasteryBucket } from '@/lib/mastery';
+import { useSuccessSound } from '@/hooks/useSuccessSound';
 
 interface SwipeCardProps {
   /** Front side (always shown). */
@@ -27,6 +28,7 @@ export function SwipeCard({ front, back, topHint, onSwipe, cardKey }: SwipeCardP
   const startRef = useRef<{ x: number; y: number } | null>(null);
   const draggingRef = useRef(false);
   const releasedRef = useRef(false);
+  const { playMastered } = useSuccessSound();
 
   // Reset on new card.
   useEffect(() => {
@@ -78,6 +80,7 @@ export function SwipeCard({ front, back, topHint, onSwipe, cardKey }: SwipeCardP
     const flyX = decided === 'mastered' ? 600 : decided === 'new' ? -600 : 0;
     const flyY = decided === 'learning' ? -700 : 0;
     setPos({ x: flyX, y: flyY });
+    if (decided === 'mastered') playMastered();
     setTimeout(() => onSwipe(decided), 220);
   };
 
