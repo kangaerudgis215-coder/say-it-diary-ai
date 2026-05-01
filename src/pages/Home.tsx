@@ -35,6 +35,23 @@ export default function Home() {
     if (user) fetchEntries();
   }, [user]);
 
+  // Refresh entries + recall completion when the tab regains focus or
+  // becomes visible again. This ensures the recall badge appears
+  // immediately after returning from the Recall page.
+  useEffect(() => {
+    if (!user) return;
+    const onFocus = () => fetchEntries();
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') fetchEntries();
+    };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [user]);
+
   const fetchEntries = async () => {
     if (!user) return;
     const { data } = await supabase
