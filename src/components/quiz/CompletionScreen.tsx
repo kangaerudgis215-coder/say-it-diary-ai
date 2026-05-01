@@ -9,6 +9,7 @@ import fireAnimation from '@/assets/fire.json';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
 import { format, subDays } from 'date-fns';
+import { useToast } from '@/hooks/use-toast';
 
 interface CompletionScreenProps {
   streak: number;
@@ -59,6 +60,7 @@ export function CompletionScreen({ streak, expressions, isPastDiary = false, dia
   const navigate = useNavigate();
   const { user } = useAuth();
   const { playBigSuccess } = useSuccessSound();
+  const { toast } = useToast();
   const [show, setShow] = useState(false);
   const display = useCountUp(streak);
   const todayDow = (new Date().getDay() + 6) % 7; // Mon=0..Sun=6
@@ -95,15 +97,45 @@ export function CompletionScreen({ streak, expressions, isPastDiary = false, dia
   }, [user, todayDow]);
 
   const handleShare = async () => {
-    const text = `Say It Diaryで${streak}日連続学習中！🔥 今日も英語日記を完了しました ✨ #SayItDiary #英語学習`;
-    if (navigator.share) {
+    const shareUrl = typeof window !== 'undefined' ? window.location.origin : 'https://say-it-diary-ai.lovable.app';
+    const exprLine = expressions.length > 0
+      ? `\n今日の表現: ${expressions.slice(0, 3).join(' / ')}`
+      : '';
+    const text = `AI英語日記 SO-KI で${streak}日連続学習中！🔥\n今日も英語日記を完了しました ✨${exprLine}\n#SOKI #SayItDiary #英語学習`;
+    const shareData: ShareData = {
+      title: 'AI英語日記 SO-KI',
+      text,
+      url: shareUrl,
+    };
+
+    // Prefer the native share sheet when available (mobile + supported desktops).
+    if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
       try {
-        await navigator.share({ text });
-      } catch {
-        // User cancelled
+        if (typeof (navigator as any).canShare === 'function' && !(navigator as any).canShare(shareData)) {
+          throw new Error('canShare returned false');
+        }
+        await navigator.share(shareData);
+        return;
+      } catch (err: any) {
+        // AbortError = user cancelled; do nothing
+        if (err && (err.name === 'AbortError' || /aborted/i.test(err.message || ''))) return;
+        // Otherwise fall through to clipboard fallback
       }
-    } else {
-      await navigator.clipboard.writeText(text);
+    }
+
+    // Clipboard fallback with toast confirmation
+    try {
+      await navigator.clipboard.writeText(`${text}\n${shareUrl}`);
+      toast({
+        title: 'シェア用テキストをコピーしました',
+        description: 'SNSに貼り付けてシェアしてね ✨',
+      });
+    } catch {
+      toast({
+        variant: 'destructive',
+        title: 'シェアに失敗しました',
+        description: 'もう一度お試しください。',
+      });
     }
   };
 
