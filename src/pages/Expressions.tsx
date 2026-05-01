@@ -105,9 +105,14 @@ export default function Expressions() {
     return map;
   }, [expressions]);
 
+  // Count expressions that need (re)tagging: missing OR currently parked in その他.
+  // Showing this count lets the user keep draining the その他 bucket via Auto-tag.
   const untaggedCount = useMemo(
-    () => expressions.filter(e => !e.scene_or_context).length,
-    [expressions]
+    () =>
+      expressions.filter(
+        (e) => !e.scene_or_context || e.scene_or_context === 'その他',
+      ).length,
+    [expressions],
   );
 
   // Per-category breakdown using the 6 fixed categories.
@@ -252,7 +257,7 @@ export default function Expressions() {
           {untaggedCount > 0 && (
             <div className="flex items-center justify-between p-3 bg-primary/10 rounded-xl mb-4">
               <span className="text-xs text-muted-foreground">
-                {untaggedCount} phrase{untaggedCount > 1 ? 's' : ''} need a category
+                {untaggedCount} 個の表現を再分類できます
               </span>
               <Button size="sm" variant="ghost" onClick={handleTagExpressions} disabled={isTagging}>
                 {isTagging ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-1" />}
