@@ -600,7 +600,7 @@ export default function Chat() {
         )}
 
         {/* Prominent CTA to finish diary */}
-        {hasEnoughContent && !isGeneratingDiary && !isLoading && (
+        {!isLocked && hasEnoughContent && !isGeneratingDiary && !isLoading && (
           <div className="flex justify-center py-4">
             <Button
               variant="glow"
