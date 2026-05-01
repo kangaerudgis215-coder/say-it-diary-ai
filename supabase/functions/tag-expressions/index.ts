@@ -61,7 +61,6 @@ serve(async (req) => {
       "verb phrase",
       "adjective phrase",
       "noun phrase",
-      "fixed phrase",
       "adverb phrase",
       "idiom",
       "other",
@@ -69,7 +68,10 @@ serve(async (req) => {
 
     const needsRetag = (expressions || []).filter((e: any) => {
       const sceneOk = SCENES.includes(e.scene_or_context);
-      const posOk = POS.includes(e.pos_or_type);
+      // Treat the now-retired "fixed phrase" tag as needing re-tagging so it
+      // gets folded into "idiom" automatically the next time the user runs
+      // Auto-tag.
+      const posOk = POS.includes(e.pos_or_type) && e.pos_or_type !== "fixed phrase";
       return !sceneOk || !posOk;
     });
 
@@ -108,7 +110,10 @@ For each expression below, assign:
    FALLBACK RULE: If unsure, default to "日常". NEVER output "その他" in this response.
 
 2. pos_or_type: A simple grammatical/phrase type label.
-   Options: "verb phrase", "adjective phrase", "noun phrase", "fixed phrase", "adverb phrase", "idiom", "other"
+   Options: "verb phrase", "adjective phrase", "noun phrase", "adverb phrase", "idiom", "other"
+   Note: "idiom" now also covers fixed/set phrases and common conversational
+   formulas (what used to be tagged "fixed phrase"). Use "idiom" for any
+   multi-word phrase whose meaning is conventional or non-literal.
 
 Expressions to classify:
 ${batch.map((exp, idx) => `${idx + 1}. Expression: "${exp.expression}"
@@ -172,8 +177,12 @@ Only return the JSON array, nothing else.`;
           const scene = specificScenes.includes(tag.scene_or_context)
             ? tag.scene_or_context
             : "日常";
-          const pos = (POS as readonly string[]).includes(tag.pos_or_type)
-            ? tag.pos_or_type
+          // Map the legacy "fixed phrase" label onto "idiom" if the model
+          // returns it, then validate against the active POS list.
+          const rawPos =
+            tag.pos_or_type === "fixed phrase" ? "idiom" : tag.pos_or_type;
+          const pos = (POS as readonly string[]).includes(rawPos)
+            ? rawPos
             : "other";
 
           const { error: updateError } = await supabase
