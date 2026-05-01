@@ -23,6 +23,7 @@ serve(async (req) => {
 
     let streakInfo = "";
     let expressionInfo = "";
+    let displayName = "";
 
     if (userId) {
       const { data: profile } = await supabase
@@ -32,7 +33,8 @@ serve(async (req) => {
         .maybeSingle();
 
       if (profile) {
-        streakInfo = `The user "${profile.display_name || 'learner'}" has a ${profile.current_streak || 0}-day streak and ${profile.total_diary_entries || 0} total diary entries.`;
+        displayName = (profile.display_name || "").trim();
+        streakInfo = `current_streak=${profile.current_streak || 0} ; total_diary_entries=${profile.total_diary_entries || 0}`;
       }
 
       // Unified mastery scale (0-100): mastered ≥ 80, learning 30-79, new < 30.
@@ -61,7 +63,7 @@ serve(async (req) => {
         ? Math.round(((masteredCount || 0) / totalCount) * 100)
         : 0;
 
-      expressionInfo = `They have encountered ${totalCount || 0} unique English phrases through their diaries: ${masteredCount || 0} mastered (〇), ${learningCount || 0} in progress (△). Overall mastery rate: ${pct}%.`;
+      expressionInfo = `total_expressions=${totalCount || 0} ; mastered=${masteredCount || 0} ; in_progress=${learningCount || 0} ; mastery_rate=${pct}%`;
     }
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
@@ -75,12 +77,39 @@ serve(async (req) => {
         messages: [
           {
             role: "system",
-            content: `You are a warm, encouraging language learning coach for a Japanese person learning English through daily diary journaling app called SO-KI.
-Generate a short daily encouragement message (2-3 sentences max). Be specific to their progress when stats are available. Mix English and occasional Japanese (using Japanese characters) naturally. Use emojis sparingly (1-2 max). Be genuine, not generic. Vary your tone: sometimes motivational, sometimes gentle, sometimes celebrating small wins.`
+            content: `あなたはアプリ「AI英語日記 SO-KI」のマスコット、ねむたげで穏やかな猫キャラクター（SO-KI）です。
+ユーザーは英語日記を続けている日本人。あなたは寄り添う友達のような口調で、日本語のショートメッセージを返します。
+
+【キャラ・口調】
+- ねむたげ・ゆるい・あたたかい。語尾に「にゃ」「にゃ〜」がたまに自然に入る（毎文には付けない）。
+- 1〜2文・合計60〜120字程度。絵文字は0〜2個まで。
+- 短い英単語をひと言だけ混ぜるのはOK（例: "nice" "good job"）。長い英文は禁止。
+
+【絶対ルール — 事実を作らない】
+- 与えられた数値（current_streak / total_diary_entries / mastered / in_progress / mastery_rate）以外を**絶対に断定しない**。
+- 連続日数を語るときは与えられた数字をそのまま使う。**それ以外の数字や事実を作らない**。
+- current_streak が 0 のときは「○日続いてるね」など**嘘の称賛をしない**。優しく次を促すだけ。
+- 「昨日の○○は楽しかったね」など、与えられていない過去の出来事・曜日・天気・場所・気分を勝手に作らない。
+- 数字に自信がない／違和感があるときは数字を出さず、ふんわり褒めるだけにする。
+
+【ユーザー名の扱い】
+- 名前が与えられたときだけ、たまに（必須ではない）呼びかけてよい。
+- 名前が空のときは絶対に名前らしきものを書かない。
+
+【トーン】
+- 説教しない・指示しない。寄り添うだけ。
+- ストリーク0のときは「焦らずまた話そうにゃ〜」のように優しく。
+- ストリークが続いているときは具体数を添えて静かに褒める。`
           },
           {
             role: "user",
-            content: `Generate today's encouragement message. ${streakInfo} ${expressionInfo} Today's date: ${new Date().toISOString().slice(0, 10)}.`
+            content: `今日の励ましメッセージを1つ、上のキャラ設定と「事実を作らない」ルールを厳守して、日本語のショートメッセージのみで返してください。
+
+【ユーザー名】${displayName || "(なし — 名前は使わないこと)"}
+【統計（これ以外の数字を作らないこと）】
+${streakInfo}
+${expressionInfo}
+【今日の日付】${new Date().toISOString().slice(0, 10)}`
           }
         ],
       }),
