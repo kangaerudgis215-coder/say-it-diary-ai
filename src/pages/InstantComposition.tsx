@@ -270,10 +270,17 @@ export default function InstantComposition() {
 
   // ============ DONE STAGE ============
   if (stage === 'done') {
+    const total = results.new + results.learning + results.mastered;
+    const sessionPerfect = total > 0 && results.new === 0 && results.learning === 0;
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center safe-bottom">
-        <Trophy className="w-16 h-16 text-primary mb-4" />
-        <h2 className="text-2xl font-bold mb-1">Session complete!</h2>
+      <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center safe-bottom relative">
+        <div className="relative">
+          {sessionPerfect && <SparklesAura />}
+          <Trophy className="w-16 h-16 text-primary mb-4 relative z-10" />
+        </div>
+        <h2 className="text-2xl font-bold mb-1 relative">
+          {sessionPerfect ? '100% — Perfect!' : 'Session complete!'}
+        </h2>
         <p className="text-sm text-muted-foreground mb-6">{RANGE_LABEL[range]}</p>
 
         <div className="grid grid-cols-3 gap-3 w-full max-w-xs mb-8">
@@ -330,6 +337,12 @@ export default function InstantComposition() {
             back={direction === 'en2jp' ? (current.meaning ?? '') : current.expression}
             topHint={direction === 'en2jp' ? 'EN → JP' : 'JP → EN'}
             onSwipe={handleSwipe}
+            quote={
+              current.sourceSentence && current.sourceDate
+                ? { text: current.sourceSentence, date: current.sourceDate }
+                : null
+            }
+            quoteSide={direction === 'en2jp' ? 'front' : 'back'}
           />
         ) : (
           <Loader2 className="w-6 h-6 animate-spin text-primary" />
