@@ -149,6 +149,8 @@ export default function Chat() {
 
   const sendMessage = async (content: string) => {
     if (!content.trim() || !conversationId || !user) return;
+    // Hard guard: never accept new messages once the diary is finalised.
+    if (existingDiaryId) return;
 
     const userMessage: Message = {
       id: Date.now().toString(),
