@@ -22,6 +22,12 @@ import { normalizeForExpression } from '@/lib/textComparison';
 import { persistDiarySentences } from '@/lib/practiceBuilder';
 import { format, parseISO, isToday as isTodayFn } from 'date-fns';
 
+const SILENCE_OPTIONS: { ms: number; label: string }[] = [
+  { ms: 1500, label: '1.5秒' },
+  { ms: 5000, label: '5秒' },
+  { ms: 10000, label: '10秒' },
+];
+
 interface Message {
   id: string;
   role: 'user' | 'assistant';
@@ -44,6 +50,17 @@ export default function Chat() {
   const [diaryDate, setDiaryDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
   const [showHelp, setShowHelp] = useState(false);
   const [diaryAlreadyExists, setDiaryAlreadyExists] = useState(false);
+  const [silenceMs, setSilenceMs] = useState<number>(() => {
+    if (typeof window === 'undefined') return 1500;
+    const saved = Number(window.localStorage.getItem('chat:silenceMs'));
+    return SILENCE_OPTIONS.some((o) => o.ms === saved) ? saved : 1500;
+  });
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('chat:silenceMs', String(silenceMs));
+    }
+  }, [silenceMs]);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -591,12 +608,36 @@ export default function Chat() {
         </div>
 
         {/* Big centered mic — the primary action */}
-        <div className="flex justify-center">
+        <div className="flex items-center justify-center gap-3">
           <VoiceRecordButton
             onTranscript={handleVoiceTranscript}
             className="h-32 w-32"
             iconSize={72}
+            autoStopSilenceMs={silenceMs}
           />
+          {/* Silence-cutoff selector */}
+          <div
+            className="flex flex-col gap-1"
+            aria-label="自動停止までの無音時間"
+          >
+            <span className="text-[10px] uppercase tracking-wider text-muted-foreground text-center">
+              無音
+            </span>
+            {SILENCE_OPTIONS.map((opt) => (
+              <button
+                key={opt.ms}
+                type="button"
+                onClick={() => setSilenceMs(opt.ms)}
+                className={`text-[11px] px-2.5 py-1 rounded-full border transition-colors ${
+                  silenceMs === opt.ms
+                    ? 'bg-primary text-primary-foreground border-primary shadow'
+                    : 'bg-muted/40 text-muted-foreground border-border hover:bg-muted'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
     </div>

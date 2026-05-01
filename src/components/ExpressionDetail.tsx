@@ -1,4 +1,4 @@
-import { Calendar, BookOpen, MessageSquare, Tag, Layers, Star, Trash2, Loader2, Archive, ArchiveRestore, BarChart3, ChevronDown } from 'lucide-react';
+import { Calendar, BookOpen, MessageSquare, Tag, Layers, Star, Trash2, Loader2, Archive, ArchiveRestore, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
@@ -132,35 +132,12 @@ export function ExpressionDetail({
         </div>
       )}
 
-      {/* Review stats */}
-      <div className="space-y-2">
-        <div className="flex items-center gap-2 text-xs text-muted-foreground uppercase tracking-wide">
-          <BarChart3 className="w-3 h-3" />
-          Practice Stats
-        </div>
-        <div className="grid grid-cols-3 gap-2 text-center">
-          <div className="bg-muted/30 rounded-lg p-2">
-            <p className="font-bold text-sm">{expression.review_count || 0}</p>
-            <p className="text-xs text-muted-foreground">Reviews</p>
-          </div>
-          <div className="bg-muted/30 rounded-lg p-2">
-            <p className="font-bold text-sm">{expression.correct_streak || 0}</p>
-            <p className="text-xs text-muted-foreground">Streak</p>
-          </div>
-          <div className="bg-muted/30 rounded-lg p-2">
-            <p className="font-bold text-sm">{expression.mastery_level}/3</p>
-            <p className="text-xs text-muted-foreground">Mastery</p>
-          </div>
-        </div>
-        {expression.last_reviewed_at && (
-          <p className="text-xs text-muted-foreground">
-            Last reviewed: {format(new Date(expression.last_reviewed_at), 'MMM d, yyyy')}
-          </p>
-        )}
-      </div>
-
-      {/* Mastery bar */}
+      {/* Mastery bar — the only at-a-glance "marubatsu" indicator */}
       <div className="space-y-1">
+        <div className="flex items-center justify-between text-xs text-muted-foreground">
+          <span>Mastery</span>
+          <span className="tabular-nums">{expression.mastery_level ?? 0}/3</span>
+        </div>
         <div className="h-2 bg-muted rounded-full overflow-hidden">
           <div
             className="h-full bg-primary rounded-full transition-all duration-300"

@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { ExpressionListItem } from '@/components/expressions/ExpressionListItem';
 import { ExpressionDetail } from '@/components/ExpressionDetail';
-import { bucketOf, SCENE_CATEGORIES } from '@/lib/mastery';
+import { bucketOf, SCENE_CATEGORIES, POS_CATEGORIES, POS_LABELS_JA, type PosCategory } from '@/lib/mastery';
 import { Input } from '@/components/ui/input';
 import { findSimilarExpressions, groupSimilarExpressions } from '@/lib/expressionSimilarity';
 
@@ -33,6 +33,7 @@ export interface ExpressionWithDiary {
 const PAGE_SIZE = 50;
 
 type ViewMode = 'overview' | 'category';
+type GroupBy = 'scene' | 'pos';
 
 export default function Expressions() {
   const { user } = useAuth();
@@ -42,6 +43,7 @@ export default function Expressions() {
   const [expressions, setExpressions] = useState<ExpressionWithDiary[]>([]);
   const [view, setView] = useState<ViewMode>('overview');
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
+  const [groupBy, setGroupBy] = useState<GroupBy>('scene');
   const [search, setSearch] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [isTagging, setIsTagging] = useState(false);
@@ -135,15 +137,29 @@ export default function Expressions() {
     [expressions],
   );
 
-  // Per-category breakdown using the 6 fixed categories.
-  const categoryStats = useMemo(() => {
-    const map = new Map<string, { total: number; mastered: number; learning: number; newCount: number }>();
-    SCENE_CATEGORIES.forEach(c => map.set(c, { total: 0, mastered: 0, learning: 0, newCount: 0 }));
-    for (const e of active) {
-      const key = (SCENE_CATEGORIES as readonly string[]).includes(e.scene_or_context as any)
+  // Per-category breakdown for whichever grouping is active.
+  const buckets = groupBy === 'scene'
+    ? (SCENE_CATEGORIES as readonly string[])
+    : (POS_CATEGORIES as readonly string[]);
+
+  const keyOf = (e: ExpressionWithDiary): string => {
+    if (groupBy === 'scene') {
+      return (SCENE_CATEGORIES as readonly string[]).includes(e.scene_or_context as any)
         ? (e.scene_or_context as string)
         : 'その他';
-      const s = map.get(key)!;
+    }
+    return (POS_CATEGORIES as readonly string[]).includes(e.pos_or_type as any)
+      ? (e.pos_or_type as string)
+      : 'other';
+  };
+
+  const categoryStats = useMemo(() => {
+    const map = new Map<string, { total: number; mastered: number; learning: number; newCount: number }>();
+    buckets.forEach(c => map.set(c, { total: 0, mastered: 0, learning: 0, newCount: 0 }));
+    for (const e of active) {
+      const key = keyOf(e);
+      const s = map.get(key);
+      if (!s) continue;
       s.total++;
       const b = bucketOf(e.mastery_level);
       if (b === 'mastered') s.mastered++;
@@ -151,16 +167,11 @@ export default function Expressions() {
       else s.newCount++;
     }
     return map;
-  }, [active]);
+  }, [active, groupBy]);
 
   const categoryList = useMemo(() => {
     if (!activeCategory) return [];
-    let list = active.filter(e => {
-      const c = (SCENE_CATEGORIES as readonly string[]).includes(e.scene_or_context as any)
-        ? (e.scene_or_context as string)
-        : 'その他';
-      return c === activeCategory;
-    });
+    let list = active.filter(e => keyOf(e) === activeCategory);
     if (search.trim()) {
       const q = search.trim().toLowerCase();
       list = list.filter(
@@ -173,7 +184,7 @@ export default function Expressions() {
     // doesn't grow noisy. The newest occurrence wins (list is already sorted desc).
     const groups = groupSimilarExpressions(list);
     return groups.map((g) => g.representative);
-  }, [active, activeCategory, search]);
+  }, [active, activeCategory, search, groupBy]);
 
   const visible = categoryList.slice(0, visibleCount);
   const hasMore = visibleCount < categoryList.length;
@@ -233,7 +244,11 @@ export default function Expressions() {
         )}
         <div className="flex-1">
           <h1 className="text-lg font-semibold tracking-tight text-foreground/90">
-            {view === 'category' ? activeCategory : 'Phrases'}
+            {view === 'category'
+              ? (groupBy === 'pos'
+                  ? (POS_LABELS_JA[activeCategory as PosCategory] ?? activeCategory)
+                  : activeCategory)
+              : 'Phrases'}
           </h1>
           <p className="text-xs text-muted-foreground">
             {view === 'category'
@@ -296,12 +311,45 @@ export default function Expressions() {
             </Button>
           </div>
 
+          {/* Group-by switch — flip between scene and POS classification. */}
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-xs uppercase tracking-widest text-muted-foreground">
+              {groupBy === 'scene' ? '場面で分類' : '品詞で分類'}
+            </p>
+            <div className="inline-flex p-0.5 rounded-full bg-muted">
+              <button
+                onClick={() => setGroupBy('scene')}
+                className={cn(
+                  'px-3 py-1 text-xs rounded-full transition-colors',
+                  groupBy === 'scene'
+                    ? 'bg-primary text-primary-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground',
+                )}
+              >
+                場面
+              </button>
+              <button
+                onClick={() => setGroupBy('pos')}
+                className={cn(
+                  'px-3 py-1 text-xs rounded-full transition-colors',
+                  groupBy === 'pos'
+                    ? 'bg-primary text-primary-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground',
+                )}
+              >
+                品詞
+              </button>
+            </div>
+          </div>
+
           {/* Category buttons */}
-          <p className="text-xs uppercase tracking-widest text-muted-foreground mb-3">Categories</p>
           <div className="grid grid-cols-2 gap-3">
-            {SCENE_CATEGORIES.map(cat => {
+            {buckets.map(cat => {
               const s = categoryStats.get(cat)!;
               const pct = s.total > 0 ? Math.round((s.mastered / s.total) * 100) : 0;
+              const label = groupBy === 'pos'
+                ? POS_LABELS_JA[cat as PosCategory] ?? cat
+                : cat;
               return (
                 <button
                   key={cat}
@@ -314,7 +362,7 @@ export default function Expressions() {
                   )}
                 >
                   <div className="flex items-center justify-between mb-2">
-                    <span className="font-semibold text-foreground">{cat}</span>
+                    <span className="font-semibold text-foreground">{label}</span>
                     <span className="text-xs text-muted-foreground">{s.total}</span>
                   </div>
                   {/* Meter */}

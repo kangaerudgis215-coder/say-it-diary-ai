@@ -44,20 +44,36 @@ serve(async (req) => {
 
     // Fetch every expression that is either untagged, has empty tags, OR is
     // currently sitting in "その他" — those are exactly the ones the user wants
-    // re-classified into the proper 6-category system.
+    // re-classified into the proper category system. We ALSO sweep up
+    // expressions whose existing scene/pos tags are leftover English/legacy
+    // labels that don't belong to the strict allow-list.
     const { data: expressions, error: fetchError } = await supabase
       .from('expressions')
       .select('id, expression, meaning, example_sentence, scene_or_context, pos_or_type')
-      .eq('user_id', user.id)
-      .or(
-        'scene_or_context.is.null,pos_or_type.is.null,scene_or_context.eq.,pos_or_type.eq.,scene_or_context.eq.その他'
-      );
+      .eq('user_id', user.id);
 
     if (fetchError) {
       throw fetchError;
     }
 
-    if (!expressions || expressions.length === 0) {
+    const SCENES = ["日常", "仕事", "学習", "感情", "人間関係"] as const;
+    const POS = [
+      "verb phrase",
+      "adjective phrase",
+      "noun phrase",
+      "fixed phrase",
+      "adverb phrase",
+      "idiom",
+      "other",
+    ] as const;
+
+    const needsRetag = (expressions || []).filter((e: any) => {
+      const sceneOk = SCENES.includes(e.scene_or_context);
+      const posOk = POS.includes(e.pos_or_type);
+      return !sceneOk || !posOk;
+    });
+
+    if (needsRetag.length === 0) {
       return new Response(JSON.stringify({ 
         message: "All expressions are already tagged",
         updated: 0 
@@ -66,14 +82,14 @@ serve(async (req) => {
       });
     }
 
-    console.log(`Tagging ${expressions.length} expressions for user ${user.id}`);
+    console.log(`Tagging ${needsRetag.length} expressions for user ${user.id}`);
 
     // Process expressions in batches to avoid API limits
     const batchSize = 10;
     let updatedCount = 0;
 
-    for (let i = 0; i < expressions.length; i += batchSize) {
-      const batch = expressions.slice(i, i + batchSize);
+    for (let i = 0; i < needsRetag.length; i += batchSize) {
+      const batch = needsRetag.slice(i, i + batchSize);
       
       const prompt = `You are an expert at categorizing English expressions for language learners.
 
@@ -150,18 +166,21 @@ Only return the JSON array, nothing else.`;
         for (let j = 0; j < batch.length; j++) {
           const exp = batch[j];
           const tag = tags[j] || { scene_or_context: "日常", pos_or_type: "other" };
-          const specificScenes = ["日常", "仕事", "学習", "感情", "人間関係"];
+          const specificScenes = SCENES as readonly string[];
           // Force a specific bucket. If the model returned "その他" or anything
           // unexpected, fall back to "日常" to drain the Other bucket.
           const scene = specificScenes.includes(tag.scene_or_context)
             ? tag.scene_or_context
             : "日常";
+          const pos = (POS as readonly string[]).includes(tag.pos_or_type)
+            ? tag.pos_or_type
+            : "other";
 
           const { error: updateError } = await supabase
             .from('expressions')
             .update({
               scene_or_context: scene,
-              pos_or_type: tag.pos_or_type || "other"
+              pos_or_type: pos,
             })
             .eq('id', exp.id);
 
