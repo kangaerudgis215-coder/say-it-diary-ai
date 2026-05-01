@@ -9,7 +9,9 @@ interface EncouragementData {
   cachedDate: string;
 }
 
-const STORAGE_KEY = 'soki_daily_encouragement';
+// v2 — refreshed cat persona + factual-accuracy rules. Bumped key to invalidate
+// any previously-cached message that used the old voice / wrong facts.
+const STORAGE_KEY = 'soki_daily_encouragement_v2';
 
 export function DailyEncouragement() {
   const { user } = useAuth();
