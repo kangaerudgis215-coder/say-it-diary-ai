@@ -479,12 +479,11 @@ export default function DiaryReview() {
             <CardContent>
               <p className="text-xs text-muted-foreground mb-2">タップで本文中の該当箇所をハイライト</p>
               <div className="space-y-3">
-                {expressions.map((exp) => (
-                  {
-                    const stat = reuseStats[exp.id];
-                    const isReused = !!stat?.isReused;
-                    return (
-                      <button
+                {expressions.map((exp) => {
+                  const stat = reuseStats[exp.id];
+                  const isReused = !!stat?.isReused;
+                  return (
+                    <button
                         key={exp.id}
                         className={cn(
                           'w-full text-left rounded-lg p-3 transition-all duration-200 border',
@@ -529,9 +528,8 @@ export default function DiaryReview() {
                             身についていてすごい！前にも使えていた表現です
                           </p>
                         )}
-                      </button>
-                    );
-                  }
+                    </button>
+                  );
                 })}
               </div>
             </CardContent>
