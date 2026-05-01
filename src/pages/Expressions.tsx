@@ -244,7 +244,11 @@ export default function Expressions() {
         )}
         <div className="flex-1">
           <h1 className="text-lg font-semibold tracking-tight text-foreground/90">
-            {view === 'category' ? activeCategory : 'Phrases'}
+            {view === 'category'
+              ? (groupBy === 'pos'
+                  ? (POS_LABELS_JA[activeCategory as PosCategory] ?? activeCategory)
+                  : activeCategory)
+              : 'Phrases'}
           </h1>
           <p className="text-xs text-muted-foreground">
             {view === 'category'
