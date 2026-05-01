@@ -200,21 +200,30 @@ export default function Calendar() {
       {/* Empty state when date selected but no entry */}
       {!selectedEntry && selectedDate && (
         <div className="mt-6 bg-card rounded-2xl p-6 text-center fade-in border border-border">
-          <p className="text-muted-foreground mb-4">
-            {isFuture(selectedDate) 
-              ? "You can't write a diary for a future date."
-              : `No diary entry for ${format(selectedDate, 'MMMM d, yyyy')} yet.`
-            }
-          </p>
-          {!isFuture(selectedDate) && (
-            <Button
-              variant="glow"
-              className="gap-2"
-              onClick={() => navigate(`/chat?date=${format(selectedDate, 'yyyy-MM-dd')}`)}
-            >
-              <Plus className="w-4 h-4" />
-              {isToday(selectedDate) ? "Start today's diary" : "Write diary for this day"}
-            </Button>
+          {isFuture(selectedDate) ? (
+            <p className="text-muted-foreground">
+              未来の日付には日記を書けません。
+            </p>
+          ) : (
+            <>
+              <div className="mb-2 text-2xl">{isToday(selectedDate) ? '✨' : '📅'}</div>
+              <p className="font-bold text-base mb-1">
+                {format(selectedDate, 'yyyy年M月d日')}
+              </p>
+              <p className="text-sm text-muted-foreground mb-4">
+                {isToday(selectedDate)
+                  ? 'まだこの日の日記がありません。今日の出来事を話そう！'
+                  : 'この日の日記はまだありません。過去の出来事を埋めてストリークを繋げよう🔥'}
+              </p>
+              <Button
+                variant="glow"
+                className="gap-2"
+                onClick={() => navigate(`/chat?date=${format(selectedDate, 'yyyy-MM-dd')}`)}
+              >
+                <Plus className="w-4 h-4" />
+                {isToday(selectedDate) ? '今日の日記を書く' : 'この日の日記を書く'}
+              </Button>
+            </>
           )}
         </div>
       )}
