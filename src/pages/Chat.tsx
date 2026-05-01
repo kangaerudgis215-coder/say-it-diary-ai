@@ -449,6 +449,7 @@ export default function Chat() {
         .single();
 
       if (savedEntry) {
+        setExistingDiaryId(savedEntry.id);
         navigate(`/review?diaryId=${savedEntry.id}&date=${diaryDate}`);
       } else {
         navigate('/calendar');
