@@ -77,3 +77,35 @@ export function findSimilarExpressions<T extends { expression: string }>(
 ): T[] {
   return candidates.filter((c) => isSimilarExpression(target, c.expression));
 }
+
+/**
+ * Group expressions into clusters of "similar ideas". For each cluster we keep:
+ *   - representative: the first/oldest entry chosen as the canonical card
+ *   - members: every expression that belongs to the cluster (used for the
+ *     "view diary" date picker and the count badge)
+ *
+ * The input order is preserved for the representative selection (so callers can
+ * pre-sort by `created_at` ascending to make the *first* occurrence canonical,
+ * or descending to make the *latest* one canonical).
+ */
+export function groupSimilarExpressions<T extends { expression: string }>(
+  items: T[],
+): { representative: T; members: T[] }[] {
+  const used = new Set<number>();
+  const groups: { representative: T; members: T[] }[] = [];
+  for (let i = 0; i < items.length; i++) {
+    if (used.has(i)) continue;
+    const rep = items[i];
+    const members: T[] = [rep];
+    used.add(i);
+    for (let j = i + 1; j < items.length; j++) {
+      if (used.has(j)) continue;
+      if (isSimilarExpression(rep.expression, items[j].expression)) {
+        used.add(j);
+        members.push(items[j]);
+      }
+    }
+    groups.push({ representative: rep, members });
+  }
+  return groups;
+}
