@@ -48,13 +48,15 @@
     * Log spoken words for today
     * This upserts the vocabulary log for today, adding new words to the existing list
     */
-   const logSpokenWords = useCallback(async (spokenText: string): Promise<boolean> => {
+  const logSpokenWords = useCallback(async (spokenText: string, dateOverride?: string): Promise<boolean> => {
      if (!user || !spokenText.trim()) return false;
  
      if (isLogging) return false; // Prevent concurrent logging
      setIsLogging(true);
  
-     const today = format(new Date(), 'yyyy-MM-dd');
+    // For past-diary chats, attribute words to the diary's actual date so
+    // the AI Feedback / Progress page reflects the correct day.
+    const today = dateOverride || format(new Date(), 'yyyy-MM-dd');
      const newWords = extractMeaningfulWords(spokenText);
      
      if (newWords.length === 0) {
