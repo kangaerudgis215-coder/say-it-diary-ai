@@ -77,18 +77,20 @@ serve(async (req) => {
       
       const prompt = `You are an expert at categorizing English expressions for language learners.
 
+These expressions are currently UNCATEGORIZED or stuck in "その他" and the user
+wants them redistributed into one of the 5 specific buckets. You MUST pick the
+closest of the first 5 categories — DO NOT return "その他".
+
 For each expression below, assign:
-1. scene_or_context: Choose EXACTLY ONE from these 6 Japanese categories
+1. scene_or_context: Choose EXACTLY ONE from these 5 Japanese categories
    and return the JAPANESE label exactly as written (no English, no quotes around it):
-   "日常" — daily life, food, weather, health, hobbies, travel, errands, small talk, home/morning/evening routines
-   "仕事" — work, business, office, career, money, meetings, colleagues
-   "学習" — school, study, learning, education, classes, exams, language practice
-   "感情" — feelings, mood, reactions, emotional reflections (happy, sad, tired, excited…)
-   "人間関係" — family, friends, partner, dating, social interactions
-   "その他" — ONLY when the expression truly fits NONE of the above. This must be RARE.
-   IMPORTANT: Always try the first 5 categories first. Default fallback is NEVER "その他";
-   prefer the closest of the first 5 even if the fit is approximate.
-   
+   "日常" — daily life, food, weather, health, hobbies, travel, errands, small talk, home/morning/evening routines, time, places, weather, generic actions, body, money-as-spending
+   "仕事" — work, business, office, career, salary, meetings, colleagues, projects, deadlines
+   "学習" — school, study, learning, education, classes, exams, language practice, reading, research
+   "感情" — feelings, mood, reactions, emotional reflections (happy, sad, tired, excited, surprised, nervous…)
+   "人間関係" — family, friends, partner, dating, social interactions, conversations between people
+   FALLBACK RULE: If unsure, default to "日常". NEVER output "その他" in this response.
+
 2. pos_or_type: A simple grammatical/phrase type label.
    Options: "verb phrase", "adjective phrase", "noun phrase", "fixed phrase", "adverb phrase", "idiom", "other"
 
@@ -148,10 +150,12 @@ Only return the JSON array, nothing else.`;
         for (let j = 0; j < batch.length; j++) {
           const exp = batch[j];
           const tag = tags[j] || { scene_or_context: "日常", pos_or_type: "other" };
-          const allowedScenes = ["日常", "仕事", "学習", "感情", "人間関係", "その他"];
-          // If the model returned something unexpected, fall back to "日常" rather than
-          // "その他" so we don't keep re-creating the bucket the user is trying to drain.
-          const scene = allowedScenes.includes(tag.scene_or_context) ? tag.scene_or_context : "日常";
+          const specificScenes = ["日常", "仕事", "学習", "感情", "人間関係"];
+          // Force a specific bucket. If the model returned "その他" or anything
+          // unexpected, fall back to "日常" to drain the Other bucket.
+          const scene = specificScenes.includes(tag.scene_or_context)
+            ? tag.scene_or_context
+            : "日常";
 
           const { error: updateError } = await supabase
             .from('expressions')
