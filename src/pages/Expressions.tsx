@@ -148,8 +148,11 @@ export default function Expressions() {
         ? (e.scene_or_context as string)
         : 'その他';
     }
-    return (POS_CATEGORIES as readonly string[]).includes(e.pos_or_type as any)
-      ? (e.pos_or_type as string)
+    // "fixed phrase" was merged into "idiom"; normalise any legacy values so
+    // they bucket together with イディオム・決まり文句.
+    const raw = e.pos_or_type === 'fixed phrase' ? 'idiom' : e.pos_or_type;
+    return (POS_CATEGORIES as readonly string[]).includes(raw as any)
+      ? (raw as string)
       : 'other';
   };
 
