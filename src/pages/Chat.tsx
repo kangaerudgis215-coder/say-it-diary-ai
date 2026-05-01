@@ -472,6 +472,7 @@ export default function Chat() {
 
   // Check if we have enough content for diary (at least 2 user messages)
   const hasEnoughContent = messages.filter(m => m.role === 'user').length >= 2;
+  const isLocked = !!existingDiaryId;
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -535,28 +536,45 @@ export default function Chat() {
             )}
           </div>
           
-          <Button
-            variant="success"
-            size="sm"
-            onClick={handleGenerateDiary}
-            disabled={!hasEnoughContent || isGeneratingDiary}
-            className={hasEnoughContent ? 'animate-pulse' : ''}
-          >
-            {isGeneratingDiary ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <>
-                <Check className="w-4 h-4" />
-                Done
-              </>
-            )}
-          </Button>
+          {isLocked ? (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => navigate(`/review?diaryId=${existingDiaryId}&date=${diaryDate}`)}
+            >
+              <BookOpen className="w-4 h-4" />
+              レビュー
+            </Button>
+          ) : (
+            <Button
+              variant="success"
+              size="sm"
+              onClick={handleGenerateDiary}
+              disabled={!hasEnoughContent || isGeneratingDiary}
+              className={hasEnoughContent ? 'animate-pulse' : ''}
+            >
+              {isGeneratingDiary ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <>
+                  <Check className="w-4 h-4" />
+                  Done
+                </>
+              )}
+            </Button>
+          )}
         </div>
         
         {/* Prompt to finish when ready */}
-        {hasEnoughContent && !isGeneratingDiary && (
+        {!isLocked && hasEnoughContent && !isGeneratingDiary && (
           <p className="text-xs text-center text-primary mt-2 animate-pulse">
             Ready? Tap Done to create your diary! ✨
+          </p>
+        )}
+        {isLocked && (
+          <p className="text-xs text-center text-muted-foreground mt-2 inline-flex items-center gap-1 justify-center w-full">
+            <Lock className="w-3 h-3" />
+            この日の日記は作成済みです。修正はレビュー画面から。
           </p>
         )}
       </header>
