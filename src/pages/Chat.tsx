@@ -181,10 +181,10 @@ export default function Chat() {
       // Call AI for response. If we're wrapping up, append a system nudge so
       // the AI gives a warm closing line ("Sounds great! Let's create your
       // diary now ✨") instead of asking another question.
-      const aiMessages = [
+      const aiMessages: { role: string; content: string }[] = [
         ...messages,
         userMessage,
-      ].map((m) => ({ role: m.role, content: m.content }));
+      ].map((m) => ({ role: m.role as string, content: m.content }));
       if (shouldWrapUp) {
         aiMessages.push({
           role: 'system',
