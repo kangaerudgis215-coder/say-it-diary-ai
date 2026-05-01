@@ -470,7 +470,10 @@ serve(async (req) => {
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
         }
-        
+
+        // Force every extracted expression's scene into the 6 fixed categories.
+        normalizeExpressionScenes(parsed);
+
         return new Response(JSON.stringify(parsed), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
