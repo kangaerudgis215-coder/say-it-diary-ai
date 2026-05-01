@@ -20,6 +20,9 @@ export function QuizSession() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const diaryId = searchParams.get('diaryId');
+  // When `recall=1`, also mark recall_sessions.completed on finish so the
+  // diary disappears from the recall queue and the kira-kira badge appears.
+  const isRecallMode = searchParams.get('recall') === '1';
 
   const [phase, setPhase] = useState<Phase>('loading');
   const [sentences, setSentences] = useState<PracticeSentence[]>([]);
@@ -127,8 +130,30 @@ export function QuizSession() {
       .eq('user_id', user.id);
   };
 
+  const markRecallCompleted = async () => {
+    if (!user || !diaryId) return;
+    // Use upsert-style insert; the unique index on (user_id, diary_entry_id)
+    // where completed=true makes this idempotent.
+    await supabase
+      .from('recall_sessions')
+      .insert({
+        user_id: user.id,
+        diary_entry_id: diaryId,
+        completed: true,
+      } as any)
+      // Ignore duplicate-key errors if already recalled.
+      .then(({ error }) => {
+        if (error && !/duplicate key|unique/i.test(error.message)) {
+          console.warn('[recall_sessions] insert failed:', error.message);
+        }
+      });
+  };
+
   const finishToRecall = async () => {
     await markReviewCompleted();
+    if (isRecallMode) {
+      await markRecallCompleted();
+    }
     // Reorder + read-aloud are NOT recall. Recall is a separate manual step
     // the user kicks off from the bottom-tab badge or the recall page itself.
     // Just show the local celebration screen and let them choose what's next.
@@ -150,7 +175,7 @@ export function QuizSession() {
   }
 
   if (phase === 'complete') {
-    if (isPastDiary) {
+    if (isPastDiary || isRecallMode) {
       return <RecallCompletionScreen diaryDate={diaryDate} />;
     }
     return <CompletionScreen streak={streak} expressions={expressions} />;
