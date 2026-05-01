@@ -13,6 +13,10 @@ import { format, subDays } from 'date-fns';
 interface CompletionScreenProps {
   streak: number;
   expressions: string[];
+  /** True when the diary being completed is from a past date (back-filled). */
+  isPastDiary?: boolean;
+  /** yyyy-MM-dd of the diary's date — used to show date context for past entries. */
+  diaryDate?: string;
 }
 
 function getStreakMessage(streak: number): string {
@@ -51,7 +55,7 @@ function useCountUp(target: number, duration = 1400, startDelay = 350) {
 
 const WEEK_LABELS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
-export function CompletionScreen({ streak, expressions }: CompletionScreenProps) {
+export function CompletionScreen({ streak, expressions, isPastDiary = false, diaryDate }: CompletionScreenProps) {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { playBigSuccess } = useSuccessSound();
@@ -151,8 +155,15 @@ export function CompletionScreen({ streak, expressions }: CompletionScreenProps)
 
         {/* Message */}
         <p className="mt-4 text-base font-medium text-foreground/90 max-w-xs">
-          {getStreakMessage(streak)}
+          {isPastDiary
+            ? '過去の日記もどんどん埋めて、ストリークを繋げていこう！🔥'
+            : getStreakMessage(streak)}
         </p>
+        {isPastDiary && diaryDate && (
+          <p className="mt-1 text-xs text-muted-foreground">
+            {diaryDate} の日記を完了しました
+          </p>
+        )}
 
         {/* Weekday checks */}
         <div className="mt-6 flex gap-2">

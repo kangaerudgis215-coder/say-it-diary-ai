@@ -33,6 +33,10 @@ export function QuizSession() {
   const [fullJapanese, setFullJapanese] = useState('');
   const [diaryDate, setDiaryDate] = useState<string>('');
   const [isPastDiary, setIsPastDiary] = useState(false);
+  // True if this diary had NOT had its reorder review completed before this
+  // session started. Drives whether we show the celebratory streak screen
+  // (first time only) or the calmer recall-completion screen (subsequent runs).
+  const [isFirstCompletion, setIsFirstCompletion] = useState(false);
 
   useEffect(() => {
     if (user && diaryId) loadData();
@@ -58,6 +62,8 @@ export function QuizSession() {
     setDiaryDate(entry.date || '');
     const today = format(new Date(), 'yyyy-MM-dd');
     setIsPastDiary(Boolean(entry.date) && entry.date < today);
+    // Capture first-completion state BEFORE we mark it completed at the end.
+    setIsFirstCompletion(!entry.sentences_review_completed);
 
     // Get expressions
     const { data: exprs } = await supabase
@@ -175,10 +181,21 @@ export function QuizSession() {
   }
 
   if (phase === 'complete') {
-    if (isPastDiary || isRecallMode) {
-      return <RecallCompletionScreen diaryDate={diaryDate} />;
+    // First-ever reorder completion for this diary → celebratory streak screen,
+    // even if the diary itself is from a past date (back-filling streaks).
+    // Any subsequent run (including recall mode) shows the calmer "review done"
+    // screen.
+    if (isFirstCompletion) {
+      return (
+        <CompletionScreen
+          streak={streak}
+          expressions={expressions}
+          isPastDiary={isPastDiary}
+          diaryDate={diaryDate}
+        />
+      );
     }
-    return <CompletionScreen streak={streak} expressions={expressions} />;
+    return <RecallCompletionScreen diaryDate={diaryDate} />;
   }
 
   if (phase === 'readAloud') {
