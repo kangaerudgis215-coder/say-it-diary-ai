@@ -273,18 +273,28 @@ export default function Expressions() {
             </div>
           </div>
 
-          {/* Tagging hint */}
-          {untaggedCount > 0 && (
-            <div className="flex items-center justify-between p-3 bg-primary/10 rounded-xl mb-4">
-              <span className="text-xs text-muted-foreground">
-                {untaggedCount} 個の表現を再分類できます
-              </span>
-              <Button size="sm" variant="ghost" onClick={handleTagExpressions} disabled={isTagging}>
-                {isTagging ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-1" />}
-                {isTagging ? 'Tagging…' : 'Auto-tag'}
-              </Button>
-            </div>
-          )}
+          {/* Auto-tag — always visible so users can rebalance categories anytime */}
+          <div className="flex items-center justify-between p-3 bg-primary/10 rounded-xl mb-4">
+            <span className="text-xs text-muted-foreground">
+              {untaggedCount > 0
+                ? `${untaggedCount} 個の表現を再分類できます`
+                : 'カテゴリをいつでも整理できます'}
+            </span>
+            <Button
+              size="sm"
+              variant="default"
+              onClick={handleTagExpressions}
+              disabled={isTagging}
+              className="gap-1"
+            >
+              {isTagging ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <RefreshCw className="w-4 h-4" />
+              )}
+              {isTagging ? 'Tagging…' : 'Auto-tag'}
+            </Button>
+          </div>
 
           {/* Category buttons */}
           <p className="text-xs uppercase tracking-widest text-muted-foreground mb-3">Categories</p>
