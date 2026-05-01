@@ -23,7 +23,7 @@ import { persistDiarySentences } from '@/lib/practiceBuilder';
 import { format, parseISO, isToday as isTodayFn } from 'date-fns';
 
 const SILENCE_OPTIONS: { ms: number; label: string }[] = [
-  { ms: 1500, label: '1.5秒' },
+  { ms: 3000, label: '3秒' },
   { ms: 5000, label: '5秒' },
   { ms: 10000, label: '10秒' },
 ];
@@ -51,9 +51,9 @@ export default function Chat() {
   const [showHelp, setShowHelp] = useState(false);
   const [diaryAlreadyExists, setDiaryAlreadyExists] = useState(false);
   const [silenceMs, setSilenceMs] = useState<number>(() => {
-    if (typeof window === 'undefined') return 1500;
+    if (typeof window === 'undefined') return 3000;
     const saved = Number(window.localStorage.getItem('chat:silenceMs'));
-    return SILENCE_OPTIONS.some((o) => o.ms === saved) ? saved : 1500;
+    return SILENCE_OPTIONS.some((o) => o.ms === saved) ? saved : 3000;
   });
 
   useEffect(() => {
@@ -170,25 +170,28 @@ export default function Chat() {
     // Log spoken vocabulary
     logSpokenWords(userMessage.content);
 
-    // Hard cap: once user + AI messages combined reach 10 (excluding the
-    // initial welcome bubble), stop the conversation and auto-finish the diary
-    // exactly as if the user pressed "Done".
+    // Soft cap: once user + AI messages combined reach 10 (excluding the
+    // initial welcome bubble), ask the AI to wrap the conversation up
+    // naturally on this turn, then auto-trigger diary generation after it
+    // replies. This avoids the previous abrupt cut-off.
     const realCount = nextMessages.filter((m) => m.id !== 'welcome').length;
-    if (realCount >= 10 && !diaryAlreadyExists) {
-      setIsLoading(false);
-      toast({
-        title: '十分話せました ✨',
-        description: '日記を自動で生成します…',
-      });
-      // Defer one tick so the user message paints first
-      setTimeout(() => {
-        void handleGenerateDiary();
-      }, 300);
-      return;
-    }
+    const shouldWrapUp = realCount >= 10 && !diaryAlreadyExists;
 
     try {
-      // Call AI for response
+      // Call AI for response. If we're wrapping up, append a system nudge so
+      // the AI gives a warm closing line ("Sounds great! Let's create your
+      // diary now ✨") instead of asking another question.
+      const aiMessages: { role: string; content: string }[] = [
+        ...messages,
+        userMessage,
+      ].map((m) => ({ role: m.role as string, content: m.content }));
+      if (shouldWrapUp) {
+        aiMessages.push({
+          role: 'system',
+          content:
+            'IMPORTANT: This is the final turn. Do NOT ask another question. Briefly acknowledge what the user just shared in one warm sentence, then say something like "Sounds great! Let\'s turn this into your diary now ✨". Keep it under 30 words.',
+        });
+      }
       const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`, {
         method: 'POST',
         headers: {
@@ -196,10 +199,7 @@ export default function Chat() {
           'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
         },
         body: JSON.stringify({
-          messages: [...messages, userMessage].map(m => ({
-            role: m.role,
-            content: m.content,
-          })),
+          messages: aiMessages,
           type: 'conversation',
         }),
       });
@@ -246,6 +246,18 @@ export default function Chat() {
         role: 'assistant',
         content: assistantMessage.content,
       });
+
+      // Auto-finish the diary after the AI's closing line.
+      if (shouldWrapUp) {
+        toast({
+          title: '十分話せました ✨',
+          description: '日記を自動で生成します…',
+        });
+        // Wait a beat so the user can read the AI's closing message.
+        setTimeout(() => {
+          void handleGenerateDiary();
+        }, 1800);
+      }
     } catch (error: any) {
       toast({
         variant: 'destructive',
