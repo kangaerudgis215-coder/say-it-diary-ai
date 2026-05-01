@@ -229,19 +229,13 @@ export default function Chat() {
 
       setMessages(prev => [...prev, assistantMessage]);
 
-      // Speak the AI reply aloud for an immersive feel
-      try {
-        if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-          window.speechSynthesis.cancel();
-          const u = new SpeechSynthesisUtterance(assistantMessage.content);
-          u.lang = 'en-US';
-          u.rate = 0.95;
-          u.pitch = 1.05;
-          window.speechSynthesis.speak(u);
-        }
-      } catch {
-        // ignore TTS errors
-      }
+      // Speak the AI reply aloud. Browser TTS is famously flaky:
+      //   • Chrome silently drops `speak()` if it's called immediately after
+      //     `cancel()` — we add a short delay.
+      //   • Safari/iOS only has voices ready *after* `voiceschanged`, so the
+      //     first utterance of a session can be silent. We wait for voices.
+      //   • If the engine ends up "paused" (Chrome bug), `resume()` revives it.
+      void speakAssistant(assistantMessage.content);
 
       // Save assistant message
       await supabase.from('messages').insert({
