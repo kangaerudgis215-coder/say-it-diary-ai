@@ -252,7 +252,7 @@ export default function DiaryReview() {
           meaning: exp?.meaning ?? null,
           example: exp?.example ?? null,
           scene_or_context: exp?.scene_or_context ?? null,
-          pos_or_type: exp?.pos_or_type ?? null,
+          pos_or_type: exp?.pos_or_type === 'fixed phrase' ? 'idiom' : (exp?.pos_or_type ?? null),
         }))
         .filter((exp: any) => exp.expression.length > 0)
         .filter((exp: any) => diaryNorm.includes(normalizeForExpression(exp.expression)));
