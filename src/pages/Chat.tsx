@@ -28,6 +28,64 @@ const SILENCE_OPTIONS: { ms: number; label: string }[] = [
   { ms: 10000, label: '10秒' },
 ];
 
+/**
+ * Robust browser TTS for the AI's spoken reply. Works around three known
+ * pain points:
+ *   1. Chrome ignores `speak()` if called too soon after `cancel()`.
+ *   2. Safari/iOS only has voices after `voiceschanged` fires.
+ *   3. Long utterances pause silently in Chrome — `resume()` brings them back.
+ */
+async function speakAssistant(text: string): Promise<void> {
+  if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+  const synth = window.speechSynthesis;
+  try {
+    // Wait for voices to be loaded (Safari/iOS first-load workaround).
+    if (synth.getVoices().length === 0) {
+      await new Promise<void>((resolve) => {
+        const t = setTimeout(resolve, 800);
+        synth.addEventListener(
+          'voiceschanged',
+          () => {
+            clearTimeout(t);
+            resolve();
+          },
+          { once: true },
+        );
+      });
+    }
+    synth.cancel();
+    // Small gap so Chrome doesn't swallow the next speak().
+    await new Promise((r) => setTimeout(r, 80));
+
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = 'en-US';
+    u.rate = 0.95;
+    u.pitch = 1.05;
+    // Prefer an English voice if one is installed — avoids picking up the
+    // system default (e.g. a JP voice) which can sound robotic for English.
+    const voices = synth.getVoices();
+    const en =
+      voices.find((v) => v.lang === 'en-US' && v.localService) ||
+      voices.find((v) => v.lang === 'en-US') ||
+      voices.find((v) => v.lang.startsWith('en'));
+    if (en) u.voice = en;
+    synth.speak(u);
+
+    // Chrome bug: long utterances stop after ~15s. Periodically nudge it.
+    const keepAlive = setInterval(() => {
+      if (!synth.speaking) {
+        clearInterval(keepAlive);
+        return;
+      }
+      if (synth.paused) synth.resume();
+    }, 5000);
+    u.onend = () => clearInterval(keepAlive);
+    u.onerror = () => clearInterval(keepAlive);
+  } catch {
+    // ignore TTS errors
+  }
+}
+
 interface Message {
   id: string;
   role: 'user' | 'assistant';
