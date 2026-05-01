@@ -619,6 +619,24 @@ export default function Chat() {
 
       {/* Input Area — speaking-first layout */}
       <div className="sticky bottom-0 glass border-t border-border px-4 pt-3 pb-5 safe-bottom">
+        {isLocked ? (
+          <div className="flex flex-col items-center gap-3 py-2">
+            <p className="text-sm text-muted-foreground inline-flex items-center gap-1.5">
+              <Lock className="w-4 h-4" />
+              この日の日記は完成済みのためチャットはロックされています
+            </p>
+            <Button
+              variant="glow"
+              size="lg"
+              onClick={() => navigate(`/review?diaryId=${existingDiaryId}&date=${diaryDate}`)}
+              className="gap-2 px-8"
+            >
+              <BookOpen className="w-5 h-5" />
+              日記レビューへ
+            </Button>
+          </div>
+        ) : (
+        <>
         {/* Compact text input row (kept for typing fallback) */}
         <div className="relative mb-4">
           <Input
@@ -673,6 +691,8 @@ export default function Chat() {
             ))}
           </div>
         </div>
+        </>
+        )}
       </div>
     </div>
   );
