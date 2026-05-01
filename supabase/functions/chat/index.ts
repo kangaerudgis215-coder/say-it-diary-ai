@@ -44,6 +44,46 @@ function extractJson(response: string): unknown {
   }
 }
 
+/**
+ * The 6 fixed Japanese scene categories used everywhere in the app.
+ * Mirrors `SCENE_CATEGORIES` in src/lib/mastery.ts.
+ */
+const SCENE_CATEGORIES = ["日常", "仕事", "学習", "感情", "人間関係", "その他"] as const;
+type SceneCategory = (typeof SCENE_CATEGORIES)[number];
+
+/** Map a free-form / English label coming back from the LLM onto one of the 6 fixed categories. */
+function normalizeScene(raw: unknown): SceneCategory {
+  if (typeof raw !== "string") return "その他";
+  const s = raw.trim();
+  if ((SCENE_CATEGORIES as readonly string[]).includes(s)) return s as SceneCategory;
+  const lower = s.toLowerCase();
+  // Japanese keyword hits (for sloppy responses like "日常生活" / "仕事場" etc.)
+  if (s.includes("日常") || s.includes("生活") || s.includes("食") || s.includes("健康") || s.includes("天気") || s.includes("趣味") || s.includes("旅行")) return "日常";
+  if (s.includes("仕事") || s.includes("会社") || s.includes("ビジネス") || s.includes("職場") || s.includes("業務")) return "仕事";
+  if (s.includes("学習") || s.includes("勉強") || s.includes("学校") || s.includes("授業") || s.includes("教育")) return "学習";
+  if (s.includes("感情") || s.includes("気持ち") || s.includes("感想") || s.includes("気分")) return "感情";
+  if (s.includes("人間関係") || s.includes("家族") || s.includes("友達") || s.includes("友人") || s.includes("恋人") || s.includes("関係")) return "人間関係";
+  // English keyword hits.
+  if (/(daily|life|food|weather|health|hobby|travel|routine|home|morning|evening|night)/.test(lower)) return "日常";
+  if (/(work|business|office|career|job|meeting|colleague|money|finance)/.test(lower)) return "仕事";
+  if (/(school|study|learn|education|class|exam|lesson|homework)/.test(lower)) return "学習";
+  if (/(feel|emotion|mood|happy|sad|angry|anxious|tired|excited|reflect)/.test(lower)) return "感情";
+  if (/(family|friend|relation|partner|social|people|love|date)/.test(lower)) return "人間関係";
+  return "その他";
+}
+
+/** Walk a parsed AI response and normalize every scene_or_context field in place. */
+function normalizeExpressionScenes(parsed: any): void {
+  if (!parsed || typeof parsed !== "object") return;
+  const arr = Array.isArray(parsed.expressions) ? parsed.expressions : null;
+  if (!arr) return;
+  for (const exp of arr) {
+    if (exp && typeof exp === "object") {
+      exp.scene_or_context = normalizeScene(exp.scene_or_context);
+    }
+  }
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
