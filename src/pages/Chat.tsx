@@ -23,7 +23,7 @@ import { persistDiarySentences } from '@/lib/practiceBuilder';
 import { format, parseISO, isToday as isTodayFn } from 'date-fns';
 
 const SILENCE_OPTIONS: { ms: number; label: string }[] = [
-  { ms: 1500, label: '1.5秒' },
+  { ms: 3000, label: '3秒' },
   { ms: 5000, label: '5秒' },
   { ms: 10000, label: '10秒' },
 ];
@@ -51,9 +51,9 @@ export default function Chat() {
   const [showHelp, setShowHelp] = useState(false);
   const [diaryAlreadyExists, setDiaryAlreadyExists] = useState(false);
   const [silenceMs, setSilenceMs] = useState<number>(() => {
-    if (typeof window === 'undefined') return 1500;
+    if (typeof window === 'undefined') return 3000;
     const saved = Number(window.localStorage.getItem('chat:silenceMs'));
-    return SILENCE_OPTIONS.some((o) => o.ms === saved) ? saved : 1500;
+    return SILENCE_OPTIONS.some((o) => o.ms === saved) ? saved : 3000;
   });
 
   useEffect(() => {
