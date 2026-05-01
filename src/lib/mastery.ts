@@ -79,7 +79,6 @@ export const POS_CATEGORIES = [
   "verb phrase",
   "adjective phrase",
   "noun phrase",
-  "fixed phrase",
   "adverb phrase",
   "idiom",
   "other",
@@ -91,8 +90,7 @@ export const POS_LABELS_JA: Record<PosCategory, string> = {
   "verb phrase": "動詞句",
   "adjective phrase": "形容詞句",
   "noun phrase": "名詞句",
-  "fixed phrase": "決まり文句",
   "adverb phrase": "副詞句",
-  "idiom": "イディオム",
+  "idiom": "イディオム・決まり文句",
   "other": "その他",
 };
