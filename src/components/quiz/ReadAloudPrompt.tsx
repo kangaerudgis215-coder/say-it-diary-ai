@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { Mic, SkipForward } from 'lucide-react';
 import Lottie from 'lottie-react';
+import { DotLottieReact } from '@lottiefiles/dotlottie-react';
 import voiceAnim from '@/assets/voice.json';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
@@ -20,41 +21,57 @@ export function ReadAloudPrompt({ englishText, japaneseText, onComplete, onSkip 
   const [gaugeValue, setGaugeValue] = useState(0);
   const [passed, setPassed] = useState(false);
   const [showNice, setShowNice] = useState(false);
+  const [showSuccessAnim, setShowSuccessAnim] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const { playSuccess } = useSuccessSound();
 
   const { isListening, transcript, isSupported, startListening, stopListening, resetTranscript } =
     useSpeechRecognition({ lang: 'en-US' });
 
-  // Check transcript accuracy against the full diary
-  useEffect(() => {
-    if (!isListening && transcript && !passed) {
-      const userWords = normalizeText(transcript).split(' ').filter(w => w.length > 0);
-      const targetWords = normalizeText(englishText).split(' ').filter(w => w.length > 0);
-      
+  // Check transcript accuracy against the full diary. We watch the *interim*
+  // transcript too so we can pass the user the moment they hit the threshold,
+  // without waiting for the recogniser to finalise. This makes judgement feel
+  // significantly snappier.
+  const checkAccuracy = useCallback(
+    (rawTranscript: string) => {
+      if (passed) return;
+      const userWords = normalizeText(rawTranscript).split(' ').filter((w) => w.length > 0);
+      const targetWords = normalizeText(englishText).split(' ').filter((w) => w.length > 0);
       if (targetWords.length === 0) return;
-      
-      // Count how many target words appear in user's speech
+
       const targetSet = new Set(targetWords);
-      const matched = userWords.filter(w => targetSet.has(w)).length;
+      const matched = userWords.filter((w) => targetSet.has(w)).length;
       const accuracy = matched / targetWords.length;
-      
-      if (accuracy >= 0.5) {
+
+      // Lower threshold + early exit for a much snappier feel.
+      if (accuracy >= 0.35) {
         setPassed(true);
         setShowNice(true);
+        setShowSuccessAnim(true);
         setGaugeValue(100);
         playSuccess();
         if (navigator.vibrate) navigator.vibrate(100);
+        // Stop listening immediately — no need to keep the mic open.
+        if (isListening) stopListening();
         setTimeout(() => {
           setShowNice(false);
+          setShowSuccessAnim(false);
           onComplete();
-        }, 1800);
+        }, 1200);
       } else {
-        // Partial progress
         setGaugeValue(Math.min(95, Math.round(accuracy * 100)));
       }
+    },
+    [englishText, passed, playSuccess, onComplete, isListening, stopListening],
+  );
+
+  // Re-check on every transcript / interim update for fast judgement.
+  useEffect(() => {
+    if (passed) return;
+    if (transcript || (isListening && (window as any))) {
+      checkAccuracy(transcript);
     }
-  }, [isListening, transcript, englishText, passed, onComplete, playSuccess]);
+  }, [transcript, isListening, passed, checkAccuracy]);
 
   // Gauge animation while listening
   useEffect(() => {
@@ -139,6 +156,18 @@ export function ReadAloudPrompt({ englishText, japaneseText, onComplete, onSkip 
           />
         ) : (
           <Mic style={{ width: 72, height: 72 }} />
+        )}
+
+        {/* Success animation overlaid on top of the mic for a triumphant moment. */}
+        {showSuccessAnim && (
+          <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+            <DotLottieReact
+              src="/anim/success-2.lottie"
+              autoplay
+              loop={false}
+              style={{ width: 240, height: 240 }}
+            />
+          </div>
         )}
       </button>
 
