@@ -44,6 +44,46 @@ function extractJson(response: string): unknown {
   }
 }
 
+/**
+ * The 6 fixed Japanese scene categories used everywhere in the app.
+ * Mirrors `SCENE_CATEGORIES` in src/lib/mastery.ts.
+ */
+const SCENE_CATEGORIES = ["日常", "仕事", "学習", "感情", "人間関係", "その他"] as const;
+type SceneCategory = (typeof SCENE_CATEGORIES)[number];
+
+/** Map a free-form / English label coming back from the LLM onto one of the 6 fixed categories. */
+function normalizeScene(raw: unknown): SceneCategory {
+  if (typeof raw !== "string") return "その他";
+  const s = raw.trim();
+  if ((SCENE_CATEGORIES as readonly string[]).includes(s)) return s as SceneCategory;
+  const lower = s.toLowerCase();
+  // Japanese keyword hits (for sloppy responses like "日常生活" / "仕事場" etc.)
+  if (s.includes("日常") || s.includes("生活") || s.includes("食") || s.includes("健康") || s.includes("天気") || s.includes("趣味") || s.includes("旅行")) return "日常";
+  if (s.includes("仕事") || s.includes("会社") || s.includes("ビジネス") || s.includes("職場") || s.includes("業務")) return "仕事";
+  if (s.includes("学習") || s.includes("勉強") || s.includes("学校") || s.includes("授業") || s.includes("教育")) return "学習";
+  if (s.includes("感情") || s.includes("気持ち") || s.includes("感想") || s.includes("気分")) return "感情";
+  if (s.includes("人間関係") || s.includes("家族") || s.includes("友達") || s.includes("友人") || s.includes("恋人") || s.includes("関係")) return "人間関係";
+  // English keyword hits.
+  if (/(daily|life|food|weather|health|hobby|travel|routine|home|morning|evening|night)/.test(lower)) return "日常";
+  if (/(work|business|office|career|job|meeting|colleague|money|finance)/.test(lower)) return "仕事";
+  if (/(school|study|learn|education|class|exam|lesson|homework)/.test(lower)) return "学習";
+  if (/(feel|emotion|mood|happy|sad|angry|anxious|tired|excited|reflect)/.test(lower)) return "感情";
+  if (/(family|friend|relation|partner|social|people|love|date)/.test(lower)) return "人間関係";
+  return "その他";
+}
+
+/** Walk a parsed AI response and normalize every scene_or_context field in place. */
+function normalizeExpressionScenes(parsed: any): void {
+  if (!parsed || typeof parsed !== "object") return;
+  const arr = Array.isArray(parsed.expressions) ? parsed.expressions : null;
+  if (!arr) return;
+  for (const exp of arr) {
+    if (exp && typeof exp === "object") {
+      exp.scene_or_context = normalizeScene(exp.scene_or_context);
+    }
+  }
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -126,6 +166,16 @@ serve(async (req) => {
 - Prefer 2-4 word phrases over single words
 - Include meaning in Japanese, part of speech, and usage context
 
+【SCENE_OR_CONTEXT — STRICT RULE】
+- The "scene_or_context" field MUST be EXACTLY ONE of these 6 Japanese labels (no English, no synonyms, no extra text):
+  "日常" (daily life: food, weather, health, hobbies, travel, errands, small talk)
+  "仕事" (work, business, office, career, money matters)
+  "学習" (school, study, learning, education, exams)
+  "感情" (feelings, mood, reactions, emotional reflections)
+  "人間関係" (family, friends, partner, social interactions, relationships)
+  "その他" (use ONLY when the expression truly fits none of the above — this should be RARE)
+- Always pick the closest of the first 5 categories before falling back to "その他".
+
 【SENTENCE BREAKDOWN】
 - Break the diary into individual sentences
 - For each sentence, provide the Japanese translation
@@ -148,7 +198,7 @@ serve(async (req) => {
       "expression": "exact phrase from diary",
       "meaning": "日本語の意味",
       "pos_or_type": "verb phrase / noun phrase / fixed phrase",
-      "scene_or_context": "daily life / work / feelings etc"
+      "scene_or_context": "日常 / 仕事 / 学習 / 感情 / 人間関係 / その他 のいずれか1つ"
     }
   ]
 }`;
@@ -174,6 +224,11 @@ serve(async (req) => {
 - 既存リストと被る場合は「復習」フラグを立てる
 - 新出の場合は「新出」フラグを立てる
 
+【scene_or_context のルール（厳守）】
+- 必ず次の6つの日本語ラベルから「1つだけ」選ぶこと（英語や別の語は禁止）：
+  "日常" / "仕事" / "学習" / "感情" / "人間関係" / "その他"
+- "その他" は本当にどれにも当てはまらない時だけ使うこと（ほとんど発生しないはず）。
+
 【出力形式（JSON）】
 {
   "sentences": [
@@ -188,7 +243,7 @@ serve(async (req) => {
       "expression": "表現",
       "meaning": "日本語訳",
       "pos_or_type": "verb phrase / noun phrase / fixed phrase など",
-      "scene_or_context": "daily life / work / feelings など",
+      "scene_or_context": "日常 / 仕事 / 学習 / 感情 / 人間関係 / その他 のいずれか1つ",
       "flag": "新出 または 復習"
     }
   ]
@@ -217,6 +272,11 @@ serve(async (req) => {
 - Each expression MUST be an exact substring of the corrected diary text
 - Prefer 2-4 word phrases over single words
 
+【SCENE_OR_CONTEXT — STRICT RULE】
+- The "scene_or_context" field MUST be EXACTLY ONE of these 6 Japanese labels:
+  "日常" / "仕事" / "学習" / "感情" / "人間関係" / "その他"
+- Use "その他" only when none of the first 5 fit.
+
 【SENTENCE BREAKDOWN】
 - Break the corrected diary into individual sentences
 - For each sentence, provide the Japanese translation
@@ -239,7 +299,7 @@ serve(async (req) => {
       "expression": "exact phrase from diary",
       "meaning": "日本語の意味",
       "pos_or_type": "verb phrase / noun phrase / fixed phrase",
-      "scene_or_context": "daily life / work / feelings etc"
+      "scene_or_context": "日常 / 仕事 / 学習 / 感情 / 人間関係 / その他 のいずれか1つ"
     }
   ]
 }`;
@@ -410,7 +470,10 @@ serve(async (req) => {
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
         }
-        
+
+        // Force every extracted expression's scene into the 6 fixed categories.
+        normalizeExpressionScenes(parsed);
+
         return new Response(JSON.stringify(parsed), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });

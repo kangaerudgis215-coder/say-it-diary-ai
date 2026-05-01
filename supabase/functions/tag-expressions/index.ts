@@ -42,12 +42,16 @@ serve(async (req) => {
       });
     }
 
-    // Fetch all expressions for this user that don't have tags
+    // Fetch every expression that is either untagged, has empty tags, OR is
+    // currently sitting in "その他" — those are exactly the ones the user wants
+    // re-classified into the proper 6-category system.
     const { data: expressions, error: fetchError } = await supabase
       .from('expressions')
       .select('id, expression, meaning, example_sentence, scene_or_context, pos_or_type')
       .eq('user_id', user.id)
-      .or('scene_or_context.is.null,pos_or_type.is.null,scene_or_context.eq.,pos_or_type.eq.');
+      .or(
+        'scene_or_context.is.null,pos_or_type.is.null,scene_or_context.eq.,pos_or_type.eq.,scene_or_context.eq.その他'
+      );
 
     if (fetchError) {
       throw fetchError;
@@ -74,13 +78,16 @@ serve(async (req) => {
       const prompt = `You are an expert at categorizing English expressions for language learners.
 
 For each expression below, assign:
-1. scene_or_context: Choose EXACTLY ONE from these 6 Japanese categories (return the Japanese label as-is):
-   "日常" (daily life, food, weather, health, hobbies, travel, small talk)
-   "仕事" (work, business, office)
-   "学習" (school, study, learning, education)
-   "感情" (feelings, emotions, mood)
-   "人間関係" (family, friends, relationships, social)
-   "その他" (anything that doesn't clearly fit above)
+1. scene_or_context: Choose EXACTLY ONE from these 6 Japanese categories
+   and return the JAPANESE label exactly as written (no English, no quotes around it):
+   "日常" — daily life, food, weather, health, hobbies, travel, errands, small talk, home/morning/evening routines
+   "仕事" — work, business, office, career, money, meetings, colleagues
+   "学習" — school, study, learning, education, classes, exams, language practice
+   "感情" — feelings, mood, reactions, emotional reflections (happy, sad, tired, excited…)
+   "人間関係" — family, friends, partner, dating, social interactions
+   "その他" — ONLY when the expression truly fits NONE of the above. This must be RARE.
+   IMPORTANT: Always try the first 5 categories first. Default fallback is NEVER "その他";
+   prefer the closest of the first 5 even if the fit is approximate.
    
 2. pos_or_type: A simple grammatical/phrase type label.
    Options: "verb phrase", "adjective phrase", "noun phrase", "fixed phrase", "adverb phrase", "idiom", "other"
@@ -140,9 +147,11 @@ Only return the JSON array, nothing else.`;
         // Update each expression with its tags
         for (let j = 0; j < batch.length; j++) {
           const exp = batch[j];
-          const tag = tags[j] || { scene_or_context: "その他", pos_or_type: "other" };
+          const tag = tags[j] || { scene_or_context: "日常", pos_or_type: "other" };
           const allowedScenes = ["日常", "仕事", "学習", "感情", "人間関係", "その他"];
-          const scene = allowedScenes.includes(tag.scene_or_context) ? tag.scene_or_context : "その他";
+          // If the model returned something unexpected, fall back to "日常" rather than
+          // "その他" so we don't keep re-creating the bucket the user is trying to drain.
+          const scene = allowedScenes.includes(tag.scene_or_context) ? tag.scene_or_context : "日常";
 
           const { error: updateError } = await supabase
             .from('expressions')
@@ -160,12 +169,12 @@ Only return the JSON array, nothing else.`;
         }
       } catch (parseError) {
         console.error("Failed to parse AI response:", parseError, content);
-        // Fallback: tag with "other"
+        // Fallback: leave scene as "日常" (safest catch-all) instead of dumping into "その他".
         for (const exp of batch) {
           await supabase
             .from('expressions')
             .update({
-              scene_or_context: "その他",
+              scene_or_context: "日常",
               pos_or_type: "other"
             })
             .eq('id', exp.id);

@@ -10,7 +10,7 @@ import { ExpressionListItem } from '@/components/expressions/ExpressionListItem'
 import { ExpressionDetail } from '@/components/ExpressionDetail';
 import { bucketOf, SCENE_CATEGORIES } from '@/lib/mastery';
 import { Input } from '@/components/ui/input';
-import { findSimilarExpressions } from '@/lib/expressionSimilarity';
+import { findSimilarExpressions, groupSimilarExpressions } from '@/lib/expressionSimilarity';
 
 export interface ExpressionWithDiary {
   id: string;
@@ -84,9 +84,35 @@ export default function Expressions() {
     return map;
   }, [expressions]);
 
+  /**
+   * For each expression id, the deduped list of diary dates (desc) coming from
+   * every *similar* expression in the user's history. Used by the list card and
+   * detail view to drive the multi-date "View diary…" picker.
+   */
+  const relatedDatesById = useMemo(() => {
+    const map: Record<string, string[]> = {};
+    const groups = groupSimilarExpressions(expressions);
+    for (const g of groups) {
+      const dates = Array.from(
+        new Set(
+          g.members
+            .map((m) => m.diary_date)
+            .filter((d): d is string => !!d),
+        ),
+      ).sort((a, b) => b.localeCompare(a));
+      for (const m of g.members) map[m.id] = dates;
+    }
+    return map;
+  }, [expressions]);
+
+  // Count expressions that need (re)tagging: missing OR currently parked in その他.
+  // Showing this count lets the user keep draining the その他 bucket via Auto-tag.
   const untaggedCount = useMemo(
-    () => expressions.filter(e => !e.scene_or_context).length,
-    [expressions]
+    () =>
+      expressions.filter(
+        (e) => !e.scene_or_context || e.scene_or_context === 'その他',
+      ).length,
+    [expressions],
   );
 
   // Per-category breakdown using the 6 fixed categories.
@@ -123,7 +149,10 @@ export default function Expressions() {
           (e.meaning ?? '').toLowerCase().includes(q)
       );
     }
-    return list;
+    // Collapse similar expressions into a single representative card so the list
+    // doesn't grow noisy. The newest occurrence wins (list is already sorted desc).
+    const groups = groupSimilarExpressions(list);
+    return groups.map((g) => g.representative);
   }, [active, activeCategory, search]);
 
   const visible = categoryList.slice(0, visibleCount);
@@ -228,7 +257,7 @@ export default function Expressions() {
           {untaggedCount > 0 && (
             <div className="flex items-center justify-between p-3 bg-primary/10 rounded-xl mb-4">
               <span className="text-xs text-muted-foreground">
-                {untaggedCount} phrase{untaggedCount > 1 ? 's' : ''} need a category
+                {untaggedCount} 個の表現を再分類できます
               </span>
               <Button size="sm" variant="ghost" onClick={handleTagExpressions} disabled={isTagging}>
                 {isTagging ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-1" />}
@@ -313,10 +342,13 @@ export default function Expressions() {
                       key={exp.id}
                       expression={exp}
                       usageCount={usageCounts[exp.id] ?? 1}
+                      relatedDiaryDates={relatedDatesById[exp.id]}
                       isSelected={selectedId === exp.id}
                       onSelect={() => setSelectedId(selectedId === exp.id ? null : exp.id)}
                       onArchiveToggle={handleArchiveToggle}
-                      onNavigateToDiary={() => navigate(`/calendar?date=${exp.diary_date}`)}
+                      onNavigateToDiary={(d) =>
+                        navigate(`/calendar?date=${d ?? exp.diary_date}`)
+                      }
                       onDeleted={() => { setSelectedId(null); fetchExpressions(); }}
                     />
                   ))}
@@ -338,9 +370,12 @@ export default function Expressions() {
                 <div className="sticky top-4 bg-card rounded-xl border border-border p-5">
                   <ExpressionDetail
                     expression={selectedExpression}
-                    onNavigateToDiary={() => navigate(`/calendar?date=${selectedExpression.diary_date}`)}
+                    onNavigateToDiary={(d) =>
+                      navigate(`/calendar?date=${d ?? selectedExpression.diary_date}`)
+                    }
                     onDeleted={() => { setSelectedId(null); fetchExpressions(); }}
                     onArchiveToggle={handleArchiveToggle}
+                    relatedDiaryDates={relatedDatesById[selectedExpression.id]}
                   />
                 </div>
               </div>
