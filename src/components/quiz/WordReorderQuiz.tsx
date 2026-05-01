@@ -49,7 +49,15 @@ export function WordReorderQuiz({ sentence, japaneseSentence, onCorrect }: WordR
     if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
     try {
       window.speechSynthesis.cancel();
-      const u = new SpeechSynthesisUtterance(text.replace(/[.,!?;:]+$/, ''));
+      // Strip trailing punctuation, then normalise single-letter words so TTS
+      // doesn't spell them out as "capital I" / "capital A". We lowercase
+      // standalone single letters and surround them with spaces so the engine
+      // reads them as a natural word rather than an initialism.
+      const cleaned = text.replace(/[.,!?;:]+$/, '');
+      const spoken = /^[A-Za-z]$/.test(cleaned)
+        ? cleaned.toLowerCase()
+        : cleaned;
+      const u = new SpeechSynthesisUtterance(spoken);
       u.lang = 'en-US';
       u.rate = 0.95;
       window.speechSynthesis.speak(u);
