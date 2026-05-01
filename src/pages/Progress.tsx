@@ -84,13 +84,16 @@
      if (!user) return;
      setIsBackfilling(true);
  
-     try {
-       const { data: messages } = await supabase
-         .from('messages')
-         .select('content, created_at')
-         .eq('user_id', user.id)
-         .eq('role', 'user')
-         .order('created_at', { ascending: true });
+      try {
+        // Pull each user message together with its conversation's diary date.
+        // This ensures past-diary chats are attributed to the diary's date
+        // (not the day the user typed it).
+        const { data: messages } = await supabase
+          .from('messages')
+          .select('content, created_at, conversation_id, conversations!inner(date)')
+          .eq('user_id', user.id)
+          .eq('role', 'user')
+          .order('created_at', { ascending: true });
  
        if (!messages || messages.length === 0) {
          toast({ title: 'No messages found', description: 'Start a diary conversation first!' });
@@ -118,7 +121,8 @@
  
        const messagesByDate: { [date: string]: string[] } = {};
        for (const msg of messages) {
-         const date = format(new Date(msg.created_at), 'yyyy-MM-dd');
+          const convDate = (msg as any).conversations?.date as string | undefined;
+          const date = convDate || format(new Date(msg.created_at), 'yyyy-MM-dd');
          if (!messagesByDate[date]) {
            messagesByDate[date] = [];
          }
