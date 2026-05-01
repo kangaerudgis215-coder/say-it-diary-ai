@@ -200,8 +200,11 @@ export default function InstantComposition() {
         {/* Hero: overall mastery % */}
         <div className="rounded-3xl bg-gradient-to-br from-primary/20 via-card to-card border border-border/60 p-6 mb-5 text-center relative overflow-hidden">
           <div className="absolute -top-10 -right-10 w-40 h-40 rounded-full bg-primary/10 blur-3xl pointer-events-none" />
+          {overallPct === 100 && <SparklesAura />}
           <p className="text-xs uppercase tracking-widest text-muted-foreground mb-2">Overall mastery</p>
-          <p className="text-7xl font-black tracking-tight text-primary leading-none">{overallPct}%</p>
+          <p className="relative text-7xl font-black tracking-tight text-primary leading-none">
+            {overallPct}%
+          </p>
           <p className="text-xs text-muted-foreground mt-3">
             {phrases.filter(p => bucketOf(p.mastery_level) === 'mastered').length} / {phrases.length} phrases mastered
           </p>
