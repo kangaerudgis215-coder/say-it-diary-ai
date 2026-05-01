@@ -181,10 +181,21 @@ export function QuizSession() {
   }
 
   if (phase === 'complete') {
-    if (isPastDiary || isRecallMode) {
-      return <RecallCompletionScreen diaryDate={diaryDate} />;
+    // First-ever reorder completion for this diary → celebratory streak screen,
+    // even if the diary itself is from a past date (back-filling streaks).
+    // Any subsequent run (including recall mode) shows the calmer "review done"
+    // screen.
+    if (isFirstCompletion) {
+      return (
+        <CompletionScreen
+          streak={streak}
+          expressions={expressions}
+          isPastDiary={isPastDiary}
+          diaryDate={diaryDate}
+        />
+      );
     }
-    return <CompletionScreen streak={streak} expressions={expressions} />;
+    return <RecallCompletionScreen diaryDate={diaryDate} />;
   }
 
   if (phase === 'readAloud') {
