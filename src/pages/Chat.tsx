@@ -49,7 +49,6 @@ export default function Chat() {
   const [isGeneratingDiary, setIsGeneratingDiary] = useState(false);
   const [diaryDate, setDiaryDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
   const [showHelp, setShowHelp] = useState(false);
-  const [diaryAlreadyExists, setDiaryAlreadyExists] = useState(false);
   const [silenceMs, setSilenceMs] = useState<number>(() => {
     if (typeof window === 'undefined') return 3000;
     const saved = Number(window.localStorage.getItem('chat:silenceMs'));
@@ -83,18 +82,6 @@ export default function Chat() {
 
   const initConversation = async () => {
     if (!user) return;
-
-    // Check if a diary entry already exists for this date
-    const { data: existingDiary } = await supabase
-      .from('diary_entries')
-      .select('id')
-      .eq('user_id', user.id)
-      .eq('date', diaryDate)
-      .maybeSingle();
-
-    if (existingDiary) {
-      setDiaryAlreadyExists(true);
-    }
 
     // Check for existing conversation for this diary date
     const { data: existing } = await supabase
