@@ -48,7 +48,6 @@ export default function Recall() {
       setDidGlobalCleanup(true);
     }
 
-    const today = format(new Date(), 'yyyy-MM-dd');
     let entry = null;
 
     if (diaryIdFromUrl) {
@@ -62,15 +61,26 @@ export default function Recall() {
       entry = data;
     } else {
       setSourceMode('latest');
-      const { data } = await supabase
+      // Pick the OLDEST diary that is ready for recall (reorder finished) but
+      // not yet recalled. This drives the "next item in the recall queue".
+      const { data: ready } = await supabase
         .from('diary_entries')
         .select('*')
         .eq('user_id', user.id)
-        .lt('date', today)
-        .order('date', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      entry = data;
+        .eq('sentences_review_completed', true)
+        .order('date', { ascending: true });
+      const readyList = ready || [];
+      if (readyList.length > 0) {
+        const ids = readyList.map((d: any) => d.id);
+        const { data: completed } = await supabase
+          .from('recall_sessions')
+          .select('diary_entry_id')
+          .eq('user_id', user.id)
+          .eq('completed', true)
+          .in('diary_entry_id', ids);
+        const completedSet = new Set((completed || []).map((r: any) => r.diary_entry_id));
+        entry = readyList.find((d: any) => !completedSet.has(d.id)) || null;
+      }
     }
 
     if (entry) {
