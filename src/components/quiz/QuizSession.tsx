@@ -129,14 +129,10 @@ export function QuizSession() {
 
   const finishToRecall = async () => {
     await markReviewCompleted();
-    // For both new and past diaries, push the learner straight into the recall
-    // page so they can review right away. Recall completion is the new gate
-    // for the calendar sparkle + list badge.
-    if (diaryId) {
-      navigate(`/recall?diaryId=${diaryId}&mode=calendar`);
-    } else {
-      setPhase('complete');
-    }
+    // Reorder + read-aloud are NOT recall. Recall is a separate manual step
+    // the user kicks off from the bottom-tab badge or the recall page itself.
+    // Just show the local celebration screen and let them choose what's next.
+    setPhase('complete');
   };
 
   const handleReadAloudComplete = () => {
