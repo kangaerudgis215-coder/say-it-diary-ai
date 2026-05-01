@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Send, Loader2, Check, BookOpen } from 'lucide-react';
+import { ArrowLeft, Send, Loader2, Check, BookOpen, Lock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ChatBubble } from '@/components/ChatBubble';
@@ -28,6 +28,64 @@ const SILENCE_OPTIONS: { ms: number; label: string }[] = [
   { ms: 10000, label: '10秒' },
 ];
 
+/**
+ * Robust browser TTS for the AI's spoken reply. Works around three known
+ * pain points:
+ *   1. Chrome ignores `speak()` if called too soon after `cancel()`.
+ *   2. Safari/iOS only has voices after `voiceschanged` fires.
+ *   3. Long utterances pause silently in Chrome — `resume()` brings them back.
+ */
+async function speakAssistant(text: string): Promise<void> {
+  if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+  const synth = window.speechSynthesis;
+  try {
+    // Wait for voices to be loaded (Safari/iOS first-load workaround).
+    if (synth.getVoices().length === 0) {
+      await new Promise<void>((resolve) => {
+        const t = setTimeout(resolve, 800);
+        synth.addEventListener(
+          'voiceschanged',
+          () => {
+            clearTimeout(t);
+            resolve();
+          },
+          { once: true },
+        );
+      });
+    }
+    synth.cancel();
+    // Small gap so Chrome doesn't swallow the next speak().
+    await new Promise((r) => setTimeout(r, 80));
+
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = 'en-US';
+    u.rate = 0.95;
+    u.pitch = 1.05;
+    // Prefer an English voice if one is installed — avoids picking up the
+    // system default (e.g. a JP voice) which can sound robotic for English.
+    const voices = synth.getVoices();
+    const en =
+      voices.find((v) => v.lang === 'en-US' && v.localService) ||
+      voices.find((v) => v.lang === 'en-US') ||
+      voices.find((v) => v.lang.startsWith('en'));
+    if (en) u.voice = en;
+    synth.speak(u);
+
+    // Chrome bug: long utterances stop after ~15s. Periodically nudge it.
+    const keepAlive = setInterval(() => {
+      if (!synth.speaking) {
+        clearInterval(keepAlive);
+        return;
+      }
+      if (synth.paused) synth.resume();
+    }, 5000);
+    u.onend = () => clearInterval(keepAlive);
+    u.onerror = () => clearInterval(keepAlive);
+  } catch {
+    // ignore TTS errors
+  }
+}
+
 interface Message {
   id: string;
   role: 'user' | 'assistant';
@@ -47,6 +105,10 @@ export default function Chat() {
   const [isLoading, setIsLoading] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [isGeneratingDiary, setIsGeneratingDiary] = useState(false);
+  // Once a diary has been generated for this date, the chat becomes read-only
+  // so the entry can't be re-edited or accidentally regenerated. The dedicated
+  // "Edit / regenerate" flow lives on the Review screen.
+  const [existingDiaryId, setExistingDiaryId] = useState<string | null>(null);
   const [diaryDate, setDiaryDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
   const [showHelp, setShowHelp] = useState(false);
   const [silenceMs, setSilenceMs] = useState<number>(() => {
@@ -82,6 +144,17 @@ export default function Chat() {
 
   const initConversation = async () => {
     if (!user) return;
+
+    // Check whether a diary already exists for this date. If so, we lock the
+    // chat and route the user to the review/edit screen instead of letting
+    // them keep talking and re-tapping Done.
+    const { data: existingDiary } = await supabase
+      .from('diary_entries')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('date', diaryDate)
+      .maybeSingle();
+    setExistingDiaryId(existingDiary?.id ?? null);
 
     // Check for existing conversation for this diary date
     const { data: existing } = await supabase
@@ -134,6 +207,8 @@ export default function Chat() {
 
   const sendMessage = async (content: string) => {
     if (!content.trim() || !conversationId || !user) return;
+    // Hard guard: never accept new messages once the diary is finalised.
+    if (existingDiaryId) return;
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -212,19 +287,13 @@ export default function Chat() {
 
       setMessages(prev => [...prev, assistantMessage]);
 
-      // Speak the AI reply aloud for an immersive feel
-      try {
-        if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-          window.speechSynthesis.cancel();
-          const u = new SpeechSynthesisUtterance(assistantMessage.content);
-          u.lang = 'en-US';
-          u.rate = 0.95;
-          u.pitch = 1.05;
-          window.speechSynthesis.speak(u);
-        }
-      } catch {
-        // ignore TTS errors
-      }
+      // Speak the AI reply aloud. Browser TTS is famously flaky:
+      //   • Chrome silently drops `speak()` if it's called immediately after
+      //     `cancel()` — we add a short delay.
+      //   • Safari/iOS only has voices ready *after* `voiceschanged`, so the
+      //     first utterance of a session can be silent. We wait for voices.
+      //   • If the engine ends up "paused" (Chrome bug), `resume()` revives it.
+      void speakAssistant(assistantMessage.content);
 
       // Save assistant message
       await supabase.from('messages').insert({
@@ -434,6 +503,7 @@ export default function Chat() {
         .single();
 
       if (savedEntry) {
+        setExistingDiaryId(savedEntry.id);
         navigate(`/review?diaryId=${savedEntry.id}&date=${diaryDate}`);
       } else {
         navigate('/calendar');
@@ -456,6 +526,7 @@ export default function Chat() {
 
   // Check if we have enough content for diary (at least 2 user messages)
   const hasEnoughContent = messages.filter(m => m.role === 'user').length >= 2;
+  const isLocked = !!existingDiaryId;
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -519,28 +590,45 @@ export default function Chat() {
             )}
           </div>
           
-          <Button
-            variant="success"
-            size="sm"
-            onClick={handleGenerateDiary}
-            disabled={!hasEnoughContent || isGeneratingDiary}
-            className={hasEnoughContent ? 'animate-pulse' : ''}
-          >
-            {isGeneratingDiary ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <>
-                <Check className="w-4 h-4" />
-                Done
-              </>
-            )}
-          </Button>
+          {isLocked ? (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => navigate(`/review?diaryId=${existingDiaryId}&date=${diaryDate}`)}
+            >
+              <BookOpen className="w-4 h-4" />
+              レビュー
+            </Button>
+          ) : (
+            <Button
+              variant="success"
+              size="sm"
+              onClick={handleGenerateDiary}
+              disabled={!hasEnoughContent || isGeneratingDiary}
+              className={hasEnoughContent ? 'animate-pulse' : ''}
+            >
+              {isGeneratingDiary ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <>
+                  <Check className="w-4 h-4" />
+                  Done
+                </>
+              )}
+            </Button>
+          )}
         </div>
         
         {/* Prompt to finish when ready */}
-        {hasEnoughContent && !isGeneratingDiary && (
+        {!isLocked && hasEnoughContent && !isGeneratingDiary && (
           <p className="text-xs text-center text-primary mt-2 animate-pulse">
             Ready? Tap Done to create your diary! ✨
+          </p>
+        )}
+        {isLocked && (
+          <p className="text-xs text-center text-muted-foreground mt-2 inline-flex items-center gap-1 justify-center w-full">
+            <Lock className="w-3 h-3" />
+            この日の日記は作成済みです。修正はレビュー画面から。
           </p>
         )}
       </header>
@@ -566,7 +654,7 @@ export default function Chat() {
         )}
 
         {/* Prominent CTA to finish diary */}
-        {hasEnoughContent && !isGeneratingDiary && !isLoading && (
+        {!isLocked && hasEnoughContent && !isGeneratingDiary && !isLoading && (
           <div className="flex justify-center py-4">
             <Button
               variant="glow"
@@ -585,6 +673,24 @@ export default function Chat() {
 
       {/* Input Area — speaking-first layout */}
       <div className="sticky bottom-0 glass border-t border-border px-4 pt-3 pb-5 safe-bottom">
+        {isLocked ? (
+          <div className="flex flex-col items-center gap-3 py-2">
+            <p className="text-sm text-muted-foreground inline-flex items-center gap-1.5">
+              <Lock className="w-4 h-4" />
+              この日の日記は完成済みのためチャットはロックされています
+            </p>
+            <Button
+              variant="glow"
+              size="lg"
+              onClick={() => navigate(`/review?diaryId=${existingDiaryId}&date=${diaryDate}`)}
+              className="gap-2 px-8"
+            >
+              <BookOpen className="w-5 h-5" />
+              日記レビューへ
+            </Button>
+          </div>
+        ) : (
+        <>
         {/* Compact text input row (kept for typing fallback) */}
         <div className="relative mb-4">
           <Input
@@ -639,6 +745,8 @@ export default function Chat() {
             ))}
           </div>
         </div>
+        </>
+        )}
       </div>
     </div>
   );
