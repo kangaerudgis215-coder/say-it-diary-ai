@@ -1,10 +1,16 @@
-import { Calendar, BookOpen, MessageSquare, Tag, Layers, Star, Trash2, Loader2, Archive, ArchiveRestore, BarChart3 } from 'lucide-react';
+import { Calendar, BookOpen, MessageSquare, Tag, Layers, Star, Trash2, Loader2, Archive, ArchiveRestore, BarChart3, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
 import { useState } from 'react';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import { cn } from '@/lib/utils';
 
 interface ExpressionDetailProps {
   expression: {
@@ -23,12 +29,24 @@ interface ExpressionDetailProps {
     correct_streak?: number;
     last_reviewed_at?: string | null;
   };
-  onNavigateToDiary?: () => void;
+  onNavigateToDiary?: (date?: string) => void;
   onDeleted?: () => void;
   onArchiveToggle?: (id: string, newStatus: string) => void;
+  /**
+   * When this expression is the representative of a cluster of similar
+   * expressions, pass every member's diary date here (deduped, sorted).
+   * If two or more dates exist, the "View diary" button becomes a date picker.
+   */
+  relatedDiaryDates?: string[];
 }
 
-export function ExpressionDetail({ expression, onNavigateToDiary, onDeleted, onArchiveToggle }: ExpressionDetailProps) {
+export function ExpressionDetail({
+  expression,
+  onNavigateToDiary,
+  onDeleted,
+  onArchiveToggle,
+  relatedDiaryDates,
+}: ExpressionDetailProps) {
   const { toast } = useToast();
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -156,13 +174,64 @@ export function ExpressionDetail({ expression, onNavigateToDiary, onDeleted, onA
         <div className="pt-3 border-t border-border">
           <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
             <Calendar className="w-3 h-3" />
-            From diary: {formatDiaryDate(expression.diary_date)}
+            {relatedDiaryDates && relatedDiaryDates.length > 1
+              ? `Used in ${relatedDiaryDates.length} diaries`
+              : `From diary: ${formatDiaryDate(expression.diary_date)}`}
           </div>
-          {onNavigateToDiary && (
-            <Button variant="outline" size="sm" className="w-full" onClick={(e) => { e.stopPropagation(); onNavigateToDiary(); }}>
-              View diary from this day
-            </Button>
-          )}
+          {onNavigateToDiary &&
+            (relatedDiaryDates && relatedDiaryDates.length > 1 ? (
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full justify-between"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <span>View diary…</span>
+                    <ChevronDown className="w-4 h-4 opacity-60" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent
+                  className="w-64 p-2 bg-popover z-50"
+                  align="end"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground px-2 py-1">
+                    Pick a date
+                  </p>
+                  <div className="max-h-64 overflow-y-auto">
+                    {relatedDiaryDates.map((d) => (
+                      <button
+                        key={d}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onNavigateToDiary(d);
+                        }}
+                        className={cn(
+                          'w-full text-left px-2 py-2 rounded-md text-sm hover:bg-muted transition-colors',
+                          d === expression.diary_date && 'bg-muted/60 font-medium',
+                        )}
+                      >
+                        {formatDiaryDate(d)}
+                      </button>
+                    ))}
+                  </div>
+                </PopoverContent>
+              </Popover>
+            ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onNavigateToDiary(expression.diary_date ?? undefined);
+                }}
+              >
+                View diary from this day
+              </Button>
+            ))}
         </div>
       )}
 
