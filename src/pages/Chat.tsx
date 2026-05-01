@@ -87,6 +87,17 @@ export default function Chat() {
   const initConversation = async () => {
     if (!user) return;
 
+    // Check whether a diary already exists for this date. If so, we lock the
+    // chat and route the user to the review/edit screen instead of letting
+    // them keep talking and re-tapping Done.
+    const { data: existingDiary } = await supabase
+      .from('diary_entries')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('date', diaryDate)
+      .maybeSingle();
+    setExistingDiaryId(existingDiary?.id ?? null);
+
     // Check for existing conversation for this diary date
     const { data: existing } = await supabase
       .from('conversations')
