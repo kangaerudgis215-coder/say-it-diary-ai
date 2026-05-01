@@ -161,7 +161,7 @@ serve(async (req) => {
   - Each sentence should be one clear idea. No compound sentences with multiple clauses.
 
 【EXPRESSION EXTRACTION】
-- From the diary, extract 3-8 reusable English phrases (verb phrases, fixed phrases, collocations)
+- From the diary, extract 3-8 reusable English phrases (verb phrases, idioms, collocations)
 - Each expression MUST be an exact substring of the diary text
 - Prefer 2-4 word phrases over single words
 - Include meaning in Japanese, part of speech, and usage context
@@ -197,7 +197,7 @@ serve(async (req) => {
     {
       "expression": "exact phrase from diary",
       "meaning": "日本語の意味",
-      "pos_or_type": "verb phrase / noun phrase / fixed phrase",
+      "pos_or_type": "verb phrase / noun phrase / adjective phrase / adverb phrase / idiom / other (use 'idiom' for set phrases and conventional formulas — what used to be called 'fixed phrase')",
       "scene_or_context": "日常 / 仕事 / 学習 / 感情 / 人間関係 / その他 のいずれか1つ"
     }
   ]
@@ -242,7 +242,7 @@ serve(async (req) => {
     {
       "expression": "表現",
       "meaning": "日本語訳",
-      "pos_or_type": "verb phrase / noun phrase / fixed phrase など",
+      "pos_or_type": "verb phrase / noun phrase / adjective phrase / adverb phrase / idiom / other（決まり文句や定型句は 'idiom' に統合）",
       "scene_or_context": "日常 / 仕事 / 学習 / 感情 / 人間関係 / その他 のいずれか1つ",
       "flag": "新出 または 復習"
     }
@@ -298,7 +298,7 @@ serve(async (req) => {
     {
       "expression": "exact phrase from diary",
       "meaning": "日本語の意味",
-      "pos_or_type": "verb phrase / noun phrase / fixed phrase",
+      "pos_or_type": "verb phrase / noun phrase / adjective phrase / adverb phrase / idiom / other (use 'idiom' for set phrases / fixed expressions)",
       "scene_or_context": "日常 / 仕事 / 学習 / 感情 / 人間関係 / その他 のいずれか1つ"
     }
   ]

@@ -79,7 +79,6 @@ export const POS_CATEGORIES = [
   "verb phrase",
   "adjective phrase",
   "noun phrase",
-  "fixed phrase",
   "adverb phrase",
   "idiom",
   "other",
@@ -91,8 +90,28 @@ export const POS_LABELS_JA: Record<PosCategory, string> = {
   "verb phrase": "動詞句",
   "adjective phrase": "形容詞句",
   "noun phrase": "名詞句",
-  "fixed phrase": "決まり文句",
   "adverb phrase": "副詞句",
-  "idiom": "イディオム",
+  "idiom": "イディオム・決まり文句",
   "other": "その他",
 };
+
+/**
+ * Normalise a raw `pos_or_type` value coming from the database (which may
+ * still hold the legacy "fixed phrase" tag) into the active POS bucket. Used
+ * by every UI that surfaces the type label so the merged
+ * "イディオム・決まり文句" reads consistently.
+ */
+export function normalizePosType(raw: string | null | undefined): PosCategory | null {
+  if (!raw) return null;
+  const merged = raw === "fixed phrase" ? "idiom" : raw;
+  return (POS_CATEGORIES as readonly string[]).includes(merged)
+    ? (merged as PosCategory)
+    : null;
+}
+
+/** Human-friendly Japanese label, tolerant of legacy / unknown values. */
+export function posLabelJa(raw: string | null | undefined): string | null {
+  const normalised = normalizePosType(raw);
+  if (!normalised) return raw ?? null;
+  return POS_LABELS_JA[normalised];
+}

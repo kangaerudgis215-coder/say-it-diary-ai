@@ -11,6 +11,7 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
+import { posLabelJa } from '@/lib/mastery';
 
 interface ExpressionDetailProps {
   expression: {
@@ -104,7 +105,7 @@ export function ExpressionDetail({
           {expression.pos_or_type && (
             <Badge variant="secondary" className="gap-1">
               <Layers className="w-3 h-3" />
-              {expression.pos_or_type}
+              {posLabelJa(expression.pos_or_type) ?? expression.pos_or_type}
             </Badge>
           )}
         </div>
