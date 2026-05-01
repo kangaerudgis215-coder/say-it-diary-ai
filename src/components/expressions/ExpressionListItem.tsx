@@ -24,16 +24,19 @@ interface ExpressionListItemProps {
   };
   /** Total number of times a *similar* expression appears across the user's history (>=1). */
   usageCount?: number;
+  /** All diary dates (deduped, sorted desc) for the cluster this card represents. */
+  relatedDiaryDates?: string[];
   isSelected: boolean;
   onSelect: () => void;
   onArchiveToggle: (id: string, newStatus: string) => void;
-  onNavigateToDiary: () => void;
+  onNavigateToDiary: (date?: string) => void;
   onDeleted: () => void;
 }
 
 export function ExpressionListItem({
   expression: exp,
   usageCount,
+  relatedDiaryDates,
   isSelected,
   onSelect,
   onArchiveToggle,
@@ -125,6 +128,7 @@ export function ExpressionListItem({
             onNavigateToDiary={onNavigateToDiary}
             onDeleted={onDeleted}
             onArchiveToggle={onArchiveToggle}
+            relatedDiaryDates={relatedDiaryDates}
           />
         </div>
       )}
