@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Volume2, Loader2, BookOpen, PenLine, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Volume2, Loader2, BookOpen, PenLine, ChevronLeft, ChevronRight, Sparkles } from 'lucide-react';
 import { SandyLoader } from '@/components/lottie/SandyLoader';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -12,6 +12,7 @@ import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
 import { format, parseISO } from 'date-fns';
 import { normalizeForExpression } from '@/lib/textComparison';
+import { findSimilarExpressions } from '@/lib/expressionSimilarity';
 import { persistDiarySentences } from '@/lib/practiceBuilder';
 import {
   cleanupInvalidDiaryLinkedExpressions,
@@ -30,6 +31,10 @@ export default function DiaryReview() {
 
   const [diaryEntry, setDiaryEntry] = useState<any>(null);
   const [expressions, setExpressions] = useState<any[]>([]);
+  // expression.id -> { count: number; isReused: boolean }
+  // count = total number of times an idea like this expression appears across the user's history (>=1).
+  // isReused = at least one *earlier* diary already had a similar expression.
+  const [reuseStats, setReuseStats] = useState<Record<string, { count: number; isReused: boolean }>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const [highlightedExpression, setHighlightedExpression] = useState<string | null>(null);
@@ -132,6 +137,23 @@ export default function DiaryReview() {
           .eq('user_id', user.id);
       }
       setExpressions(valid);
+
+      // ----- Reuse / praise stats -----
+      // Pull every expression the user has ever had so we can compare ideas across diaries.
+      const { data: allExprs } = await supabase
+        .from('expressions')
+        .select('id, expression, created_at, diary_entry_id')
+        .eq('user_id', user.id);
+      const stats: Record<string, { count: number; isReused: boolean }> = {};
+      const pool = allExprs || [];
+      for (const cur of valid) {
+        const matches = findSimilarExpressions(cur.expression, pool);
+        const earlier = matches.filter(
+          (m: any) => m.id !== cur.id && new Date(m.created_at).getTime() < new Date(cur.created_at).getTime(),
+        );
+        stats[cur.id] = { count: matches.length, isReused: earlier.length > 0 };
+      }
+      setReuseStats(stats);
     }
 
     setIsLoading(false);
@@ -457,24 +479,58 @@ export default function DiaryReview() {
             <CardContent>
               <p className="text-xs text-muted-foreground mb-2">タップで本文中の該当箇所をハイライト</p>
               <div className="space-y-3">
-                {expressions.map((exp) => (
-                  <button
-                    key={exp.id}
-                    className={cn(
-                      "w-full text-left bg-muted rounded-lg p-3 transition-all duration-200",
-                      highlightedExpression === exp.expression
-                        ? "ring-2 ring-primary bg-primary/10"
-                        : "hover:bg-muted/80"
-                    )}
-                    onClick={() => handleExpressionTap(exp.expression)}
-                  >
-                    <p className="font-medium text-sm text-primary">{exp.expression}</p>
-                    {exp.meaning && <p className="text-xs text-muted-foreground mt-1">{exp.meaning}</p>}
-                    {exp.example_sentence && (
-                      <p className="text-xs text-muted-foreground/70 mt-1 italic">e.g. {exp.example_sentence}</p>
-                    )}
-                  </button>
-                ))}
+                {expressions.map((exp) => {
+                  const stat = reuseStats[exp.id];
+                  const isReused = !!stat?.isReused;
+                  return (
+                    <button
+                        key={exp.id}
+                        className={cn(
+                          'w-full text-left rounded-lg p-3 transition-all duration-200 border',
+                          isReused
+                            ? 'bg-amber-500/10 border-amber-400/40 hover:bg-amber-500/15'
+                            : 'bg-muted border-transparent hover:bg-muted/80',
+                          highlightedExpression === exp.expression && 'ring-2 ring-primary bg-primary/10',
+                        )}
+                        onClick={() => handleExpressionTap(exp.expression)}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <p
+                            className={cn(
+                              'font-medium text-sm',
+                              isReused ? 'text-amber-300' : 'text-primary',
+                            )}
+                          >
+                            {exp.expression}
+                          </p>
+                          {stat && stat.count > 1 && (
+                            <span
+                              className={cn(
+                                'shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full',
+                                isReused
+                                  ? 'bg-amber-400/20 text-amber-300'
+                                  : 'bg-muted-foreground/15 text-muted-foreground',
+                              )}
+                            >
+                              ×{stat.count}
+                            </span>
+                          )}
+                        </div>
+                        {exp.meaning && (
+                          <p className="text-xs text-muted-foreground mt-1">{exp.meaning}</p>
+                        )}
+                        {exp.example_sentence && (
+                          <p className="text-xs text-muted-foreground/70 mt-1 italic">e.g. {exp.example_sentence}</p>
+                        )}
+                        {isReused && (
+                          <p className="mt-2 flex items-center gap-1 text-[11px] font-semibold text-amber-300">
+                            <Sparkles className="w-3 h-3" />
+                            身についていてすごい！前にも使えていた表現です
+                          </p>
+                        )}
+                    </button>
+                  );
+                })}
               </div>
             </CardContent>
           </Card>

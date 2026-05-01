@@ -13,6 +13,13 @@ interface SwipeCardProps {
   onSwipe: (answer: MasteryBucket) => void;
   /** Animation key — change to reset the card. */
   cardKey: string;
+  /**
+   * Optional source quote shown at the bottom of the English side, styled like
+   * a famous quotation: "…sentence…" — MM,DD,YYYY
+   */
+  quote?: { text: string; date: string } | null;
+  /** Which side ("en" / "jp") of the card the original quote should appear on. */
+  quoteSide?: 'front' | 'back';
 }
 
 /**
@@ -22,7 +29,7 @@ interface SwipeCardProps {
  *  - Drag right -> 〇 "mastered"
  *  - Drag up    -> △ "learning" (fuzzy)
  */
-export function SwipeCard({ front, back, topHint, onSwipe, cardKey }: SwipeCardProps) {
+export function SwipeCard({ front, back, topHint, onSwipe, cardKey, quote, quoteSide = 'front' }: SwipeCardProps) {
   const [flipped, setFlipped] = useState(false);
   const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
   const startRef = useRef<{ x: number; y: number } | null>(null);
@@ -146,7 +153,19 @@ export function SwipeCard({ front, back, topHint, onSwipe, cardKey }: SwipeCardP
             {flipped ? back : front}
           </p>
         </div>
-        <span className="text-[11px] text-muted-foreground mt-2">
+        {quote && ((quoteSide === 'front' && !flipped) || (quoteSide === 'back' && flipped)) && (
+          <div className="w-full mt-3 px-1">
+            <div className="border-t border-border/40 pt-3 text-center">
+              <p className="text-[11px] italic text-muted-foreground/90 leading-snug font-serif">
+                “{quote.text}”
+              </p>
+              <p className="text-[10px] text-muted-foreground/60 mt-1 tracking-widest">
+                —— {quote.date}
+              </p>
+            </div>
+          </div>
+        )}
+        <span className="text-[10px] text-muted-foreground/70 mt-2">
           {flipped ? 'Tap to hide' : 'Tap to reveal'}
         </span>
       </div>

@@ -8,12 +8,18 @@ import { supabase } from '@/lib/supabase';
 import { cn } from '@/lib/utils';
 import { bucketOf, BUCKET_META, MasteryBucket, nextMasteryLevel } from '@/lib/mastery';
 import { SwipeCard } from '@/components/game/SwipeCard';
+import { DotLottieReact } from '@lottiefiles/dotlottie-react';
+import { format } from 'date-fns';
 
 interface Phrase {
   id: string;
   expression: string;
   meaning: string | null;
   mastery_level: number;
+  /** Original diary sentence the expression came from (if any). */
+  sourceSentence?: string | null;
+  /** Diary date for the source quote, formatted MM,DD,YYYY. */
+  sourceDate?: string | null;
 }
 
 type Range = 'all' | 'new' | 'learning' | 'mastered';
@@ -48,11 +54,55 @@ export default function InstantComposition() {
     setIsLoading(true);
     const { data } = await supabase
       .from('expressions')
-      .select('id, expression, meaning, mastery_level')
+      .select('id, expression, meaning, mastery_level, diary_entry_id')
       .eq('user_id', user.id)
       .eq('status', 'active')
       .not('meaning', 'is', null);
-    setPhrases((data ?? []) as Phrase[]);
+
+    const rows = (data ?? []) as any[];
+
+    // Pull diary dates + sentences for each unique diary_entry_id so we can attach a "quote".
+    const diaryIds = Array.from(
+      new Set(rows.map((r) => r.diary_entry_id).filter(Boolean)),
+    ) as string[];
+    const diaryDateMap = new Map<string, string>();
+    const diarySentencesMap = new Map<string, string[]>();
+    if (diaryIds.length > 0) {
+      const [{ data: diaries }, { data: sentences }] = await Promise.all([
+        supabase.from('diary_entries').select('id, date').in('id', diaryIds),
+        supabase
+          .from('diary_sentences')
+          .select('diary_entry_id, english_sentence, sentence_index')
+          .in('diary_entry_id', diaryIds)
+          .order('sentence_index', { ascending: true }),
+      ]);
+      (diaries || []).forEach((d: any) => diaryDateMap.set(d.id, d.date));
+      (sentences || []).forEach((s: any) => {
+        const arr = diarySentencesMap.get(s.diary_entry_id) || [];
+        arr.push(s.english_sentence);
+        diarySentencesMap.set(s.diary_entry_id, arr);
+      });
+    }
+
+    const enriched: Phrase[] = rows.map((r) => {
+      const sentencesForDiary = r.diary_entry_id ? diarySentencesMap.get(r.diary_entry_id) || [] : [];
+      const exprLower = String(r.expression).toLowerCase();
+      const sourceSentence =
+        sentencesForDiary.find((s) => s.toLowerCase().includes(exprLower)) ??
+        sentencesForDiary[0] ??
+        null;
+      const dateRaw = r.diary_entry_id ? diaryDateMap.get(r.diary_entry_id) : null;
+      const sourceDate = dateRaw ? format(new Date(dateRaw), 'M,d,yyyy') : null;
+      return {
+        id: r.id,
+        expression: r.expression,
+        meaning: r.meaning,
+        mastery_level: r.mastery_level,
+        sourceSentence,
+        sourceDate,
+      };
+    });
+    setPhrases(enriched);
     setIsLoading(false);
   };
 
@@ -150,8 +200,11 @@ export default function InstantComposition() {
         {/* Hero: overall mastery % */}
         <div className="rounded-3xl bg-gradient-to-br from-primary/20 via-card to-card border border-border/60 p-6 mb-5 text-center relative overflow-hidden">
           <div className="absolute -top-10 -right-10 w-40 h-40 rounded-full bg-primary/10 blur-3xl pointer-events-none" />
+          {overallPct === 100 && <SparklesAura />}
           <p className="text-xs uppercase tracking-widest text-muted-foreground mb-2">Overall mastery</p>
-          <p className="text-7xl font-black tracking-tight text-primary leading-none">{overallPct}%</p>
+          <p className="relative text-7xl font-black tracking-tight text-primary leading-none">
+            {overallPct}%
+          </p>
           <p className="text-xs text-muted-foreground mt-3">
             {phrases.filter(p => bucketOf(p.mastery_level) === 'mastered').length} / {phrases.length} phrases mastered
           </p>
@@ -217,10 +270,17 @@ export default function InstantComposition() {
 
   // ============ DONE STAGE ============
   if (stage === 'done') {
+    const total = results.new + results.learning + results.mastered;
+    const sessionPerfect = total > 0 && results.new === 0 && results.learning === 0;
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center safe-bottom">
-        <Trophy className="w-16 h-16 text-primary mb-4" />
-        <h2 className="text-2xl font-bold mb-1">Session complete!</h2>
+      <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center safe-bottom relative">
+        <div className="relative">
+          {sessionPerfect && <SparklesAura />}
+          <Trophy className="w-16 h-16 text-primary mb-4 relative z-10" />
+        </div>
+        <h2 className="text-2xl font-bold mb-1 relative">
+          {sessionPerfect ? '100% — Perfect!' : 'Session complete!'}
+        </h2>
         <p className="text-sm text-muted-foreground mb-6">{RANGE_LABEL[range]}</p>
 
         <div className="grid grid-cols-3 gap-3 w-full max-w-xs mb-8">
@@ -277,6 +337,12 @@ export default function InstantComposition() {
             back={direction === 'en2jp' ? (current.meaning ?? '') : current.expression}
             topHint={direction === 'en2jp' ? 'EN → JP' : 'JP → EN'}
             onSwipe={handleSwipe}
+            quote={
+              current.sourceSentence && current.sourceDate
+                ? { text: current.sourceSentence, date: current.sourceDate }
+                : null
+            }
+            quoteSide={direction === 'en2jp' ? 'front' : 'back'}
           />
         ) : (
           <Loader2 className="w-6 h-6 animate-spin text-primary" />
@@ -297,6 +363,45 @@ export default function InstantComposition() {
           〇 Got it
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Animated sparkle decoration used to celebrate 100% mastery / perfect session.
+ * Stacks several copies of the sparkles lottie around the focal element.
+ */
+function SparklesAura() {
+  const positions = [
+    { top: '-30px', left: '-30px', size: 110 },
+    { top: '-20px', right: '-30px', size: 110 },
+    { bottom: '-25px', left: '-20px', size: 90 },
+    { bottom: '-30px', right: '-15px', size: 90 },
+    { top: '40%', left: '50%', size: 160, transform: 'translate(-50%, -50%)', opacity: 0.55 },
+  ] as const;
+  return (
+    <div className="absolute inset-0 pointer-events-none z-0">
+      {positions.map((p, i) => (
+        <div
+          key={i}
+          className="absolute"
+          style={{
+            top: (p as any).top,
+            bottom: (p as any).bottom,
+            left: (p as any).left,
+            right: (p as any).right,
+            transform: (p as any).transform,
+            opacity: (p as any).opacity ?? 1,
+          }}
+        >
+          <DotLottieReact
+            src="/anim/sparkles.lottie"
+            autoplay
+            loop
+            style={{ width: p.size, height: p.size }}
+          />
+        </div>
+      ))}
     </div>
   );
 }

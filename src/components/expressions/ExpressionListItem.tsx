@@ -1,4 +1,4 @@
-import { Calendar, Star, Archive, ArchiveRestore } from 'lucide-react';
+import { Calendar, Star, Archive, ArchiveRestore, Repeat2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -22,6 +22,8 @@ interface ExpressionListItemProps {
     correct_streak: number;
     last_reviewed_at: string | null;
   };
+  /** Total number of times a *similar* expression appears across the user's history (>=1). */
+  usageCount?: number;
   isSelected: boolean;
   onSelect: () => void;
   onArchiveToggle: (id: string, newStatus: string) => void;
@@ -31,6 +33,7 @@ interface ExpressionListItemProps {
 
 export function ExpressionListItem({
   expression: exp,
+  usageCount,
   isSelected,
   onSelect,
   onArchiveToggle,
@@ -75,6 +78,16 @@ export function ExpressionListItem({
               <Badge variant="default" className="text-xs bg-amber-500/20 text-amber-500 border-amber-500/30">
                 <Star className="w-3 h-3 mr-0.5" />
                 User
+              </Badge>
+            )}
+            {typeof usageCount === 'number' && usageCount > 1 && (
+              <Badge
+                variant="default"
+                className="text-xs bg-amber-500/15 text-amber-300 border-amber-400/30"
+                title={`${usageCount} 回 似た表現として使用`}
+              >
+                <Repeat2 className="w-3 h-3 mr-0.5" />
+                ×{usageCount}
               </Badge>
             )}
           </div>

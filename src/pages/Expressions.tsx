@@ -10,6 +10,7 @@ import { ExpressionListItem } from '@/components/expressions/ExpressionListItem'
 import { ExpressionDetail } from '@/components/ExpressionDetail';
 import { bucketOf, SCENE_CATEGORIES } from '@/lib/mastery';
 import { Input } from '@/components/ui/input';
+import { findSimilarExpressions } from '@/lib/expressionSimilarity';
 
 export interface ExpressionWithDiary {
   id: string;
@@ -72,6 +73,16 @@ export default function Expressions() {
     [active]
   );
   const masteryPct = totalEncountered > 0 ? Math.round((masteredCount / totalEncountered) * 100) : 0;
+
+  // For each expression, count how many *similar* expressions exist across the entire
+  // user history. Used to surface phrases the user keeps reaching for.
+  const usageCounts = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const e of expressions) {
+      map[e.id] = findSimilarExpressions(e.expression, expressions).length;
+    }
+    return map;
+  }, [expressions]);
 
   const untaggedCount = useMemo(
     () => expressions.filter(e => !e.scene_or_context).length,
@@ -301,6 +312,7 @@ export default function Expressions() {
                     <ExpressionListItem
                       key={exp.id}
                       expression={exp}
+                      usageCount={usageCounts[exp.id] ?? 1}
                       isSelected={selectedId === exp.id}
                       onSelect={() => setSelectedId(selectedId === exp.id ? null : exp.id)}
                       onArchiveToggle={handleArchiveToggle}
