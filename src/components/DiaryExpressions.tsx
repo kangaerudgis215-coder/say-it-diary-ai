@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/lib/supabase';
 import { cn } from '@/lib/utils';
 import { partitionExpressionsForText } from '@/lib/expressionValidation';
+import { posLabelJa } from '@/lib/mastery';
 
 interface Expression {
   id: string;
@@ -141,7 +142,7 @@ export function DiaryExpressions({ diaryEntryId }: DiaryExpressionsProps) {
                     )}
                     {exp.pos_or_type && (
                       <Badge variant="secondary" className="text-xs px-1.5 py-0">
-                        {exp.pos_or_type}
+                        {posLabelJa(exp.pos_or_type) ?? exp.pos_or_type}
                       </Badge>
                     )}
                     {exp.is_user_added && (
