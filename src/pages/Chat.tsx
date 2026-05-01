@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Send, Loader2, Check, BookOpen } from 'lucide-react';
+import { ArrowLeft, Send, Loader2, Check, BookOpen, Lock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ChatBubble } from '@/components/ChatBubble';
@@ -47,6 +47,10 @@ export default function Chat() {
   const [isLoading, setIsLoading] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [isGeneratingDiary, setIsGeneratingDiary] = useState(false);
+  // Once a diary has been generated for this date, the chat becomes read-only
+  // so the entry can't be re-edited or accidentally regenerated. The dedicated
+  // "Edit / regenerate" flow lives on the Review screen.
+  const [existingDiaryId, setExistingDiaryId] = useState<string | null>(null);
   const [diaryDate, setDiaryDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
   const [showHelp, setShowHelp] = useState(false);
   const [silenceMs, setSilenceMs] = useState<number>(() => {
