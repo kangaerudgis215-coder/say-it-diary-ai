@@ -1,15 +1,17 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
-import { format } from 'date-fns';
 
 /**
- * Returns the number of past diary entries (date < today) whose recall has
- * NOT been completed yet. "Recall completed" = a row exists in
- * `recall_sessions` with completed=true for that diary.
+ * Returns the number of diary entries that are READY for recall but have NOT
+ * been recalled yet.
  *
- * This is the single source of truth for the Recall tab badge, the pending
- * list, and the calendar/list "kira-kira" badge.
+ *   ready for recall = `sentences_review_completed = true` (the user finished
+ *                       at least the reorder quiz once)
+ *   recalled         = a row exists in `recall_sessions` with completed=true
+ *
+ * This is the single source of truth for the Recall tab badge and the
+ * pending recall list.
  */
 export function usePendingRecallCount(refreshKey: number = 0) {
   const { user } = useAuth();
@@ -22,16 +24,14 @@ export function usePendingRecallCount(refreshKey: number = 0) {
     }
     let cancelled = false;
     (async () => {
-      const today = format(new Date(), 'yyyy-MM-dd');
-
-      // 1. All past diary ids
-      const { data: pastDiaries } = await supabase
+      // 1. All diaries that finished reorder (ready for recall)
+      const { data: ready } = await supabase
         .from('diary_entries')
         .select('id')
         .eq('user_id', user.id)
-        .lt('date', today);
-      const pastIds = (pastDiaries || []).map((d: any) => d.id);
-      if (pastIds.length === 0) {
+        .eq('sentences_review_completed', true);
+      const readyIds = (ready || []).map((d: any) => d.id);
+      if (readyIds.length === 0) {
         if (!cancelled) setCount(0);
         return;
       }
@@ -42,10 +42,10 @@ export function usePendingRecallCount(refreshKey: number = 0) {
         .select('diary_entry_id')
         .eq('user_id', user.id)
         .eq('completed', true)
-        .in('diary_entry_id', pastIds);
+        .in('diary_entry_id', readyIds);
       const completedSet = new Set((completed || []).map((r: any) => r.diary_entry_id));
 
-      const pending = pastIds.filter((id) => !completedSet.has(id)).length;
+      const pending = readyIds.filter((id) => !completedSet.has(id)).length;
       if (!cancelled) setCount(pending);
     })();
     return () => {

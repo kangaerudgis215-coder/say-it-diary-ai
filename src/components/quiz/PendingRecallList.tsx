@@ -32,16 +32,15 @@ export function PendingRecallList() {
 
   const load = async () => {
     if (!user) return;
-    const today = format(new Date(), 'yyyy-MM-dd');
 
-    // All past diaries (date < today)
-    const { data: past } = await supabase
+    // All diaries that have finished reorder (ready for recall)
+    const { data: ready } = await supabase
       .from('diary_entries')
       .select('id, date, content')
       .eq('user_id', user.id)
-      .lt('date', today)
+      .eq('sentences_review_completed', true)
       .order('date', { ascending: true });
-    const pastDiaries = (past || []) as PendingDiary[];
+    const readyDiaries = (ready || []) as PendingDiary[];
 
     // Those that already have a completed recall session
     const { data: completed } = await supabase
@@ -51,7 +50,7 @@ export function PendingRecallList() {
       .eq('completed', true);
     const completedSet = new Set((completed || []).map((r: any) => r.diary_entry_id));
 
-    setPending(pastDiaries.filter((d) => !completedSet.has(d.id)));
+    setPending(readyDiaries.filter((d) => !completedSet.has(d.id)));
     setLoading(false);
   };
 
