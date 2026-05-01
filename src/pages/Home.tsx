@@ -5,7 +5,8 @@ import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
 import { ThemeToggleLottie } from '@/components/ThemeToggleLottie';
 import { supabase } from '@/lib/supabase';
-import { format, parseISO, isSameDay, differenceInCalendarDays } from 'date-fns';
+import { format, parseISO, isSameDay, differenceInCalendarDays, isFuture, isToday } from 'date-fns';
+import { Plus } from 'lucide-react';
 import { StampCalendar } from '@/components/home/StampCalendar';
 import { DiaryListView } from '@/components/home/DiaryListView';
 import { BottomTabBar } from '@/components/home/BottomTabBar';
@@ -162,6 +163,37 @@ export default function Home() {
                 ? ''
                 : ' · No entry'}
             </div>
+
+            {/* CTA when the selected day has no diary yet */}
+            {!entries.some((e) => isSameDay(parseISO(e.date), selectedDate)) && (
+              <div className="rounded-2xl bg-card/60 border border-border/50 p-5 text-center fade-in">
+                {isFuture(selectedDate) ? (
+                  <p className="text-sm text-muted-foreground">未来の日付には日記を書けません。</p>
+                ) : (
+                  <>
+                    <div className="text-2xl mb-1">{isToday(selectedDate) ? '✨' : '📅'}</div>
+                    <p className="font-bold text-base mb-1">
+                      {format(selectedDate, 'yyyy年M月d日')}
+                    </p>
+                    <p className="text-xs text-muted-foreground mb-4">
+                      {isToday(selectedDate)
+                        ? '今日の出来事を話して日記にしよう！'
+                        : 'この日の日記を埋めて、ストリークを繋げよう🔥'}
+                    </p>
+                    <Button
+                      variant="glow"
+                      className="gap-2"
+                      onClick={() =>
+                        navigate(`/chat?date=${format(selectedDate, 'yyyy-MM-dd')}`)
+                      }
+                    >
+                      <Plus className="w-4 h-4" />
+                      {isToday(selectedDate) ? '今日の日記を書く' : 'この日の日記を書く'}
+                    </Button>
+                  </>
+                )}
+              </div>
+            )}
 
             <DiaryListView entries={calendarListEntries} recallCompletedIds={recallCompletedIds} />
           </>
