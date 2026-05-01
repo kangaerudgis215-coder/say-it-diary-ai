@@ -154,8 +154,8 @@ export default function Chat() {
       content: userMessage.content,
     });
 
-    // Log spoken vocabulary
-    logSpokenWords(userMessage.content);
+    // Log spoken vocabulary — attribute to the diary's date (supports past diaries)
+    logSpokenWords(userMessage.content, diaryDate);
 
     // Soft cap: once user + AI messages combined reach 10 (excluding the
     // initial welcome bubble), ask the AI to wrap the conversation up
