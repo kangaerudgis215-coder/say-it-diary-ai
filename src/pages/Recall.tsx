@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Loader2, AlertCircle, Volume2 } from 'lucide-react';
+import { ArrowLeft, Loader2, AlertCircle, Volume2, Check } from 'lucide-react';
 import { SandyLoader } from '@/components/lottie/SandyLoader';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,6 +8,8 @@ import { SelectableText } from '@/components/SelectableText';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
 import { format } from 'date-fns';
+import { RecallCompletionScreen } from '@/components/quiz/RecallCompletionScreen';
+import { useToast } from '@/hooks/use-toast';
 import {
   cleanupInvalidDiaryLinkedExpressions,
   partitionExpressionsForText,
@@ -17,6 +19,7 @@ export default function Recall() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const { toast } = useToast();
 
   const diaryIdFromUrl = searchParams.get('diaryId');
   const modeFromUrl = searchParams.get('mode');
@@ -27,6 +30,8 @@ export default function Recall() {
   const [sourceMode, setSourceMode] = useState<'latest' | 'calendar' | 'random'>('latest');
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const [didGlobalCleanup, setDidGlobalCleanup] = useState(false);
+  const [isCompleting, setIsCompleting] = useState(false);
+  const [showCompletion, setShowCompletion] = useState(false);
 
   useEffect(() => {
     fetchDiaryForRecall();
@@ -115,8 +120,34 @@ export default function Recall() {
     }
   };
 
+  const handleMarkRecallComplete = async () => {
+    if (!user || !diaryEntry || isCompleting) return;
+    setIsCompleting(true);
+    try {
+      const { error } = await supabase.from('recall_sessions').insert({
+        user_id: user.id,
+        diary_entry_id: diaryEntry.id,
+        completed: true,
+      } as any);
+      if (error) throw error;
+      setShowCompletion(true);
+    } catch (e: any) {
+      toast({
+        variant: 'destructive',
+        title: 'エラー',
+        description: e.message || '復習を記録できませんでした',
+      });
+    } finally {
+      setIsCompleting(false);
+    }
+  };
+
   if (isLoading) {
     return <SandyLoader fullscreen label="Loading diary..." />;
+  }
+
+  if (showCompletion && diaryEntry) {
+    return <RecallCompletionScreen diaryDate={diaryEntry.date} />;
   }
 
   if (!diaryEntry) {
@@ -234,7 +265,20 @@ export default function Recall() {
       </div>
 
       <div className="mt-6">
-        <Button variant="ghost" size="sm" className="w-full" onClick={handleGoBack}>
+        <Button
+          className="w-full gap-2"
+          size="lg"
+          onClick={handleMarkRecallComplete}
+          disabled={isCompleting}
+        >
+          {isCompleting ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <Check className="w-4 h-4" />
+          )}
+          復習を完了する ✨
+        </Button>
+        <Button variant="ghost" size="sm" className="w-full mt-2" onClick={handleGoBack}>
           Back
         </Button>
       </div>

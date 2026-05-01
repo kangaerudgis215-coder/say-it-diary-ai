@@ -127,14 +127,24 @@ export function QuizSession() {
       .eq('user_id', user.id);
   };
 
+  const finishToRecall = async () => {
+    await markReviewCompleted();
+    // For both new and past diaries, push the learner straight into the recall
+    // page so they can review right away. Recall completion is the new gate
+    // for the calendar sparkle + list badge.
+    if (diaryId) {
+      navigate(`/recall?diaryId=${diaryId}&mode=calendar`);
+    } else {
+      setPhase('complete');
+    }
+  };
+
   const handleReadAloudComplete = () => {
-    markReviewCompleted();
-    setPhase('complete');
+    finishToRecall();
   };
 
   const handleReadAloudSkip = () => {
-    markReviewCompleted();
-    setPhase('complete');
+    finishToRecall();
   };
 
   if (phase === 'loading') {

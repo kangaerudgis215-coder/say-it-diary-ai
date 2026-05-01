@@ -146,10 +146,10 @@ export default function Home() {
                 : ' · No entry'}
             </div>
 
-            <DiaryListView entries={calendarListEntries} />
+            <DiaryListView entries={calendarListEntries} recallCompletedIds={recallCompletedIds} />
           </>
         ) : (
-          <DiaryListView entries={entries} showSearch />
+          <DiaryListView entries={entries} showSearch recallCompletedIds={recallCompletedIds} />
         )}
       </main>
 

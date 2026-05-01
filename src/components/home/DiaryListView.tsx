@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, X } from 'lucide-react';
+import { Search, X, Sparkles } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { format, parseISO } from 'date-fns';
 import { ja } from 'date-fns/locale';
@@ -16,9 +16,11 @@ interface DiaryEntryRow {
 interface DiaryListViewProps {
   entries: DiaryEntryRow[];
   showSearch?: boolean;
+  /** Set of diary entry ids whose recall practice has been completed. */
+  recallCompletedIds?: Set<string>;
 }
 
-export function DiaryListView({ entries, showSearch = false }: DiaryListViewProps) {
+export function DiaryListView({ entries, showSearch = false, recallCompletedIds }: DiaryListViewProps) {
   const navigate = useNavigate();
   const [query, setQuery] = useState('');
 
@@ -76,7 +78,12 @@ export function DiaryListView({ entries, showSearch = false }: DiaryListViewProp
           <div className="text-xs text-muted-foreground px-1">{label}</div>
           <div className="space-y-2">
             {items.map((e) => (
-              <DiaryCard key={e.id} entry={e} onClick={() => navigate(`/review?diaryId=${e.id}&date=${e.date}`)} />
+              <DiaryCard
+                key={e.id}
+                entry={e}
+                recallCompleted={!!recallCompletedIds?.has(e.id)}
+                onClick={() => navigate(`/review?diaryId=${e.id}&date=${e.date}`)}
+              />
             ))}
           </div>
         </div>
@@ -87,9 +94,11 @@ export function DiaryListView({ entries, showSearch = false }: DiaryListViewProp
 
 function DiaryCard({
   entry,
+  recallCompleted,
   onClick,
 }: {
   entry: DiaryEntryRow;
+  recallCompleted: boolean;
   onClick: () => void;
 }) {
   const d = parseISO(entry.date);
@@ -101,10 +110,22 @@ function DiaryCard({
     <button
       onClick={onClick}
       className={cn(
-        'w-full text-left bg-card/70 hover:bg-card transition-colors',
-        'rounded-2xl border border-border/60 p-4 flex gap-4',
+        'w-full text-left bg-card/70 hover:bg-card transition-colors relative',
+        'rounded-2xl border p-4 flex gap-4',
+        recallCompleted
+          ? 'border-amber-400/50 shadow-[0_0_18px_hsl(38_92%_55%/0.18)]'
+          : 'border-border/60',
       )}
     >
+      {recallCompleted && (
+        <span
+          className="absolute -top-1.5 -right-1.5 inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-amber-400 to-orange-500 px-2 py-0.5 text-[10px] font-bold text-white shadow-md animate-pulse"
+          aria-label="Recall completed"
+        >
+          <Sparkles className="w-3 h-3" />
+          Recalled
+        </span>
+      )}
       <div className="flex flex-col items-center justify-start w-12 shrink-0">
         <span className="text-xs text-muted-foreground">{dow}</span>
         <span className="text-2xl font-bold leading-none mt-0.5">{day}</span>

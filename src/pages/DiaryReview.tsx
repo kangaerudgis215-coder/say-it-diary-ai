@@ -139,7 +139,12 @@ export default function DiaryReview() {
       setExpressions(valid);
 
       // ----- Reuse / praise stats -----
-      // Pull every expression the user has ever had so we can compare ideas across diaries.
+      // Pull every expression the user has ever had so we can compare ideas
+      // across diaries. We praise as soon as a similar expression exists
+      // *anywhere else* in the user's history (different id) — including
+      // expressions extracted around the same time. This makes the praise
+      // pop visibly the moment a phrase is genuinely repeated, rather than
+      // depending on strict created_at ordering.
       const { data: allExprs } = await supabase
         .from('expressions')
         .select('id, expression, created_at, diary_entry_id')
@@ -148,10 +153,8 @@ export default function DiaryReview() {
       const pool = allExprs || [];
       for (const cur of valid) {
         const matches = findSimilarExpressions(cur.expression, pool);
-        const earlier = matches.filter(
-          (m: any) => m.id !== cur.id && new Date(m.created_at).getTime() < new Date(cur.created_at).getTime(),
-        );
-        stats[cur.id] = { count: matches.length, isReused: earlier.length > 0 };
+        const others = matches.filter((m: any) => m.id !== cur.id);
+        stats[cur.id] = { count: matches.length, isReused: others.length > 0 };
       }
       setReuseStats(stats);
     }

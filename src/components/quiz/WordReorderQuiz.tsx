@@ -42,6 +42,22 @@ export function WordReorderQuiz({ sentence, japaneseSentence, onCorrect }: WordR
   const [showNice, setShowNice] = useState(false);
   const { playSuccess } = useSuccessSound();
 
+  // Speak a single word using the browser's built-in TTS so learners can hear
+  // every card they tap. Cancels the previous utterance so rapid taps don't
+  // queue up and lag behind.
+  const speak = useCallback((text: string) => {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+    try {
+      window.speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(text.replace(/[.,!?;:]+$/, ''));
+      u.lang = 'en-US';
+      u.rate = 0.95;
+      window.speechSynthesis.speak(u);
+    } catch {
+      /* ignore TTS errors */
+    }
+  }, []);
+
   // Touch drag state for reordering placed words
   const touchDragRef = useRef<{
     idx: number;
@@ -58,17 +74,19 @@ export function WordReorderQuiz({ sentence, japaneseSentence, onCorrect }: WordR
     if (isCorrect) return;
     setIsWrong(false);
     setHintIndex(null);
+    speak(item.word);
     setPlaced((prev) => [...prev, item]);
     setAvailable((prev) => prev.filter((x) => x !== item));
-  }, [isCorrect]);
+  }, [isCorrect, speak]);
 
   const handleTapPlaced = useCallback((item: WordItem, idx: number) => {
     if (isCorrect) return;
     setIsWrong(false);
     setHintIndex(null);
+    speak(item.word);
     setPlaced((prev) => prev.filter((_, i) => i !== idx));
     setAvailable((prev) => [...prev, item]);
-  }, [isCorrect]);
+  }, [isCorrect, speak]);
 
   // Check answer when all words are placed
   useEffect(() => {
