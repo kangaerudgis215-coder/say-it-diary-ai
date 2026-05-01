@@ -162,7 +162,7 @@ export default function Chat() {
     // naturally on this turn, then auto-trigger diary generation after it
     // replies. This avoids the previous abrupt cut-off.
     const realCount = nextMessages.filter((m) => m.id !== 'welcome').length;
-    const shouldWrapUp = realCount >= 10 && !diaryAlreadyExists;
+    const shouldWrapUp = realCount >= 10;
 
     try {
       // Call AI for response. If we're wrapping up, append a system nudge so
@@ -258,7 +258,7 @@ export default function Chat() {
   };
 
   const handleGenerateDiary = async () => {
-    if (!conversationId || !user || diaryAlreadyExists) return;
+    if (!conversationId || !user) return;
 
     setIsGeneratingDiary(true);
 
@@ -517,52 +517,28 @@ export default function Chat() {
             )}
           </div>
           
-          {diaryAlreadyExists ? (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={async () => {
-                const { data: entry } = await supabase
-                  .from('diary_entries')
-                  .select('id')
-                  .eq('user_id', user!.id)
-                  .eq('date', diaryDate)
-                  .single();
-                if (entry) navigate(`/review?diaryId=${entry.id}&date=${diaryDate}`);
-              }}
-            >
-              <BookOpen className="w-4 h-4" />
-              Review
-            </Button>
-          ) : (
-            <Button
-              variant="success"
-              size="sm"
-              onClick={handleGenerateDiary}
-              disabled={!hasEnoughContent || isGeneratingDiary}
-              className={hasEnoughContent ? 'animate-pulse' : ''}
-            >
-              {isGeneratingDiary ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <>
-                  <Check className="w-4 h-4" />
-                  Done
-                </>
-              )}
-            </Button>
-          )}
+          <Button
+            variant="success"
+            size="sm"
+            onClick={handleGenerateDiary}
+            disabled={!hasEnoughContent || isGeneratingDiary}
+            className={hasEnoughContent ? 'animate-pulse' : ''}
+          >
+            {isGeneratingDiary ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <>
+                <Check className="w-4 h-4" />
+                Done
+              </>
+            )}
+          </Button>
         </div>
         
         {/* Prompt to finish when ready */}
-        {hasEnoughContent && !isGeneratingDiary && !diaryAlreadyExists && (
+        {hasEnoughContent && !isGeneratingDiary && (
           <p className="text-xs text-center text-primary mt-2 animate-pulse">
             Ready? Tap Done to create your diary! ✨
-          </p>
-        )}
-        {diaryAlreadyExists && (
-          <p className="text-xs text-center text-muted-foreground mt-2">
-            ✅ この日の日記は作成済みです
           </p>
         )}
       </header>
@@ -588,7 +564,7 @@ export default function Chat() {
         )}
 
         {/* Prominent CTA to finish diary */}
-        {hasEnoughContent && !isGeneratingDiary && !isLoading && !diaryAlreadyExists && (
+        {hasEnoughContent && !isGeneratingDiary && !isLoading && (
           <div className="flex justify-center py-4">
             <Button
               variant="glow"
