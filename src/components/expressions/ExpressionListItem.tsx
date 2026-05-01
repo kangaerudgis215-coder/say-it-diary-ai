@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { ExpressionDetail } from '@/components/ExpressionDetail';
+import { posLabelJa } from '@/lib/mastery';
 
 interface ExpressionListItemProps {
   expression: {
@@ -75,7 +76,7 @@ export function ExpressionListItem({
               <Badge variant="outline" className="text-xs">{exp.scene_or_context}</Badge>
             )}
             {exp.pos_or_type && (
-              <Badge variant="secondary" className="text-xs">{exp.pos_or_type}</Badge>
+              <Badge variant="secondary" className="text-xs">{posLabelJa(exp.pos_or_type) ?? exp.pos_or_type}</Badge>
             )}
             {exp.is_user_added && (
               <Badge variant="default" className="text-xs bg-amber-500/20 text-amber-500 border-amber-500/30">
