@@ -11,15 +11,22 @@ interface VoiceRecordButtonProps {
   className?: string;
   /** Pixel size of the mic icon / lottie. */
   iconSize?: number;
+  /**
+   * Auto-stop the mic after this many ms of silence. Set to 0/undefined to
+   * disable. Default is 1500ms — long enough to think mid-sentence but short
+   * enough that a clear pause will end the recording for you.
+   */
+  autoStopSilenceMs?: number;
 }
 
 export function VoiceRecordButton({
   onTranscript,
   className,
   iconSize = 72,
+  autoStopSilenceMs = 1500,
 }: VoiceRecordButtonProps) {
   const { isListening, transcript, isSupported, startListening, stopListening, resetTranscript } =
-    useSpeechRecognition();
+    useSpeechRecognition({ autoStopSilenceMs });
 
   useEffect(() => {
     if (!isListening && transcript) {
