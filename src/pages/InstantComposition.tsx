@@ -353,3 +353,42 @@ export default function InstantComposition() {
     </div>
   );
 }
+
+/**
+ * Animated sparkle decoration used to celebrate 100% mastery / perfect session.
+ * Stacks several copies of the sparkles lottie around the focal element.
+ */
+function SparklesAura() {
+  const positions = [
+    { top: '-30px', left: '-30px', size: 110 },
+    { top: '-20px', right: '-30px', size: 110 },
+    { bottom: '-25px', left: '-20px', size: 90 },
+    { bottom: '-30px', right: '-15px', size: 90 },
+    { top: '40%', left: '50%', size: 160, transform: 'translate(-50%, -50%)', opacity: 0.55 },
+  ] as const;
+  return (
+    <div className="absolute inset-0 pointer-events-none z-0">
+      {positions.map((p, i) => (
+        <div
+          key={i}
+          className="absolute"
+          style={{
+            top: (p as any).top,
+            bottom: (p as any).bottom,
+            left: (p as any).left,
+            right: (p as any).right,
+            transform: (p as any).transform,
+            opacity: (p as any).opacity ?? 1,
+          }}
+        >
+          <DotLottieReact
+            src="/anim/sparkles.lottie"
+            autoplay
+            loop
+            style={{ width: p.size, height: p.size }}
+          />
+        </div>
+      ))}
+    </div>
+  );
+}
