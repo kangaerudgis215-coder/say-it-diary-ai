@@ -188,7 +188,7 @@ export function ExpressionDetail({
                     className="w-full justify-between"
                     onClick={(e) => e.stopPropagation()}
                   >
-                    <span>View diary…</span>
+                    <span>View diary from this day</span>
                     <ChevronDown className="w-4 h-4 opacity-60" />
                   </Button>
                 </PopoverTrigger>

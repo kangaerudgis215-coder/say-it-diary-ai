@@ -105,6 +105,26 @@ export default function Expressions() {
     return map;
   }, [expressions]);
 
+  /**
+   * For navigation: map each (representative) expression id to a lookup of
+   * diary_date -> diary_entry_id, so picking a date jumps straight to the
+   * correct diary review page.
+   */
+  const diaryIdByDateById = useMemo(() => {
+    const map: Record<string, Record<string, string>> = {};
+    const groups = groupSimilarExpressions(expressions);
+    for (const g of groups) {
+      const lookup: Record<string, string> = {};
+      for (const m of g.members) {
+        if (m.diary_date && m.diary_entry_id && !lookup[m.diary_date]) {
+          lookup[m.diary_date] = m.diary_entry_id;
+        }
+      }
+      for (const m of g.members) map[m.id] = lookup;
+    }
+    return map;
+  }, [expressions]);
+
   // Count expressions that need (re)tagging: missing OR currently parked in その他.
   // Showing this count lets the user keep draining the その他 bucket via Auto-tag.
   const untaggedCount = useMemo(
@@ -346,9 +366,18 @@ export default function Expressions() {
                       isSelected={selectedId === exp.id}
                       onSelect={() => setSelectedId(selectedId === exp.id ? null : exp.id)}
                       onArchiveToggle={handleArchiveToggle}
-                      onNavigateToDiary={(d) =>
-                        navigate(`/calendar?date=${d ?? exp.diary_date}`)
-                      }
+                      onNavigateToDiary={(d) => {
+                        const date = d ?? exp.diary_date ?? undefined;
+                        const id =
+                          (date && diaryIdByDateById[exp.id]?.[date]) ||
+                          exp.diary_entry_id ||
+                          undefined;
+                        if (id && date) {
+                          navigate(`/review?diaryId=${id}&date=${date}`);
+                        } else if (date) {
+                          navigate(`/calendar?date=${date}`);
+                        }
+                      }}
                       onDeleted={() => { setSelectedId(null); fetchExpressions(); }}
                     />
                   ))}
@@ -370,9 +399,18 @@ export default function Expressions() {
                 <div className="sticky top-4 bg-card rounded-xl border border-border p-5">
                   <ExpressionDetail
                     expression={selectedExpression}
-                    onNavigateToDiary={(d) =>
-                      navigate(`/calendar?date=${d ?? selectedExpression.diary_date}`)
-                    }
+                    onNavigateToDiary={(d) => {
+                      const date = d ?? selectedExpression.diary_date ?? undefined;
+                      const id =
+                        (date && diaryIdByDateById[selectedExpression.id]?.[date]) ||
+                        selectedExpression.diary_entry_id ||
+                        undefined;
+                      if (id && date) {
+                        navigate(`/review?diaryId=${id}&date=${date}`);
+                      } else if (date) {
+                        navigate(`/calendar?date=${date}`);
+                      }
+                    }}
                     onDeleted={() => { setSelectedId(null); fetchExpressions(); }}
                     onArchiveToggle={handleArchiveToggle}
                     relatedDiaryDates={relatedDatesById[selectedExpression.id]}
