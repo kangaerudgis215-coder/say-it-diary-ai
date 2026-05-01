@@ -523,6 +523,11 @@ export default function Chat() {
             <h1 className="font-bold">
               {isTodayFn(parseISO(diaryDate)) ? "Today's Diary" : format(parseISO(diaryDate), 'MMM d, yyyy')}
             </h1>
+            {!isTodayFn(parseISO(diaryDate)) && (
+              <span className="mt-0.5 inline-block text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-primary/15 text-primary border border-primary/30">
+                Past Diary
+              </span>
+            )}
           </div>
           
           {diaryAlreadyExists ? (
