@@ -42,15 +42,16 @@
    'Other',
  ];
  
- const TYPE_OPTIONS = [
-   'Verb phrase',
-   'Noun phrase',
-   'Adjective phrase',
-   'Adverb phrase',
-   'Idiom',
-   'Fixed phrase',
-   'Other',
- ];
+// Display label -> stored DB value. The "idiom" bucket now also covers
+// what used to be tagged as "fixed phrase" (決まり文句).
+const TYPE_OPTIONS: { label: string; value: string }[] = [
+  { label: 'Verb phrase (動詞句)', value: 'verb phrase' },
+  { label: 'Noun phrase (名詞句)', value: 'noun phrase' },
+  { label: 'Adjective phrase (形容詞句)', value: 'adjective phrase' },
+  { label: 'Adverb phrase (副詞句)', value: 'adverb phrase' },
+  { label: 'Idiom / 決まり文句', value: 'idiom' },
+  { label: 'Other (その他)', value: 'other' },
+];
  
  export function AddExpressionDialog({
    open,
@@ -67,7 +68,7 @@
    const [meaning, setMeaning] = useState('');
    const [example, setExample] = useState(exampleSentence);
    const [scene, setScene] = useState('Daily life');
-   const [type, setType] = useState('Fixed phrase');
+  const [type, setType] = useState('idiom');
    const [isSaving, setIsSaving] = useState(false);
    const [isGeneratingMeaning, setIsGeneratingMeaning] = useState(false);
  
@@ -237,7 +238,7 @@
                  </SelectTrigger>
                  <SelectContent>
                    {TYPE_OPTIONS.map((t) => (
-                     <SelectItem key={t} value={t}>{t}</SelectItem>
+                      <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
                    ))}
                  </SelectContent>
                </Select>
