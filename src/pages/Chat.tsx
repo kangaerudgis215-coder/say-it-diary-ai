@@ -154,7 +154,8 @@ export default function Chat() {
       content: content.trim(),
     };
 
-    setMessages(prev => [...prev, userMessage]);
+    const nextMessages = [...messages, userMessage];
+    setMessages(nextMessages);
     setInput('');
     setIsLoading(true);
 
@@ -168,6 +169,23 @@ export default function Chat() {
 
     // Log spoken vocabulary
     logSpokenWords(userMessage.content);
+
+    // Hard cap: once user + AI messages combined reach 10 (excluding the
+    // initial welcome bubble), stop the conversation and auto-finish the diary
+    // exactly as if the user pressed "Done".
+    const realCount = nextMessages.filter((m) => m.id !== 'welcome').length;
+    if (realCount >= 10 && !diaryAlreadyExists) {
+      setIsLoading(false);
+      toast({
+        title: '十分話せました ✨',
+        description: '日記を自動で生成します…',
+      });
+      // Defer one tick so the user message paints first
+      setTimeout(() => {
+        void handleGenerateDiary();
+      }, 300);
+      return;
+    }
 
     try {
       // Call AI for response
