@@ -126,6 +126,16 @@ serve(async (req) => {
 - Prefer 2-4 word phrases over single words
 - Include meaning in Japanese, part of speech, and usage context
 
+【SCENE_OR_CONTEXT — STRICT RULE】
+- The "scene_or_context" field MUST be EXACTLY ONE of these 6 Japanese labels (no English, no synonyms, no extra text):
+  "日常" (daily life: food, weather, health, hobbies, travel, errands, small talk)
+  "仕事" (work, business, office, career, money matters)
+  "学習" (school, study, learning, education, exams)
+  "感情" (feelings, mood, reactions, emotional reflections)
+  "人間関係" (family, friends, partner, social interactions, relationships)
+  "その他" (use ONLY when the expression truly fits none of the above — this should be RARE)
+- Always pick the closest of the first 5 categories before falling back to "その他".
+
 【SENTENCE BREAKDOWN】
 - Break the diary into individual sentences
 - For each sentence, provide the Japanese translation
@@ -148,7 +158,7 @@ serve(async (req) => {
       "expression": "exact phrase from diary",
       "meaning": "日本語の意味",
       "pos_or_type": "verb phrase / noun phrase / fixed phrase",
-      "scene_or_context": "daily life / work / feelings etc"
+      "scene_or_context": "日常 / 仕事 / 学習 / 感情 / 人間関係 / その他 のいずれか1つ"
     }
   ]
 }`;
@@ -174,6 +184,11 @@ serve(async (req) => {
 - 既存リストと被る場合は「復習」フラグを立てる
 - 新出の場合は「新出」フラグを立てる
 
+【scene_or_context のルール（厳守）】
+- 必ず次の6つの日本語ラベルから「1つだけ」選ぶこと（英語や別の語は禁止）：
+  "日常" / "仕事" / "学習" / "感情" / "人間関係" / "その他"
+- "その他" は本当にどれにも当てはまらない時だけ使うこと（ほとんど発生しないはず）。
+
 【出力形式（JSON）】
 {
   "sentences": [
@@ -188,7 +203,7 @@ serve(async (req) => {
       "expression": "表現",
       "meaning": "日本語訳",
       "pos_or_type": "verb phrase / noun phrase / fixed phrase など",
-      "scene_or_context": "daily life / work / feelings など",
+      "scene_or_context": "日常 / 仕事 / 学習 / 感情 / 人間関係 / その他 のいずれか1つ",
       "flag": "新出 または 復習"
     }
   ]
@@ -217,6 +232,11 @@ serve(async (req) => {
 - Each expression MUST be an exact substring of the corrected diary text
 - Prefer 2-4 word phrases over single words
 
+【SCENE_OR_CONTEXT — STRICT RULE】
+- The "scene_or_context" field MUST be EXACTLY ONE of these 6 Japanese labels:
+  "日常" / "仕事" / "学習" / "感情" / "人間関係" / "その他"
+- Use "その他" only when none of the first 5 fit.
+
 【SENTENCE BREAKDOWN】
 - Break the corrected diary into individual sentences
 - For each sentence, provide the Japanese translation
@@ -239,7 +259,7 @@ serve(async (req) => {
       "expression": "exact phrase from diary",
       "meaning": "日本語の意味",
       "pos_or_type": "verb phrase / noun phrase / fixed phrase",
-      "scene_or_context": "daily life / work / feelings etc"
+      "scene_or_context": "日常 / 仕事 / 学習 / 感情 / 人間関係 / その他 のいずれか1つ"
     }
   ]
 }`;
