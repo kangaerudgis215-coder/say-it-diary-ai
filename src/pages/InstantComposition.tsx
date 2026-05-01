@@ -8,12 +8,18 @@ import { supabase } from '@/lib/supabase';
 import { cn } from '@/lib/utils';
 import { bucketOf, BUCKET_META, MasteryBucket, nextMasteryLevel } from '@/lib/mastery';
 import { SwipeCard } from '@/components/game/SwipeCard';
+import { DotLottieReact } from '@lottiefiles/dotlottie-react';
+import { format } from 'date-fns';
 
 interface Phrase {
   id: string;
   expression: string;
   meaning: string | null;
   mastery_level: number;
+  /** Original diary sentence the expression came from (if any). */
+  sourceSentence?: string | null;
+  /** Diary date for the source quote, formatted MM,DD,YYYY. */
+  sourceDate?: string | null;
 }
 
 type Range = 'all' | 'new' | 'learning' | 'mastered';
@@ -48,11 +54,55 @@ export default function InstantComposition() {
     setIsLoading(true);
     const { data } = await supabase
       .from('expressions')
-      .select('id, expression, meaning, mastery_level')
+      .select('id, expression, meaning, mastery_level, diary_entry_id')
       .eq('user_id', user.id)
       .eq('status', 'active')
       .not('meaning', 'is', null);
-    setPhrases((data ?? []) as Phrase[]);
+
+    const rows = (data ?? []) as any[];
+
+    // Pull diary dates + sentences for each unique diary_entry_id so we can attach a "quote".
+    const diaryIds = Array.from(
+      new Set(rows.map((r) => r.diary_entry_id).filter(Boolean)),
+    ) as string[];
+    const diaryDateMap = new Map<string, string>();
+    const diarySentencesMap = new Map<string, string[]>();
+    if (diaryIds.length > 0) {
+      const [{ data: diaries }, { data: sentences }] = await Promise.all([
+        supabase.from('diary_entries').select('id, date').in('id', diaryIds),
+        supabase
+          .from('diary_sentences')
+          .select('diary_entry_id, english_sentence, sentence_index')
+          .in('diary_entry_id', diaryIds)
+          .order('sentence_index', { ascending: true }),
+      ]);
+      (diaries || []).forEach((d: any) => diaryDateMap.set(d.id, d.date));
+      (sentences || []).forEach((s: any) => {
+        const arr = diarySentencesMap.get(s.diary_entry_id) || [];
+        arr.push(s.english_sentence);
+        diarySentencesMap.set(s.diary_entry_id, arr);
+      });
+    }
+
+    const enriched: Phrase[] = rows.map((r) => {
+      const sentencesForDiary = r.diary_entry_id ? diarySentencesMap.get(r.diary_entry_id) || [] : [];
+      const exprLower = String(r.expression).toLowerCase();
+      const sourceSentence =
+        sentencesForDiary.find((s) => s.toLowerCase().includes(exprLower)) ??
+        sentencesForDiary[0] ??
+        null;
+      const dateRaw = r.diary_entry_id ? diaryDateMap.get(r.diary_entry_id) : null;
+      const sourceDate = dateRaw ? format(new Date(dateRaw), 'M,d,yyyy') : null;
+      return {
+        id: r.id,
+        expression: r.expression,
+        meaning: r.meaning,
+        mastery_level: r.mastery_level,
+        sourceSentence,
+        sourceDate,
+      };
+    });
+    setPhrases(enriched);
     setIsLoading(false);
   };
 
