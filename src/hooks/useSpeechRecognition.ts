@@ -4,6 +4,12 @@ interface UseSpeechRecognitionOptions {
   continuous?: boolean;
   interimResults?: boolean;
   lang?: string;
+  /**
+   * If set, automatically stop the recogniser after this many ms of silence
+   * (no new interim or final results). Useful for "speak then auto-send" flows
+   * so the user doesn't have to tap the mic again to stop recording.
+   */
+  autoStopSilenceMs?: number;
 }
 
 interface UseSpeechRecognitionReturn {
@@ -68,13 +74,14 @@ declare global {
 export function useSpeechRecognition(
   options: UseSpeechRecognitionOptions = {}
 ): UseSpeechRecognitionReturn {
-  const { continuous = true, interimResults = true, lang = 'en-US' } = options;
+  const { continuous = true, interimResults = true, lang = 'en-US', autoStopSilenceMs } = options;
   
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState('');
   const [interimTranscript, setInterimTranscript] = useState('');
   
   const recognitionRef = useRef<ISpeechRecognition | null>(null);
+  const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   
   // Check for browser support
   const isSupported = typeof window !== 'undefined' && 
@@ -90,12 +97,29 @@ export function useSpeechRecognition(
     recognition.interimResults = interimResults;
     recognition.lang = lang;
 
+    const armSilenceTimer = () => {
+      if (!autoStopSilenceMs) return;
+      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+      silenceTimerRef.current = setTimeout(() => {
+        try {
+          recognition.stop();
+        } catch {
+          /* ignore */
+        }
+      }, autoStopSilenceMs);
+    };
+
     recognition.onstart = () => {
       setIsListening(true);
+      armSilenceTimer();
     };
 
     recognition.onend = () => {
       setIsListening(false);
+      if (silenceTimerRef.current) {
+        clearTimeout(silenceTimerRef.current);
+        silenceTimerRef.current = null;
+      }
     };
 
     recognition.onerror = (event) => {
@@ -122,14 +146,17 @@ export function useSpeechRecognition(
       } else {
         setInterimTranscript(currentInterim);
       }
+      // Any speech activity resets the silence timer.
+      armSilenceTimer();
     };
 
     recognitionRef.current = recognition;
 
     return () => {
+      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
       recognition.stop();
     };
-  }, [continuous, interimResults, lang, isSupported]);
+  }, [continuous, interimResults, lang, isSupported, autoStopSilenceMs]);
 
   const startListening = useCallback(() => {
     if (recognitionRef.current && !isListening) {
