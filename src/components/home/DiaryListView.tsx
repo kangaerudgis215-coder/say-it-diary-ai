@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, X, Sparkles } from 'lucide-react';
+import { Search, X } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { format, parseISO } from 'date-fns';
 import { ja } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
+import { DotLottieReact } from '@lottiefiles/dotlottie-react';
 
 interface DiaryEntryRow {
   id: string;
@@ -110,27 +111,31 @@ function DiaryCard({
     <button
       onClick={onClick}
       className={cn(
-        'w-full text-left bg-card/70 hover:bg-card transition-colors relative',
+        'w-full text-left bg-card/70 hover:bg-card transition-colors',
         'rounded-2xl border p-4 flex gap-4',
         recallCompleted
-          ? 'border-amber-400/50 shadow-[0_0_18px_hsl(38_92%_55%/0.18)]'
+          ? 'border-amber-400/40 shadow-[0_0_18px_hsl(38_92%_55%/0.16)]'
           : 'border-border/60',
       )}
     >
-      {recallCompleted && (
-        <span
-          className="absolute -top-1.5 -right-1.5 inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-amber-400 to-orange-500 px-2 py-0.5 text-[10px] font-bold text-white shadow-md animate-pulse"
-          aria-label="Recall completed"
-        >
-          <Sparkles className="w-3 h-3" />
-          Recalled
-        </span>
-      )}
-      <div className="flex flex-col items-center justify-start w-12 shrink-0">
+      <div className="flex flex-col items-center justify-start w-12 shrink-0 relative">
         <span className="text-xs text-muted-foreground">{dow}</span>
         <span className="text-2xl font-bold leading-none mt-0.5">{day}</span>
         <span className="text-[10px] text-muted-foreground mt-1">{time}</span>
       </div>
+      {recallCompleted && (
+        <div
+          className="w-12 h-12 -ml-2 self-center pointer-events-none"
+          aria-label="Recall completed"
+        >
+          <DotLottieReact
+            src="/anim/winner.lottie"
+            autoplay
+            loop
+            style={{ width: '100%', height: '100%' }}
+          />
+        </div>
+      )}
       <p className="text-sm leading-relaxed text-foreground/90 line-clamp-3 flex-1">
         {entry.content}
       </p>
