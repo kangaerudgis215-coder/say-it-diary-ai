@@ -73,3 +73,26 @@ export const SCENE_CATEGORIES = [
   "その他",
 ] as const;
 export type SceneCategory = (typeof SCENE_CATEGORIES)[number];
+
+/** Fixed POS / phrase-type buckets used in the Phrases list. */
+export const POS_CATEGORIES = [
+  "verb phrase",
+  "adjective phrase",
+  "noun phrase",
+  "fixed phrase",
+  "adverb phrase",
+  "idiom",
+  "other",
+] as const;
+export type PosCategory = (typeof POS_CATEGORIES)[number];
+
+/** Friendly Japanese label for each POS bucket. */
+export const POS_LABELS_JA: Record<PosCategory, string> = {
+  "verb phrase": "動詞句",
+  "adjective phrase": "形容詞句",
+  "noun phrase": "名詞句",
+  "fixed phrase": "決まり文句",
+  "adverb phrase": "副詞句",
+  "idiom": "イディオム",
+  "other": "その他",
+};
