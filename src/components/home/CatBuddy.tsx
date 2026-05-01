@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { DotLottieReact } from '@lottiefiles/dotlottie-react';
+import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/lib/supabase';
 
 interface CatDiaryEntry {
   id: string;
@@ -19,7 +21,9 @@ interface CatBuddyProps {
  * with a short reaction + encouragement, nyaa~.
  */
 export function CatBuddy({ recentDiary, entries = [], streak = 0 }: CatBuddyProps) {
-  const [comments, setComments] = useState<string[]>(() => pickFallbackBubbles(recentDiary ?? '', streak));
+  const { user } = useAuth();
+  const [displayName, setDisplayName] = useState<string | null>(null);
+  const [comments, setComments] = useState<string[]>(() => pickFallbackBubbles(recentDiary ?? '', streak, null));
   const [index, setIndex] = useState(0);
 
   const diarySignature = useMemo(
@@ -27,9 +31,24 @@ export function CatBuddy({ recentDiary, entries = [], streak = 0 }: CatBuddyProp
     [entries],
   );
 
+  // Fetch the user's display name once so the cat can occasionally call them by name.
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from('profiles')
+        .select('display_name')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      if (!cancelled) setDisplayName((data?.display_name || '').trim() || null);
+    })();
+    return () => { cancelled = true; };
+  }, [user]);
+
   useEffect(() => {
     let cancelled = false;
-    const fallback = pickFallbackBubbles(recentDiary ?? entries[0]?.content ?? '', streak);
+    const fallback = pickFallbackBubbles(recentDiary ?? entries[0]?.content ?? '', streak, displayName);
     setComments(fallback);
     setIndex(0);
 
@@ -43,7 +62,7 @@ export function CatBuddy({ recentDiary, entries = [], streak = 0 }: CatBuddyProp
             'Content-Type': 'application/json',
             Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
           },
-          body: JSON.stringify({ type: 'cat_comments', diaries: samples, streak }),
+          body: JSON.stringify({ type: 'cat_comments', diaries: samples, streak, displayName }),
         });
         if (!response.ok) throw new Error('failed');
         const data = await response.json();
@@ -60,9 +79,9 @@ export function CatBuddy({ recentDiary, entries = [], streak = 0 }: CatBuddyProp
     return () => {
       cancelled = true;
     };
-  }, [diarySignature, entries, recentDiary, streak]);
+  }, [diarySignature, entries, recentDiary, streak, displayName]);
 
-  const bubble = comments[index % comments.length] || pickFallbackBubbles('', streak)[0];
+  const bubble = comments[index % comments.length] || pickFallbackBubbles('', streak, displayName)[0];
   const cycleComment = () => setIndex((prev) => (prev + 1) % Math.max(1, comments.length));
 
   return (
@@ -108,19 +127,24 @@ function pickDiarySamples(entries: CatDiaryEntry[]): CatDiaryEntry[] {
   return [...picked, ...rest].slice(0, 3);
 }
 
-function pickFallbackBubbles(text: string, streak: number): string[] {
-  const base = pickBubble(text);
+function pickFallbackBubbles(text: string, streak: number, name: string | null): string[] {
+  const base = pickBubble(text, name);
+  const honor = name ? `${name}` : null;
   const streakLine =
     streak >= 7
-      ? `${streak}日続いてるの、さすがにすごいにゃ。今日も少し話すにゃ？`
+      ? `${honor ? `${honor}、` : ''}${streak}日続いてるの、さすがにすごいにゃ。今日も少し話すにゃ？`
       : streak > 0
-        ? `${streak}日ストリーク中にゃ〜。今日のことも聞かせてにゃ。`
-        : 'まずは一言でいいにゃ〜。今日はどんな日だったにゃ？';
-  return [base, streakLine, '眠いけど聞く準備はできてるにゃ。今日も話してにゃ〜'];
+        ? `${streak}日ストリーク中にゃ〜。${honor ? `${honor}の` : ''}今日のことも聞かせてにゃ。`
+        : `${honor ? `${honor}、` : ''}まずは一言でいいにゃ〜。今日はどんな日だったにゃ？`;
+  const sleepy = honor
+    ? `眠いけど${honor}の話なら聞く準備できてるにゃ〜`
+    : '眠いけど聞く準備はできてるにゃ。今日も話してにゃ〜';
+  return [base, streakLine, sleepy];
 }
 
-function pickBubble(text: string): string {
+function pickBubble(text: string, name: string | null): string {
   const t = text.toLowerCase();
+  const prefix = name && Math.random() < 0.4 ? `${name}、` : '';
 
   const rules: Array<{ match: RegExp; line: string }> = [
     { match: /\bramen|noodle|udon|soba\b/, line: '僕もラーメン食べたくなってきたにゃ〜。今日はどんなことがあったにゃ？' },
@@ -138,11 +162,13 @@ function pickBubble(text: string): string {
   ];
 
   for (const r of rules) {
-    if (r.match.test(t)) return r.line;
+    if (r.match.test(t)) return prefix + r.line;
   }
 
   if (!text.trim()) {
-    return 'やぁにゃ〜。今日はどんな一日だったにゃ？ぼちぼち話してにゃ。';
+    return name
+      ? `やぁ${name}〜。今日はどんな一日だったにゃ？ぼちぼち話してにゃ。`
+      : 'やぁにゃ〜。今日はどんな一日だったにゃ？ぼちぼち話してにゃ。';
   }
-  return 'おつかれにゃ〜。今日はどんなことがあったにゃ？';
+  return prefix + 'おつかれにゃ〜。今日はどんなことがあったにゃ？';
 }

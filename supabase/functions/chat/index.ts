@@ -90,7 +90,7 @@ serve(async (req) => {
   }
 
   try {
-    const { messages, type, diary, diaries, streak, wordCount, existingExpressions, correction } = await req.json();
+    const { messages, type, diary, diaries, streak, wordCount, existingExpressions, correction, displayName } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
 
     if (!LOVABLE_API_KEY) {
@@ -320,6 +320,8 @@ serve(async (req) => {
 - Each comment must be short: 22-42 Japanese characters if possible.
 - Each comment = one tiny reaction to diary content OR streak + one soft prompt/encouragement.
 - Do not quote private details too specifically. Keep it casual.
+- If a user display name is provided, address the user by name in AT MOST ONE of the 3 comments (e.g. "〇〇、" or "〇〇の今日は…"). The other two must NOT use the name. Never invent a name.
+- Never invent facts. Only react to what's literally written. If unsure, stay generic and warm.
 
 【OUTPUT FORMAT】
 {"comments":["comment 1","comment 2","comment 3"]}`;
@@ -374,11 +376,12 @@ serve(async (req) => {
       const diaryLines = Array.isArray(diaries)
         ? diaries.slice(0, 5).map((d: any, i: number) => `${i + 1}. ${String(d?.date ?? "unknown")}: ${String(d?.content ?? "").slice(0, 500)}`).join("\n")
         : String(diary ?? "");
+      const safeName = typeof displayName === "string" ? displayName.trim().slice(0, 24) : "";
       aiMessages = [
         { role: "system", content: systemPrompt },
         {
           role: "user",
-          content: `【Current streak】${Number(streak ?? 0)} days\n【Past diary samples】\n${diaryLines}`,
+          content: `【User display name】${safeName || "(none — do NOT use any name)"}\n【Current streak】${Number(streak ?? 0)} days\n【Past diary samples】\n${diaryLines}`,
         },
       ];
     } else if (type === "generate_quiz") {
