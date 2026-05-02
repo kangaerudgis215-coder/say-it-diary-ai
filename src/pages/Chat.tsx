@@ -797,37 +797,48 @@ export default function Chat() {
           </Button>
         </div>
 
-        {/* Big centered mic — the primary action */}
-        <div className="flex items-center justify-center gap-3">
-          <VoiceRecordButton
-            onTranscript={handleVoiceTranscript}
-            className="h-32 w-32"
-            iconSize={72}
-            autoStopSilenceMs={silenceMs}
-          />
-          {/* Silence-cutoff selector */}
-          <div
-            className="flex flex-col gap-1"
-            aria-label="自動停止までの無音時間"
-          >
-            <span className="text-[10px] uppercase tracking-wider text-muted-foreground text-center">
-              無音
-            </span>
-            {SILENCE_OPTIONS.map((opt) => (
-              <button
-                key={opt.ms}
-                type="button"
-                onClick={() => setSilenceMs(opt.ms)}
-                className={`text-[11px] px-2.5 py-1 rounded-full border transition-colors ${
-                  silenceMs === opt.ms
-                    ? 'bg-primary text-primary-foreground border-primary shadow'
-                    : 'bg-muted/40 text-muted-foreground border-border hover:bg-muted'
-                }`}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
+        {/* Big centered mic — tap to start, tap again to stop. No silence
+            auto-cutoff: the user controls the entire recording window so
+            mid-sentence pauses don't cut them off. */}
+        <div className="flex flex-col items-center justify-center gap-2">
+          {speechSupported ? (
+            <button
+              type="button"
+              onClick={isListening ? stopMic : startMic}
+              aria-label={isListening ? '録音を停止' : '録音を開始'}
+              className={cn(
+                'relative inline-flex items-center justify-center rounded-full shrink-0 h-32 w-32',
+                'transition-all duration-200 active:scale-95',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                isListening
+                  ? 'bg-primary/15 ring-2 ring-primary/50'
+                  : 'bg-primary text-primary-foreground shadow-lg shadow-primary/30 hover:shadow-primary/50',
+              )}
+            >
+              {!isListening && (
+                <span className="absolute inset-0 rounded-full bg-primary/30 blur-xl -z-10" />
+              )}
+              {isListening ? (
+                <Lottie
+                  animationData={voiceAnim}
+                  loop
+                  autoplay
+                  style={{ width: 115, height: 115 }}
+                />
+              ) : (
+                <Mic style={{ width: 72, height: 72 }} />
+              )}
+            </button>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              このブラウザは音声入力に対応していません
+            </p>
+          )}
+          <p className="text-[11px] text-muted-foreground">
+            {isListening
+              ? 'タップで停止 ・ 話した英語が入力欄に表示されます'
+              : 'マイクをタップして英語で話す'}
+          </p>
         </div>
         </>
         )}
