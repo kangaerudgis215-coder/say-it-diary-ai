@@ -1,12 +1,14 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Send, Loader2, Check, BookOpen, Lock } from 'lucide-react';
+import { ArrowLeft, Send, Loader2, Check, BookOpen, Lock, Mic, Square } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ChatBubble } from '@/components/ChatBubble';
-import { VoiceRecordButton } from '@/components/VoiceRecordButton';
 import { SandyLoader } from '@/components/lottie/SandyLoader';
 import { HelpCircle } from 'lucide-react';
+import Lottie from 'lottie-react';
+import voiceAnim from '@/assets/voice.json';
+import { cn } from '@/lib/utils';
 import {
   Dialog,
   DialogContent,
@@ -21,12 +23,6 @@ import { useVocabularyLog } from '@/hooks/useVocabularyLog';
 import { normalizeForExpression } from '@/lib/textComparison';
 import { persistDiarySentences } from '@/lib/practiceBuilder';
 import { format, parseISO, isToday as isTodayFn } from 'date-fns';
-
-const SILENCE_OPTIONS: { ms: number; label: string }[] = [
-  { ms: 3000, label: '3秒' },
-  { ms: 5000, label: '5秒' },
-  { ms: 10000, label: '10秒' },
-];
 
 /**
  * Robust browser TTS for the AI's spoken reply. Works around three known
