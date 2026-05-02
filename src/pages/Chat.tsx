@@ -159,11 +159,21 @@ export default function Chat() {
       .select('*, messages(*)')
       .eq('user_id', user.id)
       .eq('date', diaryDate)
-      .single();
+      .maybeSingle();
 
     if (existing) {
       setConversationId(existing.id);
-      setMessages((existing.messages || []).map((m: any) => ({
+      // CRITICAL: Postgres does NOT preserve insertion order on related
+      // selects. Without an explicit sort, returning to a conversation can
+      // shuffle the messages (e.g. AI reply appearing before its user prompt).
+      // Sort by created_at ascending so the chat always reads top-to-bottom
+      // in the order it actually happened.
+      const ordered = [...(existing.messages || [])].sort((a: any, b: any) => {
+        const ta = new Date(a.created_at ?? 0).getTime();
+        const tb = new Date(b.created_at ?? 0).getTime();
+        return ta - tb;
+      });
+      setMessages(ordered.map((m: any) => ({
         id: m.id,
         role: m.role,
         content: m.content,
@@ -523,6 +533,11 @@ export default function Chat() {
    * chat input so the user can see their English appear live.
    */
   const startMic = () => {
+    console.log('[mic] startMic called', {
+      speechSupported,
+      isListening,
+      hasExistingRec: !!recognitionRef.current,
+    });
     if (!speechSupported) {
       toast({
         variant: 'destructive',
@@ -531,7 +546,24 @@ export default function Chat() {
       });
       return;
     }
-    if (isListening) return;
+    // Defensive cleanup: if a stale recogniser is still attached (e.g. the
+    // user backgrounded the PWA and came back, in which case onend may not
+    // have fired), abort it before starting a fresh one. Without this,
+    // calling start() on an already-started instance throws InvalidStateError
+    // and the mic silently does nothing.
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.abort();
+      } catch {
+        /* ignore */
+      }
+      recognitionRef.current = null;
+    }
+    if (isListening) {
+      // State got out of sync — reset and let the user tap again.
+      setIsListening(false);
+      return;
+    }
     const Ctor: any =
       (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     const rec = new Ctor();
@@ -542,12 +574,15 @@ export default function Chat() {
     finalBufferRef.current = '';
     baseInputRef.current = input;
 
-    rec.onstart = () => setIsListening(true);
+    rec.onstart = () => {
+      console.log('[mic] onstart fired');
+      setIsListening(true);
+    };
     rec.onerror = (e: any) => {
       // "aborted" fires when we intentionally stop — not a real error.
       const err = e?.error;
+      console.warn('[mic] onerror', err);
       if (!err || err === 'aborted' || err === 'no-speech') return;
-      console.error('Speech recognition error:', err);
       if (err === 'not-allowed' || err === 'service-not-allowed') {
         toast({
           variant: 'destructive',
@@ -571,6 +606,7 @@ export default function Chat() {
       setIsListening(false);
     };
     rec.onend = () => {
+      console.log('[mic] onend fired');
       setIsListening(false);
       // Commit any pending finals into input one last time.
       const base = baseInputRef.current;
@@ -606,8 +642,9 @@ export default function Chat() {
     try {
       recognitionRef.current = rec;
       rec.start();
+      console.log('[mic] start() called successfully');
     } catch (err) {
-      console.error('Failed to start speech recognition:', err);
+      console.error('[mic] start() threw:', err);
       recognitionRef.current = null;
       setIsListening(false);
       toast({
