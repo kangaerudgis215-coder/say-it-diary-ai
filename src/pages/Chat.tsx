@@ -1,13 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Send, Loader2, Check, BookOpen, Lock, Mic, Square } from 'lucide-react';
+import { ArrowLeft, Send, Loader2, Check, BookOpen, Lock, Mic } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ChatBubble } from '@/components/ChatBubble';
 import { SandyLoader } from '@/components/lottie/SandyLoader';
 import { HelpCircle } from 'lucide-react';
-import Lottie from 'lottie-react';
-import voiceAnim from '@/assets/voice.json';
 import { cn } from '@/lib/utils';
 import {
   Dialog,
@@ -24,92 +22,32 @@ import { normalizeForExpression } from '@/lib/textComparison';
 import { persistDiarySentences } from '@/lib/practiceBuilder';
 import { format, parseISO, isToday as isTodayFn } from 'date-fns';
 
-/**
- * Robust browser TTS for the AI's spoken reply. Works around three known
- * pain points:
- *   1. Chrome ignores `speak()` if called too soon after `cancel()`.
- *   2. Safari/iOS only has voices after `voiceschanged` fires.
- *   3. Long utterances pause silently in Chrome — `resume()` brings them back.
- */
-// Tracks the keepAlive interval id of any in-flight TTS so we can kill it
-// from outside (e.g. when the user taps the mic). Without this the Chrome
-// "resume on pause" heartbeat can keep the speechSynthesis audio session
-// alive for minutes after the utterance ends, which on iOS Safari blocks
-// SpeechRecognition from starting (it immediately aborts).
-let ttsKeepAliveId: ReturnType<typeof setInterval> | null = null;
+let assistantSpeechTimer: ReturnType<typeof setTimeout> | null = null;
 
 function stopAssistantSpeech(): void {
-  if (ttsKeepAliveId !== null) {
-    clearInterval(ttsKeepAliveId);
-    ttsKeepAliveId = null;
+  if (assistantSpeechTimer) {
+    clearTimeout(assistantSpeechTimer);
+    assistantSpeechTimer = null;
   }
   if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-    try {
-      window.speechSynthesis.cancel();
-    } catch {
-      /* ignore */
-    }
+    window.speechSynthesis.cancel();
   }
 }
 
-async function speakAssistant(text: string): Promise<void> {
+function speakAssistant(text: string): void {
   if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
-  const synth = window.speechSynthesis;
-  try {
-    // Wait for voices to be loaded (Safari/iOS first-load workaround).
-    if (synth.getVoices().length === 0) {
-      await new Promise<void>((resolve) => {
-        const t = setTimeout(resolve, 800);
-        synth.addEventListener(
-          'voiceschanged',
-          () => {
-            clearTimeout(t);
-            resolve();
-          },
-          { once: true },
-        );
-      });
-    }
-    stopAssistantSpeech();
-    // Small gap so Chrome doesn't swallow the next speak().
-    await new Promise((r) => setTimeout(r, 80));
-
-    const u = new SpeechSynthesisUtterance(text);
-    u.lang = 'en-US';
-    u.rate = 0.95;
-    u.pitch = 1.05;
-    // Prefer an English voice if one is installed — avoids picking up the
-    // system default (e.g. a JP voice) which can sound robotic for English.
-    const voices = synth.getVoices();
-    const en =
-      voices.find((v) => v.lang === 'en-US' && v.localService) ||
-      voices.find((v) => v.lang === 'en-US') ||
-      voices.find((v) => v.lang.startsWith('en'));
-    if (en) u.voice = en;
-    synth.speak(u);
-
-    // Chrome bug: long utterances stop after ~15s. Periodically nudge it.
-    ttsKeepAliveId = setInterval(() => {
-      if (!synth.speaking) {
-        if (ttsKeepAliveId !== null) {
-          clearInterval(ttsKeepAliveId);
-          ttsKeepAliveId = null;
-        }
-        return;
-      }
-      if (synth.paused) synth.resume();
-    }, 5000);
-    const clear = () => {
-      if (ttsKeepAliveId !== null) {
-        clearInterval(ttsKeepAliveId);
-        ttsKeepAliveId = null;
-      }
-    };
-    u.onend = clear;
-    u.onerror = clear;
-  } catch {
-    // ignore TTS errors
-  }
+  stopAssistantSpeech();
+  assistantSpeechTimer = setTimeout(() => {
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'en-US';
+    utterance.rate = 0.95;
+    utterance.pitch = 1.05;
+    const voice = window.speechSynthesis
+      .getVoices()
+      .find((v) => v.lang === 'en-US' || v.lang.startsWith('en'));
+    if (voice) utterance.voice = voice;
+    window.speechSynthesis.speak(utterance);
+  }, 80);
 }
 
 interface Message {
@@ -139,13 +77,7 @@ export default function Chat() {
   const [showHelp, setShowHelp] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef<any>(null);
-  // Buffer of finalized speech chunks committed to the input field for this
-  // recording session. We track this separately so interim (in-progress)
-  // results can be rendered live without overwriting earlier finals.
-  const finalBufferRef = useRef<string>('');
-  // Snapshot of `input` at the moment recording started, so we can append
-  // to whatever the user had already typed.
-  const baseInputRef = useRef<string>('');
+  const transcriptBaseRef = useRef<string>('');
   const speechSupported =
     typeof window !== 'undefined' &&
     ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window);
@@ -207,6 +139,7 @@ export default function Chat() {
         id: m.id,
         role: m.role,
         content: m.content,
+        japanese: m.japanese ?? undefined,
       })));
     } else {
       // Create new conversation for this diary date
@@ -222,14 +155,19 @@ export default function Chat() {
         const dateLabel = isToday ? 'today' : format(parseISO(diaryDate), 'MMMM d, yyyy');
         
         // Add welcome message
+        const welcomeJapanese = isToday
+          ? 'こんばんは！🌙 今日はどんな一日でしたか？大きなことでも小さなことでも、何があったか教えてください。英語で表現するお手伝いをします！'
+          : `こんばんは！🌙 ${dateLabel} のことを書きましょう。その日は何がありましたか？覚えていることを何でも教えてください！`;
         const welcomeMessage = {
           id: 'welcome',
           role: 'assistant' as const,
           content: isToday 
             ? "Hi there! 🌙 How was your day today? Tell me about anything that happened - big or small. I'm here to listen and help you express it in English!"
             : `Hi there! 🌙 Let's write about ${dateLabel}. What happened that day? Tell me anything you remember!`,
+          japanese: welcomeJapanese,
         };
         setMessages([welcomeMessage]);
+        speakAssistant(welcomeMessage.content);
         
         // Save welcome message
         await supabase.from('messages').insert({
@@ -237,6 +175,7 @@ export default function Chat() {
           user_id: user.id,
           role: 'assistant',
           content: welcomeMessage.content,
+          japanese: welcomeMessage.japanese,
         });
       }
     }
@@ -324,13 +263,7 @@ export default function Chat() {
 
       setMessages(prev => [...prev, assistantMessage]);
 
-      // Speak the AI reply aloud. Browser TTS is famously flaky:
-      //   • Chrome silently drops `speak()` if it's called immediately after
-      //     `cancel()` — we add a short delay.
-      //   • Safari/iOS only has voices ready *after* `voiceschanged`, so the
-      //     first utterance of a session can be silent. We wait for voices.
-      //   • If the engine ends up "paused" (Chrome bug), `resume()` revives it.
-      void speakAssistant(assistantMessage.content);
+      speakAssistant(assistantMessage.content);
 
       // Save assistant message
       await supabase.from('messages').insert({
@@ -338,6 +271,7 @@ export default function Chat() {
         user_id: user.id,
         role: 'assistant',
         content: assistantMessage.content,
+        japanese: assistantMessage.japanese ?? null,
       });
 
       // Auto-finish the diary after the AI's closing line.
@@ -556,18 +490,8 @@ export default function Chat() {
     }
   };
 
-  /**
-   * Start the mic on a direct user gesture. We instantiate a fresh
-   * SpeechRecognition each press (some browsers refuse to restart a stopped
-   * instance) and stream both interim and final results straight into the
-   * chat input so the user can see their English appear live.
-   */
   const startMic = () => {
-    console.log('[mic] startMic called', {
-      speechSupported,
-      isListening,
-      hasExistingRec: !!recognitionRef.current,
-    });
+    if (recognitionRef.current) return;
     if (!speechSupported) {
       toast({
         variant: 'destructive',
@@ -576,29 +500,7 @@ export default function Chat() {
       });
       return;
     }
-    // Defensive cleanup: if a stale recogniser is still attached (e.g. the
-    // user backgrounded the PWA and came back, in which case onend may not
-    // have fired), abort it before starting a fresh one. Without this,
-    // calling start() on an already-started instance throws InvalidStateError
-    // and the mic silently does nothing.
-    if (recognitionRef.current) {
-      try {
-        recognitionRef.current.abort();
-      } catch {
-        /* ignore */
-      }
-      recognitionRef.current = null;
-    }
-    if (isListening) {
-      // State got out of sync — reset and let the user tap again.
-      setIsListening(false);
-      return;
-    }
-    // CRITICAL — iOS Safari quirk: if speechSynthesis still holds the audio
-    // session (e.g. a TTS keep-alive heartbeat is running from the previous
-    // AI reply), the next SpeechRecognition.start() immediately fires
-    // `aborted`. We tear down TTS and its keep-alive timer first so the
-    // engine releases the mic.
+
     stopAssistantSpeech();
     const Ctor: any =
       (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -606,18 +508,13 @@ export default function Chat() {
     rec.lang = 'en-US';
     rec.continuous = true;
     rec.interimResults = true;
-
-    finalBufferRef.current = '';
-    baseInputRef.current = input;
+    transcriptBaseRef.current = input.trim();
 
     rec.onstart = () => {
-      console.log('[mic] onstart fired');
       setIsListening(true);
     };
     rec.onerror = (e: any) => {
-      // "aborted" fires when we intentionally stop — not a real error.
       const err = e?.error;
-      console.warn('[mic] onerror', err);
       if (!err || err === 'aborted' || err === 'no-speech') return;
       if (err === 'not-allowed' || err === 'service-not-allowed') {
         toast({
@@ -640,23 +537,13 @@ export default function Chat() {
         });
       }
       setIsListening(false);
+      recognitionRef.current = null;
     };
     rec.onend = () => {
-      console.log('[mic] onend fired');
       setIsListening(false);
-      // Commit any pending finals into input one last time.
-      const base = baseInputRef.current;
-      const finals = finalBufferRef.current.trim();
-      if (finals) {
-        setInput((base ? base + ' ' : '') + finals);
-      }
       recognitionRef.current = null;
     };
     rec.onresult = (event: any) => {
-      // Walk ALL results (not just from resultIndex) so we capture every
-      // interim chunk currently in the buffer. Finalized chunks are committed
-      // to a ref so they survive re-renders, while interim chunks are shown
-      // live and overwritten on each event.
       let finals = '';
       let interim = '';
       for (let i = 0; i < event.results.length; i++) {
@@ -669,8 +556,7 @@ export default function Chat() {
           interim += (interim ? ' ' : '') + txt;
         }
       }
-      finalBufferRef.current = finals;
-      const base = baseInputRef.current;
+      const base = transcriptBaseRef.current;
       const live = [finals, interim].filter(Boolean).join(' ');
       setInput((base ? base + ' ' : '') + live);
     };
@@ -678,9 +564,7 @@ export default function Chat() {
     try {
       recognitionRef.current = rec;
       rec.start();
-      console.log('[mic] start() called successfully');
     } catch (err) {
-      console.error('[mic] start() threw:', err);
       recognitionRef.current = null;
       setIsListening(false);
       toast({
@@ -905,14 +789,15 @@ export default function Chat() {
           </Button>
         </div>
 
-        {/* Big centered mic — tap to start, tap again to stop. No silence
-            auto-cutoff: the user controls the entire recording window so
-            mid-sentence pauses don't cut them off. */}
+        {/* Big centered mic — press and hold to speak. */}
         <div className="flex flex-col items-center justify-center gap-2">
           {speechSupported ? (
             <button
               type="button"
-              onClick={isListening ? stopMic : startMic}
+              onPointerDown={startMic}
+              onPointerUp={stopMic}
+              onPointerLeave={stopMic}
+              onPointerCancel={stopMic}
               aria-label={isListening ? '録音を停止' : '録音を開始'}
               className={cn(
                 'relative inline-flex items-center justify-center rounded-full shrink-0 h-32 w-32',
@@ -926,16 +811,8 @@ export default function Chat() {
               {!isListening && (
                 <span className="absolute inset-0 rounded-full bg-primary/30 blur-xl -z-10" />
               )}
-              {isListening ? (
-                <Lottie
-                  animationData={voiceAnim}
-                  loop
-                  autoplay
-                  style={{ width: 115, height: 115 }}
-                />
-              ) : (
-                <Mic style={{ width: 72, height: 72 }} />
-              )}
+              {isListening && <span className="absolute inset-3 rounded-full border border-primary/40 animate-ping" />}
+              <Mic className={cn('h-16 w-16', isListening && 'text-primary')} />
             </button>
           ) : (
             <p className="text-xs text-muted-foreground">
@@ -944,8 +821,8 @@ export default function Chat() {
           )}
           <p className="text-[11px] text-muted-foreground">
             {isListening
-              ? 'タップで停止 ・ 話した英語が入力欄に表示されます'
-              : 'マイクをタップして英語で話す'}
+              ? '押している間、英語をリアルタイム入力します'
+              : 'マイクを押しながら英語で話す'}
           </p>
         </div>
         </>
