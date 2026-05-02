@@ -533,6 +533,11 @@ export default function Chat() {
    * chat input so the user can see their English appear live.
    */
   const startMic = () => {
+    console.log('[mic] startMic called', {
+      speechSupported,
+      isListening,
+      hasExistingRec: !!recognitionRef.current,
+    });
     if (!speechSupported) {
       toast({
         variant: 'destructive',
@@ -541,7 +546,24 @@ export default function Chat() {
       });
       return;
     }
-    if (isListening) return;
+    // Defensive cleanup: if a stale recogniser is still attached (e.g. the
+    // user backgrounded the PWA and came back, in which case onend may not
+    // have fired), abort it before starting a fresh one. Without this,
+    // calling start() on an already-started instance throws InvalidStateError
+    // and the mic silently does nothing.
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.abort();
+      } catch {
+        /* ignore */
+      }
+      recognitionRef.current = null;
+    }
+    if (isListening) {
+      // State got out of sync — reset and let the user tap again.
+      setIsListening(false);
+      return;
+    }
     const Ctor: any =
       (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     const rec = new Ctor();
@@ -552,12 +574,15 @@ export default function Chat() {
     finalBufferRef.current = '';
     baseInputRef.current = input;
 
-    rec.onstart = () => setIsListening(true);
+    rec.onstart = () => {
+      console.log('[mic] onstart fired');
+      setIsListening(true);
+    };
     rec.onerror = (e: any) => {
       // "aborted" fires when we intentionally stop — not a real error.
       const err = e?.error;
+      console.warn('[mic] onerror', err);
       if (!err || err === 'aborted' || err === 'no-speech') return;
-      console.error('Speech recognition error:', err);
       if (err === 'not-allowed' || err === 'service-not-allowed') {
         toast({
           variant: 'destructive',
@@ -581,6 +606,7 @@ export default function Chat() {
       setIsListening(false);
     };
     rec.onend = () => {
+      console.log('[mic] onend fired');
       setIsListening(false);
       // Commit any pending finals into input one last time.
       const base = baseInputRef.current;
@@ -616,8 +642,9 @@ export default function Chat() {
     try {
       recognitionRef.current = rec;
       rec.start();
+      console.log('[mic] start() called successfully');
     } catch (err) {
-      console.error('Failed to start speech recognition:', err);
+      console.error('[mic] start() threw:', err);
       recognitionRef.current = null;
       setIsListening(false);
       toast({
