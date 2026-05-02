@@ -494,18 +494,8 @@ export default function Chat() {
     }
   };
 
-  /**
-   * Start the mic on a direct user gesture. We instantiate a fresh
-   * SpeechRecognition each press (some browsers refuse to restart a stopped
-   * instance) and stream both interim and final results straight into the
-   * chat input so the user can see their English appear live.
-   */
   const startMic = () => {
-    console.log('[mic] startMic called', {
-      speechSupported,
-      isListening,
-      hasExistingRec: !!recognitionRef.current,
-    });
+    if (recognitionRef.current) return;
     if (!speechSupported) {
       toast({
         variant: 'destructive',
@@ -514,29 +504,7 @@ export default function Chat() {
       });
       return;
     }
-    // Defensive cleanup: if a stale recogniser is still attached (e.g. the
-    // user backgrounded the PWA and came back, in which case onend may not
-    // have fired), abort it before starting a fresh one. Without this,
-    // calling start() on an already-started instance throws InvalidStateError
-    // and the mic silently does nothing.
-    if (recognitionRef.current) {
-      try {
-        recognitionRef.current.abort();
-      } catch {
-        /* ignore */
-      }
-      recognitionRef.current = null;
-    }
-    if (isListening) {
-      // State got out of sync — reset and let the user tap again.
-      setIsListening(false);
-      return;
-    }
-    // CRITICAL — iOS Safari quirk: if speechSynthesis still holds the audio
-    // session (e.g. a TTS keep-alive heartbeat is running from the previous
-    // AI reply), the next SpeechRecognition.start() immediately fires
-    // `aborted`. We tear down TTS and its keep-alive timer first so the
-    // engine releases the mic.
+
     stopAssistantSpeech();
     const Ctor: any =
       (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -544,18 +512,13 @@ export default function Chat() {
     rec.lang = 'en-US';
     rec.continuous = true;
     rec.interimResults = true;
-
-    finalBufferRef.current = '';
-    baseInputRef.current = input;
+    transcriptBaseRef.current = input.trim();
 
     rec.onstart = () => {
-      console.log('[mic] onstart fired');
       setIsListening(true);
     };
     rec.onerror = (e: any) => {
-      // "aborted" fires when we intentionally stop — not a real error.
       const err = e?.error;
-      console.warn('[mic] onerror', err);
       if (!err || err === 'aborted' || err === 'no-speech') return;
       if (err === 'not-allowed' || err === 'service-not-allowed') {
         toast({
@@ -578,23 +541,13 @@ export default function Chat() {
         });
       }
       setIsListening(false);
+      recognitionRef.current = null;
     };
     rec.onend = () => {
-      console.log('[mic] onend fired');
       setIsListening(false);
-      // Commit any pending finals into input one last time.
-      const base = baseInputRef.current;
-      const finals = finalBufferRef.current.trim();
-      if (finals) {
-        setInput((base ? base + ' ' : '') + finals);
-      }
       recognitionRef.current = null;
     };
     rec.onresult = (event: any) => {
-      // Walk ALL results (not just from resultIndex) so we capture every
-      // interim chunk currently in the buffer. Finalized chunks are committed
-      // to a ref so they survive re-renders, while interim chunks are shown
-      // live and overwritten on each event.
       let finals = '';
       let interim = '';
       for (let i = 0; i < event.results.length; i++) {
@@ -607,8 +560,7 @@ export default function Chat() {
           interim += (interim ? ' ' : '') + txt;
         }
       }
-      finalBufferRef.current = finals;
-      const base = baseInputRef.current;
+      const base = transcriptBaseRef.current;
       const live = [finals, interim].filter(Boolean).join(' ');
       setInput((base ? base + ' ' : '') + live);
     };
@@ -616,9 +568,7 @@ export default function Chat() {
     try {
       recognitionRef.current = rec;
       rec.start();
-      console.log('[mic] start() called successfully');
     } catch (err) {
-      console.error('[mic] start() threw:', err);
       recognitionRef.current = null;
       setIsListening(false);
       toast({
