@@ -594,21 +594,12 @@ export default function Chat() {
       setIsListening(false);
       return;
     }
-    // CRITICAL — iOS Safari quirk: if speechSynthesis is currently speaking
-    // (or even just has a queued utterance from a previous AI reply), the
-    // audio session is held by the TTS engine and any new SpeechRecognition
-    // .start() immediately fires `aborted`. We force-cancel TTS and ALSO
-    // pause it so the engine releases the audio session before we capture
-    // the mic.
-    try {
-      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
-        // Some iOS builds need an explicit pause to release the session.
-        try { window.speechSynthesis.pause(); } catch { /* ignore */ }
-      }
-    } catch {
-      /* ignore */
-    }
+    // CRITICAL — iOS Safari quirk: if speechSynthesis still holds the audio
+    // session (e.g. a TTS keep-alive heartbeat is running from the previous
+    // AI reply), the next SpeechRecognition.start() immediately fires
+    // `aborted`. We tear down TTS and its keep-alive timer first so the
+    // engine releases the mic.
+    stopAssistantSpeech();
     const Ctor: any =
       (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     const rec = new Ctor();
