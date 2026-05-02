@@ -139,6 +139,7 @@ export default function Chat() {
         id: m.id,
         role: m.role,
         content: m.content,
+        japanese: m.japanese ?? undefined,
       })));
     } else {
       // Create new conversation for this diary date
@@ -276,7 +277,8 @@ export default function Chat() {
         user_id: user.id,
         role: 'assistant',
         content: assistantMessage.content,
-      });
+        japanese: assistantMessage.japanese ?? null,
+      } as any);
 
       // Auto-finish the diary after the AI's closing line.
       if (shouldWrapUp) {
