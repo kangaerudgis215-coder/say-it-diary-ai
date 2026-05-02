@@ -1,12 +1,14 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Send, Loader2, Check, BookOpen, Lock } from 'lucide-react';
+import { ArrowLeft, Send, Loader2, Check, BookOpen, Lock, Mic, Square } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ChatBubble } from '@/components/ChatBubble';
-import { VoiceRecordButton } from '@/components/VoiceRecordButton';
 import { SandyLoader } from '@/components/lottie/SandyLoader';
 import { HelpCircle } from 'lucide-react';
+import Lottie from 'lottie-react';
+import voiceAnim from '@/assets/voice.json';
+import { cn } from '@/lib/utils';
 import {
   Dialog,
   DialogContent,
@@ -21,12 +23,6 @@ import { useVocabularyLog } from '@/hooks/useVocabularyLog';
 import { normalizeForExpression } from '@/lib/textComparison';
 import { persistDiarySentences } from '@/lib/practiceBuilder';
 import { format, parseISO, isToday as isTodayFn } from 'date-fns';
-
-const SILENCE_OPTIONS: { ms: number; label: string }[] = [
-  { ms: 3000, label: '3秒' },
-  { ms: 5000, label: '5秒' },
-  { ms: 10000, label: '10秒' },
-];
 
 /**
  * Robust browser TTS for the AI's spoken reply. Works around three known
@@ -111,17 +107,18 @@ export default function Chat() {
   const [existingDiaryId, setExistingDiaryId] = useState<string | null>(null);
   const [diaryDate, setDiaryDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
   const [showHelp, setShowHelp] = useState(false);
-  const [silenceMs, setSilenceMs] = useState<number>(() => {
-    if (typeof window === 'undefined') return 3000;
-    const saved = Number(window.localStorage.getItem('chat:silenceMs'));
-    return SILENCE_OPTIONS.some((o) => o.ms === saved) ? saved : 3000;
-  });
-
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem('chat:silenceMs', String(silenceMs));
-    }
-  }, [silenceMs]);
+  const [isListening, setIsListening] = useState(false);
+  const recognitionRef = useRef<any>(null);
+  // Buffer of finalized speech chunks committed to the input field for this
+  // recording session. We track this separately so interim (in-progress)
+  // results can be rendered live without overwriting earlier finals.
+  const finalBufferRef = useRef<string>('');
+  // Snapshot of `input` at the moment recording started, so we can append
+  // to whatever the user had already typed.
+  const baseInputRef = useRef<string>('');
+  const speechSupported =
+    typeof window !== 'undefined' &&
+    ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -524,6 +521,93 @@ export default function Chat() {
     inputRef.current?.focus();
   };
 
+  /**
+   * Start the mic on a direct user gesture. We instantiate a fresh
+   * SpeechRecognition each press (some browsers refuse to restart a stopped
+   * instance) and stream both interim and final results straight into the
+   * chat input so the user can see their English appear live.
+   */
+  const startMic = () => {
+    if (!speechSupported || isListening) return;
+    const Ctor: any =
+      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    const rec = new Ctor();
+    rec.lang = 'en-US';
+    rec.continuous = true;
+    rec.interimResults = true;
+
+    finalBufferRef.current = '';
+    baseInputRef.current = input;
+
+    rec.onstart = () => setIsListening(true);
+    rec.onerror = (e: any) => {
+      // "aborted" fires when we intentionally stop — not a real error.
+      if (e?.error && e.error !== 'aborted' && e.error !== 'no-speech') {
+        console.error('Speech recognition error:', e.error);
+      }
+    };
+    rec.onend = () => {
+      setIsListening(false);
+      // Commit any pending finals into input one last time.
+      const base = baseInputRef.current;
+      const finals = finalBufferRef.current.trim();
+      if (finals) {
+        setInput((base ? base + ' ' : '') + finals);
+      }
+      recognitionRef.current = null;
+    };
+    rec.onresult = (event: any) => {
+      let interim = '';
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const r = event.results[i];
+        const txt = r[0].transcript;
+        if (r.isFinal) {
+          finalBufferRef.current += (finalBufferRef.current ? ' ' : '') + txt.trim();
+        } else {
+          interim += txt;
+        }
+      }
+      const base = baseInputRef.current;
+      const finals = finalBufferRef.current;
+      const live = [finals, interim.trim()].filter(Boolean).join(' ');
+      setInput((base ? base + ' ' : '') + live);
+    };
+
+    try {
+      recognitionRef.current = rec;
+      rec.start();
+    } catch (err) {
+      console.error('Failed to start speech recognition:', err);
+      recognitionRef.current = null;
+      setIsListening(false);
+    }
+  };
+
+  const stopMic = () => {
+    const rec = recognitionRef.current;
+    if (rec) {
+      try {
+        rec.stop();
+      } catch {
+        /* ignore */
+      }
+    }
+  };
+
+  // Stop the mic if the user navigates away mid-recording.
+  useEffect(() => {
+    return () => {
+      const rec = recognitionRef.current;
+      if (rec) {
+        try {
+          rec.abort();
+        } catch {
+          /* ignore */
+        }
+      }
+    };
+  }, []);
+
   // Check if we have enough content for diary (at least 2 user messages)
   const hasEnoughContent = messages.filter(m => m.role === 'user').length >= 2;
   const isLocked = !!existingDiaryId;
@@ -713,37 +797,48 @@ export default function Chat() {
           </Button>
         </div>
 
-        {/* Big centered mic — the primary action */}
-        <div className="flex items-center justify-center gap-3">
-          <VoiceRecordButton
-            onTranscript={handleVoiceTranscript}
-            className="h-32 w-32"
-            iconSize={72}
-            autoStopSilenceMs={silenceMs}
-          />
-          {/* Silence-cutoff selector */}
-          <div
-            className="flex flex-col gap-1"
-            aria-label="自動停止までの無音時間"
-          >
-            <span className="text-[10px] uppercase tracking-wider text-muted-foreground text-center">
-              無音
-            </span>
-            {SILENCE_OPTIONS.map((opt) => (
-              <button
-                key={opt.ms}
-                type="button"
-                onClick={() => setSilenceMs(opt.ms)}
-                className={`text-[11px] px-2.5 py-1 rounded-full border transition-colors ${
-                  silenceMs === opt.ms
-                    ? 'bg-primary text-primary-foreground border-primary shadow'
-                    : 'bg-muted/40 text-muted-foreground border-border hover:bg-muted'
-                }`}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
+        {/* Big centered mic — tap to start, tap again to stop. No silence
+            auto-cutoff: the user controls the entire recording window so
+            mid-sentence pauses don't cut them off. */}
+        <div className="flex flex-col items-center justify-center gap-2">
+          {speechSupported ? (
+            <button
+              type="button"
+              onClick={isListening ? stopMic : startMic}
+              aria-label={isListening ? '録音を停止' : '録音を開始'}
+              className={cn(
+                'relative inline-flex items-center justify-center rounded-full shrink-0 h-32 w-32',
+                'transition-all duration-200 active:scale-95',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                isListening
+                  ? 'bg-primary/15 ring-2 ring-primary/50'
+                  : 'bg-primary text-primary-foreground shadow-lg shadow-primary/30 hover:shadow-primary/50',
+              )}
+            >
+              {!isListening && (
+                <span className="absolute inset-0 rounded-full bg-primary/30 blur-xl -z-10" />
+              )}
+              {isListening ? (
+                <Lottie
+                  animationData={voiceAnim}
+                  loop
+                  autoplay
+                  style={{ width: 115, height: 115 }}
+                />
+              ) : (
+                <Mic style={{ width: 72, height: 72 }} />
+              )}
+            </button>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              このブラウザは音声入力に対応していません
+            </p>
+          )}
+          <p className="text-[11px] text-muted-foreground">
+            {isListening
+              ? 'タップで停止 ・ 話した英語が入力欄に表示されます'
+              : 'マイクをタップして英語で話す'}
+          </p>
         </div>
         </>
         )}
