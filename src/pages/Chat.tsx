@@ -77,13 +77,7 @@ export default function Chat() {
   const [showHelp, setShowHelp] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef<any>(null);
-  // Buffer of finalized speech chunks committed to the input field for this
-  // recording session. We track this separately so interim (in-progress)
-  // results can be rendered live without overwriting earlier finals.
-  const finalBufferRef = useRef<string>('');
-  // Snapshot of `input` at the moment recording started, so we can append
-  // to whatever the user had already typed.
-  const baseInputRef = useRef<string>('');
+  const transcriptBaseRef = useRef<string>('');
   const speechSupported =
     typeof window !== 'undefined' &&
     ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window);
@@ -160,12 +154,16 @@ export default function Chat() {
         const dateLabel = isToday ? 'today' : format(parseISO(diaryDate), 'MMMM d, yyyy');
         
         // Add welcome message
+        const welcomeJapanese = isToday
+          ? 'こんばんは！🌙 今日はどんな一日でしたか？大きなことでも小さなことでも、何があったか教えてください。英語で表現するお手伝いをします！'
+          : `こんばんは！🌙 ${dateLabel} のことを書きましょう。その日は何がありましたか？覚えていることを何でも教えてください！`;
         const welcomeMessage = {
           id: 'welcome',
           role: 'assistant' as const,
           content: isToday 
             ? "Hi there! 🌙 How was your day today? Tell me about anything that happened - big or small. I'm here to listen and help you express it in English!"
             : `Hi there! 🌙 Let's write about ${dateLabel}. What happened that day? Tell me anything you remember!`,
+          japanese: welcomeJapanese,
         };
         setMessages([welcomeMessage]);
         
@@ -175,6 +173,7 @@ export default function Chat() {
           user_id: user.id,
           role: 'assistant',
           content: welcomeMessage.content,
+          japanese: welcomeMessage.japanese,
         });
       }
     }
