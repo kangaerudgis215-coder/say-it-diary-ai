@@ -516,11 +516,6 @@ export default function Chat() {
     }
   };
 
-  const handleVoiceTranscript = (text: string) => {
-    setInput(prev => prev + (prev ? ' ' : '') + text);
-    inputRef.current?.focus();
-  };
-
   /**
    * Start the mic on a direct user gesture. We instantiate a fresh
    * SpeechRecognition each press (some browsers refuse to restart a stopped
@@ -528,7 +523,15 @@ export default function Chat() {
    * chat input so the user can see their English appear live.
    */
   const startMic = () => {
-    if (!speechSupported || isListening) return;
+    if (!speechSupported) {
+      toast({
+        variant: 'destructive',
+        title: '音声入力に未対応',
+        description: 'お使いのブラウザは音声入力に対応していません。Chrome/Safariをお試しください。',
+      });
+      return;
+    }
+    if (isListening) return;
     const Ctor: any =
       (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     const rec = new Ctor();
@@ -542,9 +545,30 @@ export default function Chat() {
     rec.onstart = () => setIsListening(true);
     rec.onerror = (e: any) => {
       // "aborted" fires when we intentionally stop — not a real error.
-      if (e?.error && e.error !== 'aborted' && e.error !== 'no-speech') {
-        console.error('Speech recognition error:', e.error);
+      const err = e?.error;
+      if (!err || err === 'aborted' || err === 'no-speech') return;
+      console.error('Speech recognition error:', err);
+      if (err === 'not-allowed' || err === 'service-not-allowed') {
+        toast({
+          variant: 'destructive',
+          title: 'マイクが許可されていません',
+          description:
+            'ブラウザの設定でこのサイトのマイク使用を許可してください。プレビューでは許可が制限される場合があります。',
+        });
+      } else if (err === 'audio-capture') {
+        toast({
+          variant: 'destructive',
+          title: 'マイクが見つかりません',
+          description: 'デバイスにマイクが接続されているか確認してください。',
+        });
+      } else {
+        toast({
+          variant: 'destructive',
+          title: '音声入力エラー',
+          description: String(err),
+        });
       }
+      setIsListening(false);
     };
     rec.onend = () => {
       setIsListening(false);
@@ -557,19 +581,25 @@ export default function Chat() {
       recognitionRef.current = null;
     };
     rec.onresult = (event: any) => {
+      // Walk ALL results (not just from resultIndex) so we capture every
+      // interim chunk currently in the buffer. Finalized chunks are committed
+      // to a ref so they survive re-renders, while interim chunks are shown
+      // live and overwritten on each event.
+      let finals = '';
       let interim = '';
-      for (let i = event.resultIndex; i < event.results.length; i++) {
+      for (let i = 0; i < event.results.length; i++) {
         const r = event.results[i];
-        const txt = r[0].transcript;
+        const txt = (r[0]?.transcript ?? '').trim();
+        if (!txt) continue;
         if (r.isFinal) {
-          finalBufferRef.current += (finalBufferRef.current ? ' ' : '') + txt.trim();
+          finals += (finals ? ' ' : '') + txt;
         } else {
-          interim += txt;
+          interim += (interim ? ' ' : '') + txt;
         }
       }
+      finalBufferRef.current = finals;
       const base = baseInputRef.current;
-      const finals = finalBufferRef.current;
-      const live = [finals, interim.trim()].filter(Boolean).join(' ');
+      const live = [finals, interim].filter(Boolean).join(' ');
       setInput((base ? base + ' ' : '') + live);
     };
 
@@ -580,6 +610,11 @@ export default function Chat() {
       console.error('Failed to start speech recognition:', err);
       recognitionRef.current = null;
       setIsListening(false);
+      toast({
+        variant: 'destructive',
+        title: 'マイクを起動できませんでした',
+        description: '少し待ってからもう一度お試しください。',
+      });
     }
   };
 
