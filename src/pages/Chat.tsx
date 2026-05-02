@@ -521,6 +521,93 @@ export default function Chat() {
     inputRef.current?.focus();
   };
 
+  /**
+   * Start the mic on a direct user gesture. We instantiate a fresh
+   * SpeechRecognition each press (some browsers refuse to restart a stopped
+   * instance) and stream both interim and final results straight into the
+   * chat input so the user can see their English appear live.
+   */
+  const startMic = () => {
+    if (!speechSupported || isListening) return;
+    const Ctor: any =
+      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    const rec = new Ctor();
+    rec.lang = 'en-US';
+    rec.continuous = true;
+    rec.interimResults = true;
+
+    finalBufferRef.current = '';
+    baseInputRef.current = input;
+
+    rec.onstart = () => setIsListening(true);
+    rec.onerror = (e: any) => {
+      // "aborted" fires when we intentionally stop — not a real error.
+      if (e?.error && e.error !== 'aborted' && e.error !== 'no-speech') {
+        console.error('Speech recognition error:', e.error);
+      }
+    };
+    rec.onend = () => {
+      setIsListening(false);
+      // Commit any pending finals into input one last time.
+      const base = baseInputRef.current;
+      const finals = finalBufferRef.current.trim();
+      if (finals) {
+        setInput((base ? base + ' ' : '') + finals);
+      }
+      recognitionRef.current = null;
+    };
+    rec.onresult = (event: any) => {
+      let interim = '';
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const r = event.results[i];
+        const txt = r[0].transcript;
+        if (r.isFinal) {
+          finalBufferRef.current += (finalBufferRef.current ? ' ' : '') + txt.trim();
+        } else {
+          interim += txt;
+        }
+      }
+      const base = baseInputRef.current;
+      const finals = finalBufferRef.current;
+      const live = [finals, interim.trim()].filter(Boolean).join(' ');
+      setInput((base ? base + ' ' : '') + live);
+    };
+
+    try {
+      recognitionRef.current = rec;
+      rec.start();
+    } catch (err) {
+      console.error('Failed to start speech recognition:', err);
+      recognitionRef.current = null;
+      setIsListening(false);
+    }
+  };
+
+  const stopMic = () => {
+    const rec = recognitionRef.current;
+    if (rec) {
+      try {
+        rec.stop();
+      } catch {
+        /* ignore */
+      }
+    }
+  };
+
+  // Stop the mic if the user navigates away mid-recording.
+  useEffect(() => {
+    return () => {
+      const rec = recognitionRef.current;
+      if (rec) {
+        try {
+          rec.abort();
+        } catch {
+          /* ignore */
+        }
+      }
+    };
+  }, []);
+
   // Check if we have enough content for diary (at least 2 user messages)
   const hasEnoughContent = messages.filter(m => m.role === 'user').length >= 2;
   const isLocked = !!existingDiaryId;
