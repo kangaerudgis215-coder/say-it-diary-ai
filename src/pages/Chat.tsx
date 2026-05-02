@@ -176,7 +176,7 @@ export default function Chat() {
           role: 'assistant',
           content: welcomeMessage.content,
           japanese: welcomeMessage.japanese,
-        } as any);
+        });
       }
     }
   };
@@ -272,7 +272,7 @@ export default function Chat() {
         role: 'assistant',
         content: assistantMessage.content,
         japanese: assistantMessage.japanese ?? null,
-      } as any);
+      });
 
       // Auto-finish the diary after the AI's closing line.
       if (shouldWrapUp) {
