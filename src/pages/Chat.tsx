@@ -166,6 +166,7 @@ export default function Chat() {
           japanese: welcomeJapanese,
         };
         setMessages([welcomeMessage]);
+        speakAssistant(welcomeMessage.content);
         
         // Save welcome message
         await supabase.from('messages').insert({
@@ -174,7 +175,7 @@ export default function Chat() {
           role: 'assistant',
           content: welcomeMessage.content,
           japanese: welcomeMessage.japanese,
-        });
+        } as any);
       }
     }
   };
