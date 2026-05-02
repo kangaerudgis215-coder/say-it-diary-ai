@@ -22,32 +22,36 @@ import { normalizeForExpression } from '@/lib/textComparison';
 import { persistDiarySentences } from '@/lib/practiceBuilder';
 import { format, parseISO, isToday as isTodayFn } from 'date-fns';
 
-let assistantSpeechTimer: ReturnType<typeof setTimeout> | null = null;
-
 function stopAssistantSpeech(): void {
-  if (assistantSpeechTimer) {
-    clearTimeout(assistantSpeechTimer);
-    assistantSpeechTimer = null;
-  }
   if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
     window.speechSynthesis.cancel();
   }
 }
 
-function speakAssistant(text: string): void {
+function createAssistantUtterance(text = ''): SpeechSynthesisUtterance | null {
   if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.lang = 'en-US';
+  utterance.rate = 0.95;
+  utterance.pitch = 1.05;
+  const voice = window.speechSynthesis
+    .getVoices()
+    .find((v) => v.lang === 'en-US' || v.lang.startsWith('en'));
+  if (voice) utterance.voice = voice;
+  return utterance;
+}
+
+function speakAssistant(text: string, preparedUtterance?: SpeechSynthesisUtterance | null): void {
+  if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+  const utterance = preparedUtterance ?? createAssistantUtterance();
+  if (!utterance) return;
   stopAssistantSpeech();
-  assistantSpeechTimer = setTimeout(() => {
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = 'en-US';
-    utterance.rate = 0.95;
-    utterance.pitch = 1.05;
-    const voice = window.speechSynthesis
-      .getVoices()
-      .find((v) => v.lang === 'en-US' || v.lang.startsWith('en'));
-    if (voice) utterance.voice = voice;
+  utterance.text = text;
+  try {
     window.speechSynthesis.speak(utterance);
-  }, 80);
+  } catch {
+    /* Browser may block speech before the first user gesture. */
+  }
 }
 
 interface Message {
