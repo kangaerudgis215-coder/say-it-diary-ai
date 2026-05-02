@@ -31,6 +31,27 @@ import { format, parseISO, isToday as isTodayFn } from 'date-fns';
  *   2. Safari/iOS only has voices after `voiceschanged` fires.
  *   3. Long utterances pause silently in Chrome — `resume()` brings them back.
  */
+// Tracks the keepAlive interval id of any in-flight TTS so we can kill it
+// from outside (e.g. when the user taps the mic). Without this the Chrome
+// "resume on pause" heartbeat can keep the speechSynthesis audio session
+// alive for minutes after the utterance ends, which on iOS Safari blocks
+// SpeechRecognition from starting (it immediately aborts).
+let ttsKeepAliveId: ReturnType<typeof setInterval> | null = null;
+
+function stopAssistantSpeech(): void {
+  if (ttsKeepAliveId !== null) {
+    clearInterval(ttsKeepAliveId);
+    ttsKeepAliveId = null;
+  }
+  if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+    try {
+      window.speechSynthesis.cancel();
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
 async function speakAssistant(text: string): Promise<void> {
   if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
   const synth = window.speechSynthesis;
@@ -49,7 +70,7 @@ async function speakAssistant(text: string): Promise<void> {
         );
       });
     }
-    synth.cancel();
+    stopAssistantSpeech();
     // Small gap so Chrome doesn't swallow the next speak().
     await new Promise((r) => setTimeout(r, 80));
 
@@ -68,15 +89,24 @@ async function speakAssistant(text: string): Promise<void> {
     synth.speak(u);
 
     // Chrome bug: long utterances stop after ~15s. Periodically nudge it.
-    const keepAlive = setInterval(() => {
+    ttsKeepAliveId = setInterval(() => {
       if (!synth.speaking) {
-        clearInterval(keepAlive);
+        if (ttsKeepAliveId !== null) {
+          clearInterval(ttsKeepAliveId);
+          ttsKeepAliveId = null;
+        }
         return;
       }
       if (synth.paused) synth.resume();
     }, 5000);
-    u.onend = () => clearInterval(keepAlive);
-    u.onerror = () => clearInterval(keepAlive);
+    const clear = () => {
+      if (ttsKeepAliveId !== null) {
+        clearInterval(ttsKeepAliveId);
+        ttsKeepAliveId = null;
+      }
+    };
+    u.onend = clear;
+    u.onerror = clear;
   } catch {
     // ignore TTS errors
   }
