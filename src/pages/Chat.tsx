@@ -814,16 +814,8 @@ export default function Chat() {
               {!isListening && (
                 <span className="absolute inset-0 rounded-full bg-primary/30 blur-xl -z-10" />
               )}
-              {isListening ? (
-                <Lottie
-                  animationData={voiceAnim}
-                  loop
-                  autoplay
-                  style={{ width: 115, height: 115 }}
-                />
-              ) : (
-                <Mic style={{ width: 72, height: 72 }} />
-              )}
+              {isListening && <span className="absolute inset-3 rounded-full border border-primary/40 animate-ping" />}
+              <Mic className={cn('h-16 w-16', isListening && 'text-primary')} />
             </button>
           ) : (
             <p className="text-xs text-muted-foreground">
