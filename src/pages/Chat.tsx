@@ -29,7 +29,7 @@ function stopAssistantSpeech(): void {
 }
 
 function createAssistantUtterance(text = ''): SpeechSynthesisUtterance | null {
-  if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+  if (typeof window === 'undefined' || !('speechSynthesis' in window)) return null;
   const utterance = new SpeechSynthesisUtterance(text);
   utterance.lang = 'en-US';
   utterance.rate = 0.95;
@@ -514,12 +514,8 @@ export default function Chat() {
 
   const toggleMic = () => {
     // Tap-to-toggle: if already listening, stop. Otherwise start.
-    if (recognitionRef.current) {
-      try {
-        recognitionRef.current.stop();
-      } catch {
-        /* ignore */
-      }
+    if (recognitionRef.current || isStartingMicRef.current) {
+      stopMic('stop');
       return;
     }
     if (!speechSupported) {
@@ -540,12 +536,19 @@ export default function Chat() {
     rec.interimResults = true;
     rec.maxAlternatives = 1;
     transcriptBaseRef.current = input.trim();
+    finalTranscriptRef.current = '';
 
     rec.onstart = () => {
+      if (recognitionRef.current !== rec) return;
+      isStartingMicRef.current = false;
       setIsListening(true);
     };
     rec.onerror = (e: any) => {
+      if (recognitionRef.current !== rec) return;
       const err = e?.error;
+      recognitionRef.current = null;
+      isStartingMicRef.current = false;
+      setIsListening(false);
       if (!err || err === 'aborted' || err === 'no-speech') return;
       if (err === 'not-allowed' || err === 'service-not-allowed') {
         toast({
@@ -567,36 +570,38 @@ export default function Chat() {
           description: String(err),
         });
       }
-      setIsListening(false);
-      recognitionRef.current = null;
     };
     rec.onend = () => {
-      setIsListening(false);
+      if (recognitionRef.current !== rec) return;
       recognitionRef.current = null;
+      isStartingMicRef.current = false;
+      setIsListening(false);
     };
     rec.onresult = (event: any) => {
-      let finals = '';
+      if (recognitionRef.current !== rec) return;
       let interim = '';
-      for (let i = 0; i < event.results.length; i++) {
+      for (let i = event.resultIndex; i < event.results.length; i++) {
         const r = event.results[i];
         const txt = (r[0]?.transcript ?? '').trim();
         if (!txt) continue;
         if (r.isFinal) {
-          finals += (finals ? ' ' : '') + txt;
+          finalTranscriptRef.current += (finalTranscriptRef.current ? ' ' : '') + txt;
         } else {
           interim += (interim ? ' ' : '') + txt;
         }
       }
       const base = transcriptBaseRef.current;
-      const live = [finals, interim].filter(Boolean).join(' ');
+      const live = [finalTranscriptRef.current, interim].filter(Boolean).join(' ');
       setInput((base ? base + ' ' : '') + live);
     };
 
     try {
       recognitionRef.current = rec;
+      isStartingMicRef.current = true;
       rec.start();
     } catch (err) {
       recognitionRef.current = null;
+      isStartingMicRef.current = false;
       setIsListening(false);
       toast({
         variant: 'destructive',
