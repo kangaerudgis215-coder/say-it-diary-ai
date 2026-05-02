@@ -1,13 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Send, Loader2, Check, BookOpen, Lock, Mic, Square } from 'lucide-react';
+import { ArrowLeft, Send, Loader2, Check, BookOpen, Lock, Mic } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ChatBubble } from '@/components/ChatBubble';
 import { SandyLoader } from '@/components/lottie/SandyLoader';
 import { HelpCircle } from 'lucide-react';
-import Lottie from 'lottie-react';
-import voiceAnim from '@/assets/voice.json';
 import { cn } from '@/lib/utils';
 import {
   Dialog,
@@ -24,92 +22,32 @@ import { normalizeForExpression } from '@/lib/textComparison';
 import { persistDiarySentences } from '@/lib/practiceBuilder';
 import { format, parseISO, isToday as isTodayFn } from 'date-fns';
 
-/**
- * Robust browser TTS for the AI's spoken reply. Works around three known
- * pain points:
- *   1. Chrome ignores `speak()` if called too soon after `cancel()`.
- *   2. Safari/iOS only has voices after `voiceschanged` fires.
- *   3. Long utterances pause silently in Chrome — `resume()` brings them back.
- */
-// Tracks the keepAlive interval id of any in-flight TTS so we can kill it
-// from outside (e.g. when the user taps the mic). Without this the Chrome
-// "resume on pause" heartbeat can keep the speechSynthesis audio session
-// alive for minutes after the utterance ends, which on iOS Safari blocks
-// SpeechRecognition from starting (it immediately aborts).
-let ttsKeepAliveId: ReturnType<typeof setInterval> | null = null;
+let assistantSpeechTimer: ReturnType<typeof setTimeout> | null = null;
 
 function stopAssistantSpeech(): void {
-  if (ttsKeepAliveId !== null) {
-    clearInterval(ttsKeepAliveId);
-    ttsKeepAliveId = null;
+  if (assistantSpeechTimer) {
+    clearTimeout(assistantSpeechTimer);
+    assistantSpeechTimer = null;
   }
   if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-    try {
-      window.speechSynthesis.cancel();
-    } catch {
-      /* ignore */
-    }
+    window.speechSynthesis.cancel();
   }
 }
 
-async function speakAssistant(text: string): Promise<void> {
+function speakAssistant(text: string): void {
   if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
-  const synth = window.speechSynthesis;
-  try {
-    // Wait for voices to be loaded (Safari/iOS first-load workaround).
-    if (synth.getVoices().length === 0) {
-      await new Promise<void>((resolve) => {
-        const t = setTimeout(resolve, 800);
-        synth.addEventListener(
-          'voiceschanged',
-          () => {
-            clearTimeout(t);
-            resolve();
-          },
-          { once: true },
-        );
-      });
-    }
-    stopAssistantSpeech();
-    // Small gap so Chrome doesn't swallow the next speak().
-    await new Promise((r) => setTimeout(r, 80));
-
-    const u = new SpeechSynthesisUtterance(text);
-    u.lang = 'en-US';
-    u.rate = 0.95;
-    u.pitch = 1.05;
-    // Prefer an English voice if one is installed — avoids picking up the
-    // system default (e.g. a JP voice) which can sound robotic for English.
-    const voices = synth.getVoices();
-    const en =
-      voices.find((v) => v.lang === 'en-US' && v.localService) ||
-      voices.find((v) => v.lang === 'en-US') ||
-      voices.find((v) => v.lang.startsWith('en'));
-    if (en) u.voice = en;
-    synth.speak(u);
-
-    // Chrome bug: long utterances stop after ~15s. Periodically nudge it.
-    ttsKeepAliveId = setInterval(() => {
-      if (!synth.speaking) {
-        if (ttsKeepAliveId !== null) {
-          clearInterval(ttsKeepAliveId);
-          ttsKeepAliveId = null;
-        }
-        return;
-      }
-      if (synth.paused) synth.resume();
-    }, 5000);
-    const clear = () => {
-      if (ttsKeepAliveId !== null) {
-        clearInterval(ttsKeepAliveId);
-        ttsKeepAliveId = null;
-      }
-    };
-    u.onend = clear;
-    u.onerror = clear;
-  } catch {
-    // ignore TTS errors
-  }
+  stopAssistantSpeech();
+  assistantSpeechTimer = setTimeout(() => {
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'en-US';
+    utterance.rate = 0.95;
+    utterance.pitch = 1.05;
+    const voice = window.speechSynthesis
+      .getVoices()
+      .find((v) => v.lang === 'en-US' || v.lang.startsWith('en'));
+    if (voice) utterance.voice = voice;
+    window.speechSynthesis.speak(utterance);
+  }, 80);
 }
 
 interface Message {
