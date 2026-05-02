@@ -289,6 +289,7 @@ export type Database = {
           conversation_id: string
           created_at: string
           id: string
+          japanese: string | null
           role: string
           user_id: string
         }
@@ -297,6 +298,7 @@ export type Database = {
           conversation_id: string
           created_at?: string
           id?: string
+          japanese?: string | null
           role: string
           user_id: string
         }
@@ -305,6 +307,7 @@ export type Database = {
           conversation_id?: string
           created_at?: string
           id?: string
+          japanese?: string | null
           role?: string
           user_id?: string
         }
