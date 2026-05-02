@@ -58,11 +58,9 @@ export function ChatBubble({ content, role, isNew = false, japaneseTranslation, 
           </div>
         )}
         {!isUser && japaneseTranslation && showJapanese && (
-            {showJapanese && (
-              <p className="text-xs text-muted-foreground mt-1 font-japanese leading-relaxed pl-1">
-                {japaneseTranslation}
-              </p>
-            )}
+          <p className="text-xs text-muted-foreground mt-1 font-japanese leading-relaxed pl-1">
+            {japaneseTranslation}
+          </p>
         )}
       </div>
     </div>
