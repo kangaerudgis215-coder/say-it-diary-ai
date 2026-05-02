@@ -789,14 +789,15 @@ export default function Chat() {
           </Button>
         </div>
 
-        {/* Big centered mic — tap to start, tap again to stop. No silence
-            auto-cutoff: the user controls the entire recording window so
-            mid-sentence pauses don't cut them off. */}
+        {/* Big centered mic — press and hold to speak. */}
         <div className="flex flex-col items-center justify-center gap-2">
           {speechSupported ? (
             <button
               type="button"
-              onClick={isListening ? stopMic : startMic}
+              onPointerDown={startMic}
+              onPointerUp={stopMic}
+              onPointerLeave={stopMic}
+              onPointerCancel={stopMic}
               aria-label={isListening ? '録音を停止' : '録音を開始'}
               className={cn(
                 'relative inline-flex items-center justify-center rounded-full shrink-0 h-32 w-32',
@@ -820,8 +821,8 @@ export default function Chat() {
           )}
           <p className="text-[11px] text-muted-foreground">
             {isListening
-              ? 'タップで停止 ・ 話した英語が入力欄に表示されます'
-              : 'マイクをタップして英語で話す'}
+              ? '押している間、英語をリアルタイム入力します'
+              : 'マイクを押しながら英語で話す'}
           </p>
         </div>
         </>
