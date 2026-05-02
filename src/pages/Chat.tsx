@@ -22,32 +22,36 @@ import { normalizeForExpression } from '@/lib/textComparison';
 import { persistDiarySentences } from '@/lib/practiceBuilder';
 import { format, parseISO, isToday as isTodayFn } from 'date-fns';
 
-let assistantSpeechTimer: ReturnType<typeof setTimeout> | null = null;
-
 function stopAssistantSpeech(): void {
-  if (assistantSpeechTimer) {
-    clearTimeout(assistantSpeechTimer);
-    assistantSpeechTimer = null;
-  }
   if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
     window.speechSynthesis.cancel();
   }
 }
 
-function speakAssistant(text: string): void {
+function createAssistantUtterance(text = ''): SpeechSynthesisUtterance | null {
+  if (typeof window === 'undefined' || !('speechSynthesis' in window)) return null;
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.lang = 'en-US';
+  utterance.rate = 0.95;
+  utterance.pitch = 1.05;
+  const voice = window.speechSynthesis
+    .getVoices()
+    .find((v) => v.lang === 'en-US' || v.lang.startsWith('en'));
+  if (voice) utterance.voice = voice;
+  return utterance;
+}
+
+function speakAssistant(text: string, preparedUtterance?: SpeechSynthesisUtterance | null): void {
   if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+  const utterance = preparedUtterance ?? createAssistantUtterance();
+  if (!utterance) return;
   stopAssistantSpeech();
-  assistantSpeechTimer = setTimeout(() => {
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = 'en-US';
-    utterance.rate = 0.95;
-    utterance.pitch = 1.05;
-    const voice = window.speechSynthesis
-      .getVoices()
-      .find((v) => v.lang === 'en-US' || v.lang.startsWith('en'));
-    if (voice) utterance.voice = voice;
+  utterance.text = text;
+  try {
     window.speechSynthesis.speak(utterance);
-  }, 80);
+  } catch {
+    /* Browser may block speech before the first user gesture. */
+  }
 }
 
 interface Message {
@@ -77,6 +81,8 @@ export default function Chat() {
   const [showHelp, setShowHelp] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef<any>(null);
+  const isStartingMicRef = useRef(false);
+  const finalTranscriptRef = useRef('');
   const transcriptBaseRef = useRef<string>('');
   const speechSupported =
     typeof window !== 'undefined' &&
@@ -181,10 +187,26 @@ export default function Chat() {
     }
   };
 
-  const sendMessage = async (content: string) => {
+  const stopMic = (mode: 'stop' | 'abort' = 'stop') => {
+    const rec = recognitionRef.current;
+    recognitionRef.current = null;
+    isStartingMicRef.current = false;
+    setIsListening(false);
+    if (!rec) return;
+    try {
+      if (mode === 'abort') rec.abort();
+      else rec.stop();
+    } catch {
+      /* ignore stale recognition sessions */
+    }
+  };
+
+  const sendMessage = async (content: string, preparedUtterance?: SpeechSynthesisUtterance | null) => {
     if (!content.trim() || !conversationId || !user) return;
     // Hard guard: never accept new messages once the diary is finalised.
     if (existingDiaryId) return;
+
+    stopMic('abort');
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -263,7 +285,7 @@ export default function Chat() {
 
       setMessages(prev => [...prev, assistantMessage]);
 
-      speakAssistant(assistantMessage.content);
+      speakAssistant(assistantMessage.content, preparedUtterance);
 
       // Save assistant message
       await supabase.from('messages').insert({
@@ -492,12 +514,8 @@ export default function Chat() {
 
   const toggleMic = () => {
     // Tap-to-toggle: if already listening, stop. Otherwise start.
-    if (recognitionRef.current) {
-      try {
-        recognitionRef.current.stop();
-      } catch {
-        /* ignore */
-      }
+    if (recognitionRef.current || isStartingMicRef.current) {
+      stopMic('stop');
       return;
     }
     if (!speechSupported) {
@@ -518,12 +536,19 @@ export default function Chat() {
     rec.interimResults = true;
     rec.maxAlternatives = 1;
     transcriptBaseRef.current = input.trim();
+    finalTranscriptRef.current = '';
 
     rec.onstart = () => {
+      if (recognitionRef.current !== rec) return;
+      isStartingMicRef.current = false;
       setIsListening(true);
     };
     rec.onerror = (e: any) => {
+      if (recognitionRef.current !== rec) return;
       const err = e?.error;
+      recognitionRef.current = null;
+      isStartingMicRef.current = false;
+      setIsListening(false);
       if (!err || err === 'aborted' || err === 'no-speech') return;
       if (err === 'not-allowed' || err === 'service-not-allowed') {
         toast({
@@ -545,36 +570,38 @@ export default function Chat() {
           description: String(err),
         });
       }
-      setIsListening(false);
-      recognitionRef.current = null;
     };
     rec.onend = () => {
-      setIsListening(false);
+      if (recognitionRef.current !== rec) return;
       recognitionRef.current = null;
+      isStartingMicRef.current = false;
+      setIsListening(false);
     };
     rec.onresult = (event: any) => {
-      let finals = '';
+      if (recognitionRef.current !== rec) return;
       let interim = '';
-      for (let i = 0; i < event.results.length; i++) {
+      for (let i = event.resultIndex; i < event.results.length; i++) {
         const r = event.results[i];
         const txt = (r[0]?.transcript ?? '').trim();
         if (!txt) continue;
         if (r.isFinal) {
-          finals += (finals ? ' ' : '') + txt;
+          finalTranscriptRef.current += (finalTranscriptRef.current ? ' ' : '') + txt;
         } else {
           interim += (interim ? ' ' : '') + txt;
         }
       }
       const base = transcriptBaseRef.current;
-      const live = [finals, interim].filter(Boolean).join(' ');
+      const live = [finalTranscriptRef.current, interim].filter(Boolean).join(' ');
       setInput((base ? base + ' ' : '') + live);
     };
 
     try {
       recognitionRef.current = rec;
+      isStartingMicRef.current = true;
       rec.start();
     } catch (err) {
       recognitionRef.current = null;
+      isStartingMicRef.current = false;
       setIsListening(false);
       toast({
         variant: 'destructive',
@@ -716,6 +743,7 @@ export default function Chat() {
             role={message.role}
             isNew={index === messages.length - 1}
             japaneseTranslation={message.japanese}
+            onSpeak={message.role === 'assistant' ? () => speakAssistant(message.content) : undefined}
           />
         ))}
         
@@ -771,7 +799,12 @@ export default function Chat() {
             ref={inputRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && sendMessage(input)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                const utterance = createAssistantUtterance();
+                void sendMessage(input, utterance);
+              }
+            }}
             placeholder="Type or tap the mic to speak…"
             className="pr-12 h-11 rounded-xl bg-muted border-0 text-sm"
             disabled={isLoading}
@@ -779,7 +812,10 @@ export default function Chat() {
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => sendMessage(input)}
+            onClick={() => {
+              const utterance = createAssistantUtterance();
+              void sendMessage(input, utterance);
+            }}
             disabled={!input.trim() || isLoading}
             className="absolute right-1 top-1/2 -translate-y-1/2"
           >
