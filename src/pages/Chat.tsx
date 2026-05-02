@@ -516,11 +516,6 @@ export default function Chat() {
     }
   };
 
-  const handleVoiceTranscript = (text: string) => {
-    setInput(prev => prev + (prev ? ' ' : '') + text);
-    inputRef.current?.focus();
-  };
-
   /**
    * Start the mic on a direct user gesture. We instantiate a fresh
    * SpeechRecognition each press (some browsers refuse to restart a stopped
