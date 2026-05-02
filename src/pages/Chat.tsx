@@ -81,6 +81,8 @@ export default function Chat() {
   const [showHelp, setShowHelp] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef<any>(null);
+  const isStartingMicRef = useRef(false);
+  const finalTranscriptRef = useRef('');
   const transcriptBaseRef = useRef<string>('');
   const speechSupported =
     typeof window !== 'undefined' &&
@@ -185,10 +187,26 @@ export default function Chat() {
     }
   };
 
-  const sendMessage = async (content: string) => {
+  const stopMic = (mode: 'stop' | 'abort' = 'stop') => {
+    const rec = recognitionRef.current;
+    recognitionRef.current = null;
+    isStartingMicRef.current = false;
+    setIsListening(false);
+    if (!rec) return;
+    try {
+      if (mode === 'abort') rec.abort();
+      else rec.stop();
+    } catch {
+      /* ignore stale recognition sessions */
+    }
+  };
+
+  const sendMessage = async (content: string, preparedUtterance?: SpeechSynthesisUtterance | null) => {
     if (!content.trim() || !conversationId || !user) return;
     // Hard guard: never accept new messages once the diary is finalised.
     if (existingDiaryId) return;
+
+    stopMic('abort');
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -267,7 +285,7 @@ export default function Chat() {
 
       setMessages(prev => [...prev, assistantMessage]);
 
-      speakAssistant(assistantMessage.content);
+      speakAssistant(assistantMessage.content, preparedUtterance);
 
       // Save assistant message
       await supabase.from('messages').insert({
