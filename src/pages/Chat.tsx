@@ -743,6 +743,7 @@ export default function Chat() {
             role={message.role}
             isNew={index === messages.length - 1}
             japaneseTranslation={message.japanese}
+            onSpeak={message.role === 'assistant' ? () => speakAssistant(message.content) : undefined}
           />
         ))}
         
@@ -798,7 +799,12 @@ export default function Chat() {
             ref={inputRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && sendMessage(input)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                const utterance = createAssistantUtterance();
+                void sendMessage(input, utterance);
+              }
+            }}
             placeholder="Type or tap the mic to speak…"
             className="pr-12 h-11 rounded-xl bg-muted border-0 text-sm"
             disabled={isLoading}
@@ -806,7 +812,10 @@ export default function Chat() {
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => sendMessage(input)}
+            onClick={() => {
+              const utterance = createAssistantUtterance();
+              void sendMessage(input, utterance);
+            }}
             disabled={!input.trim() || isLoading}
             className="absolute right-1 top-1/2 -translate-y-1/2"
           >
