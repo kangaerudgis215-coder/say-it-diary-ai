@@ -263,13 +263,7 @@ export default function Chat() {
 
       setMessages(prev => [...prev, assistantMessage]);
 
-      // Speak the AI reply aloud. Browser TTS is famously flaky:
-      //   • Chrome silently drops `speak()` if it's called immediately after
-      //     `cancel()` — we add a short delay.
-      //   • Safari/iOS only has voices ready *after* `voiceschanged`, so the
-      //     first utterance of a session can be silent. We wait for voices.
-      //   • If the engine ends up "paused" (Chrome bug), `resume()` revives it.
-      void speakAssistant(assistantMessage.content);
+      speakAssistant(assistantMessage.content);
 
       // Save assistant message
       await supabase.from('messages').insert({
