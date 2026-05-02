@@ -490,8 +490,16 @@ export default function Chat() {
     }
   };
 
-  const startMic = () => {
-    if (recognitionRef.current) return;
+  const toggleMic = () => {
+    // Tap-to-toggle: if already listening, stop. Otherwise start.
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch {
+        /* ignore */
+      }
+      return;
+    }
     if (!speechSupported) {
       toast({
         variant: 'destructive',
@@ -508,6 +516,7 @@ export default function Chat() {
     rec.lang = 'en-US';
     rec.continuous = true;
     rec.interimResults = true;
+    rec.maxAlternatives = 1;
     transcriptBaseRef.current = input.trim();
 
     rec.onstart = () => {
@@ -572,17 +581,6 @@ export default function Chat() {
         title: 'マイクを起動できませんでした',
         description: '少し待ってからもう一度お試しください。',
       });
-    }
-  };
-
-  const stopMic = () => {
-    const rec = recognitionRef.current;
-    if (rec) {
-      try {
-        rec.stop();
-      } catch {
-        /* ignore */
-      }
     }
   };
 
@@ -794,10 +792,7 @@ export default function Chat() {
           {speechSupported ? (
             <button
               type="button"
-              onPointerDown={startMic}
-              onPointerUp={stopMic}
-              onPointerLeave={stopMic}
-              onPointerCancel={stopMic}
+              onClick={toggleMic}
               aria-label={isListening ? '録音を停止' : '録音を開始'}
               className={cn(
                 'relative inline-flex items-center justify-center rounded-full shrink-0 h-32 w-32',
@@ -821,8 +816,8 @@ export default function Chat() {
           )}
           <p className="text-[11px] text-muted-foreground">
             {isListening
-              ? '押している間、英語をリアルタイム入力します'
-              : 'マイクを押しながら英語で話す'}
+              ? 'タップで停止 — 英語で話してください'
+              : 'タップして英語で話す（もう一度タップで停止）'}
           </p>
         </div>
         </>
