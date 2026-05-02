@@ -159,11 +159,21 @@ export default function Chat() {
       .select('*, messages(*)')
       .eq('user_id', user.id)
       .eq('date', diaryDate)
-      .single();
+      .maybeSingle();
 
     if (existing) {
       setConversationId(existing.id);
-      setMessages((existing.messages || []).map((m: any) => ({
+      // CRITICAL: Postgres does NOT preserve insertion order on related
+      // selects. Without an explicit sort, returning to a conversation can
+      // shuffle the messages (e.g. AI reply appearing before its user prompt).
+      // Sort by created_at ascending so the chat always reads top-to-bottom
+      // in the order it actually happened.
+      const ordered = [...(existing.messages || [])].sort((a: any, b: any) => {
+        const ta = new Date(a.created_at ?? 0).getTime();
+        const tb = new Date(b.created_at ?? 0).getTime();
+        return ta - tb;
+      });
+      setMessages(ordered.map((m: any) => ({
         id: m.id,
         role: m.role,
         content: m.content,
