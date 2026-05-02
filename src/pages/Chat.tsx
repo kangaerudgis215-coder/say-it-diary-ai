@@ -107,17 +107,18 @@ export default function Chat() {
   const [existingDiaryId, setExistingDiaryId] = useState<string | null>(null);
   const [diaryDate, setDiaryDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
   const [showHelp, setShowHelp] = useState(false);
-  const [silenceMs, setSilenceMs] = useState<number>(() => {
-    if (typeof window === 'undefined') return 3000;
-    const saved = Number(window.localStorage.getItem('chat:silenceMs'));
-    return SILENCE_OPTIONS.some((o) => o.ms === saved) ? saved : 3000;
-  });
-
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem('chat:silenceMs', String(silenceMs));
-    }
-  }, [silenceMs]);
+  const [isListening, setIsListening] = useState(false);
+  const recognitionRef = useRef<any>(null);
+  // Buffer of finalized speech chunks committed to the input field for this
+  // recording session. We track this separately so interim (in-progress)
+  // results can be rendered live without overwriting earlier finals.
+  const finalBufferRef = useRef<string>('');
+  // Snapshot of `input` at the moment recording started, so we can append
+  // to whatever the user had already typed.
+  const baseInputRef = useRef<string>('');
+  const speechSupported =
+    typeof window !== 'undefined' &&
+    ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
