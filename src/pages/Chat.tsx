@@ -18,6 +18,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
 import { useVocabularyLog } from '@/hooks/useVocabularyLog';
+import { useUISound } from '@/hooks/useUISound';
 import { normalizeForExpression } from '@/lib/textComparison';
 import { persistDiarySentences } from '@/lib/practiceBuilder';
 import { format, parseISO, isToday as isTodayFn } from 'date-fns';
@@ -28,25 +29,81 @@ function stopAssistantSpeech(): void {
   }
 }
 
+/**
+ * Strip emojis, pictographs, and other symbols so the browser TTS doesn't
+ * read them out loud (e.g. "smiling face with smiling eyes"). Also collapses
+ * whitespace left behind.
+ */
+function sanitizeForSpeech(text: string): string {
+  if (!text) return '';
+  let cleaned = text;
+  try {
+    // Unicode property escapes (modern browsers): drop emoji + symbols.
+    cleaned = cleaned.replace(/\p{Extended_Pictographic}/gu, '');
+    cleaned = cleaned.replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}\u200D]/gu, '');
+  } catch {
+    cleaned = cleaned.replace(/[\u2600-\u27BF\uFE0F]/g, '');
+  }
+  return cleaned.replace(/\s{2,}/g, ' ').trim();
+}
+
+/**
+ * Pick the most natural-sounding English voice available, preferring
+ * high-quality system voices (Samantha on iOS/macOS, Google US English on
+ * Chrome, Microsoft Aria/Jenny on Edge) over the default robotic ones.
+ */
+function pickNaturalEnglishVoice(): SpeechSynthesisVoice | null {
+  if (typeof window === 'undefined' || !('speechSynthesis' in window)) return null;
+  const voices = window.speechSynthesis.getVoices();
+  if (!voices || voices.length === 0) return null;
+  const en = voices.filter((v) => /^en(-|_|$)/i.test(v.lang));
+  if (en.length === 0) return null;
+  const preferred = [
+    /Google US English/i,
+    /Samantha/i,
+    /Ava/i,
+    /Allison/i,
+    /Karen/i,
+    /Serena/i,
+    /Microsoft (Aria|Jenny|Guy|Davis|Sonia)/i,
+    /Natural/i,
+    /Neural/i,
+    /Premium/i,
+    /Enhanced/i,
+  ];
+  for (const re of preferred) {
+    const hit = en.find((v) => re.test(v.name));
+    if (hit) return hit;
+  }
+  // Fallback: first en-US, else first English voice.
+  return en.find((v) => /en[-_]US/i.test(v.lang)) ?? en[0];
+}
+
 function createAssistantUtterance(text = ''): SpeechSynthesisUtterance | null {
   if (typeof window === 'undefined' || !('speechSynthesis' in window)) return null;
-  const utterance = new SpeechSynthesisUtterance(text);
+  const utterance = new SpeechSynthesisUtterance(sanitizeForSpeech(text));
   utterance.lang = 'en-US';
-  utterance.rate = 0.95;
-  utterance.pitch = 1.05;
-  const voice = window.speechSynthesis
-    .getVoices()
-    .find((v) => v.lang === 'en-US' || v.lang.startsWith('en'));
+  utterance.rate = 1.0;
+  utterance.pitch = 1.0;
+  utterance.volume = 1.0;
+  const voice = pickNaturalEnglishVoice();
   if (voice) utterance.voice = voice;
   return utterance;
 }
 
 function speakAssistant(text: string, preparedUtterance?: SpeechSynthesisUtterance | null): void {
   if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+  const clean = sanitizeForSpeech(text);
+  if (!clean) return;
   const utterance = preparedUtterance ?? createAssistantUtterance();
   if (!utterance) return;
   stopAssistantSpeech();
-  utterance.text = text;
+  utterance.text = clean;
+  // Re-pick voice in case voices weren't loaded when the utterance was prepared.
+  if (!utterance.voice) {
+    const v = pickNaturalEnglishVoice();
+    if (v) utterance.voice = v;
+  }
   try {
     window.speechSynthesis.speak(utterance);
   } catch {
@@ -67,6 +124,7 @@ export default function Chat() {
   const [searchParams] = useSearchParams();
   const { toast } = useToast();
   const { logSpokenWords } = useVocabularyLog();
+  const { playTap } = useUISound();
   
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
@@ -84,6 +142,20 @@ export default function Chat() {
   const isStartingMicRef = useRef(false);
   const finalTranscriptRef = useRef('');
   const transcriptBaseRef = useRef<string>('');
+  // Pre-loaded chime — created once so it can be played reliably even after
+  // long async work (past-diary generation), where a freshly-constructed
+  // Audio object is sometimes blocked by autoplay policies.
+  const diaryCompleteAudioRef = useRef<HTMLAudioElement | null>(null);
+  if (typeof window !== 'undefined' && !diaryCompleteAudioRef.current) {
+    try {
+      const a = new Audio('/sounds/diary-complete.mp3');
+      a.preload = 'auto';
+      a.volume = 0.75;
+      diaryCompleteAudioRef.current = a;
+    } catch {
+      /* no-op */
+    }
+  }
   const speechSupported =
     typeof window !== 'undefined' &&
     ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window);
@@ -106,6 +178,25 @@ export default function Chat() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  // Warm up the speech-synthesis voice list. Some browsers (Chrome, Edge)
+  // load voices asynchronously, so the first utterance can fall back to the
+  // robotic default voice if we don't trigger a load early.
+  useEffect(() => {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+    try {
+      window.speechSynthesis.getVoices();
+      const handler = () => {
+        window.speechSynthesis.getVoices();
+      };
+      window.speechSynthesis.addEventListener?.('voiceschanged', handler);
+      return () => {
+        window.speechSynthesis.removeEventListener?.('voiceschanged', handler);
+      };
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
   const initConversation = async () => {
     if (!user) return;
@@ -480,9 +571,20 @@ export default function Chat() {
 
       // Triumphant chime on diary completion
       try {
-        const a = new Audio('/sounds/diary-complete.mp3');
-        a.volume = 0.75;
-        void a.play().catch(() => {});
+        const a = diaryCompleteAudioRef.current;
+        if (a) {
+          a.currentTime = 0;
+          void a.play().catch(() => {
+            // Final fallback: a fresh Audio object.
+            try {
+              const fresh = new Audio('/sounds/diary-complete.mp3');
+              fresh.volume = 0.75;
+              void fresh.play().catch(() => {});
+            } catch {
+              /* no-op */
+            }
+          });
+        }
       } catch {
         /* no-op */
       }
@@ -801,6 +903,7 @@ export default function Chat() {
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
+                playTap();
                 const utterance = createAssistantUtterance();
                 void sendMessage(input, utterance);
               }
@@ -813,6 +916,7 @@ export default function Chat() {
             variant="ghost"
             size="icon"
             onClick={() => {
+              playTap();
               const utterance = createAssistantUtterance();
               void sendMessage(input, utterance);
             }}
