@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { MasteryBucket } from '@/lib/mastery';
 import { useSuccessSound } from '@/hooks/useSuccessSound';
-import { useUISound } from '@/hooks/useUISound';
 
 interface SwipeCardProps {
   /** Front side (always shown). */
