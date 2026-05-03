@@ -124,6 +124,7 @@ export default function Chat() {
   const [searchParams] = useSearchParams();
   const { toast } = useToast();
   const { logSpokenWords } = useVocabularyLog();
+  const { playTap } = useUISound();
   
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
@@ -163,6 +164,25 @@ export default function Chat() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  // Warm up the speech-synthesis voice list. Some browsers (Chrome, Edge)
+  // load voices asynchronously, so the first utterance can fall back to the
+  // robotic default voice if we don't trigger a load early.
+  useEffect(() => {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+    try {
+      window.speechSynthesis.getVoices();
+      const handler = () => {
+        window.speechSynthesis.getVoices();
+      };
+      window.speechSynthesis.addEventListener?.('voiceschanged', handler);
+      return () => {
+        window.speechSynthesis.removeEventListener?.('voiceschanged', handler);
+      };
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
   const initConversation = async () => {
     if (!user) return;
