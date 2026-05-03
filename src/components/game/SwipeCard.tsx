@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { MasteryBucket } from '@/lib/mastery';
 import { useSuccessSound } from '@/hooks/useSuccessSound';
-import { useUISound } from '@/hooks/useUISound';
 
 interface SwipeCardProps {
   /** Front side (always shown). */
@@ -37,7 +36,6 @@ export function SwipeCard({ front, back, topHint, onSwipe, cardKey, quote, quote
   const draggingRef = useRef(false);
   const releasedRef = useRef(false);
   const { playMastered, playSuccess } = useSuccessSound();
-  const { playTap } = useUISound();
 
   // Reset on new card.
   useEffect(() => {
@@ -89,9 +87,10 @@ export function SwipeCard({ front, back, topHint, onSwipe, cardKey, quote, quote
     const flyX = decided === 'mastered' ? 600 : decided === 'new' ? -600 : 0;
     const flyY = decided === 'learning' ? -700 : 0;
     setPos({ x: flyX, y: flyY });
+    // Only play a sound for "correct" outcomes (mastered / learning).
+    // "new" (= didn't know) is intentionally silent.
     if (decided === 'mastered') playMastered();
     else if (decided === 'learning') playSuccess();
-    else if (decided === 'new') playTap();
     setTimeout(() => onSwipe(decided), 220);
   };
 
