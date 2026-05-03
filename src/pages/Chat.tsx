@@ -142,6 +142,20 @@ export default function Chat() {
   const isStartingMicRef = useRef(false);
   const finalTranscriptRef = useRef('');
   const transcriptBaseRef = useRef<string>('');
+  // Pre-loaded chime — created once so it can be played reliably even after
+  // long async work (past-diary generation), where a freshly-constructed
+  // Audio object is sometimes blocked by autoplay policies.
+  const diaryCompleteAudioRef = useRef<HTMLAudioElement | null>(null);
+  if (typeof window !== 'undefined' && !diaryCompleteAudioRef.current) {
+    try {
+      const a = new Audio('/sounds/diary-complete.mp3');
+      a.preload = 'auto';
+      a.volume = 0.75;
+      diaryCompleteAudioRef.current = a;
+    } catch {
+      /* no-op */
+    }
+  }
   const speechSupported =
     typeof window !== 'undefined' &&
     ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window);
@@ -557,9 +571,20 @@ export default function Chat() {
 
       // Triumphant chime on diary completion
       try {
-        const a = new Audio('/sounds/diary-complete.mp3');
-        a.volume = 0.75;
-        void a.play().catch(() => {});
+        const a = diaryCompleteAudioRef.current;
+        if (a) {
+          a.currentTime = 0;
+          void a.play().catch(() => {
+            // Final fallback: a fresh Audio object.
+            try {
+              const fresh = new Audio('/sounds/diary-complete.mp3');
+              fresh.volume = 0.75;
+              void fresh.play().catch(() => {});
+            } catch {
+              /* no-op */
+            }
+          });
+        }
       } catch {
         /* no-op */
       }
