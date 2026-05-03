@@ -175,6 +175,19 @@ export default function Chat() {
     initConversation();
   }, [user, diaryDate]);
 
+  // CRITICAL: when switching between dates (e.g. today's diary already done,
+  // user opens a past date), wipe transient UI state so a half-typed message
+  // from the previous date doesn't leak into the new chat. Without this, the
+  // input box stays pre-filled and past-diary entry becomes impossible.
+  useEffect(() => {
+    setInput('');
+    setMessages([]);
+    setExistingDiaryId(null);
+    setConversationId(null);
+    stopMic('abort');
+    stopAssistantSpeech();
+  }, [diaryDate]);
+
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
