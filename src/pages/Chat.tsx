@@ -878,6 +878,7 @@ export default function Chat() {
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
+                playTap();
                 const utterance = createAssistantUtterance();
                 void sendMessage(input, utterance);
               }
@@ -890,6 +891,7 @@ export default function Chat() {
             variant="ghost"
             size="icon"
             onClick={() => {
+              playTap();
               const utterance = createAssistantUtterance();
               void sendMessage(input, utterance);
             }}
