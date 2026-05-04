@@ -139,7 +139,12 @@ export default function Chat() {
   // so the entry can't be re-edited or accidentally regenerated. The dedicated
   // "Edit / regenerate" flow lives on the Review screen.
   const [existingDiaryId, setExistingDiaryId] = useState<string | null>(null);
-  const [diaryDate, setDiaryDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
+  // diaryDate is derived directly from the URL on every render. This avoids
+  // the previous double-mount bug where the component first initialised with
+  // "today" and then reset to the URL's date — which caused initConversation
+  // to run twice, double-inserting the welcome message and triggering the
+  // welcome chime / TTS multiple times when opening a past diary.
+  const diaryDate = searchParams.get('date') ?? format(new Date(), 'yyyy-MM-dd');
   const [showHelp, setShowHelp] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef<any>(null);
@@ -153,22 +158,9 @@ export default function Chat() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    // Pen-icon FAB navigates to /chat with no date param — that always means
-    // "today's diary". Without resetting, the previously-viewed past date
-    // would leak in and lock the input.
-    const dateParam = searchParams.get('date');
-    setDiaryDate(dateParam ?? format(new Date(), 'yyyy-MM-dd'));
-  }, [searchParams]);
-
-  useEffect(() => {
-    initConversation();
-  }, [user, diaryDate]);
-
-  // CRITICAL: when switching between dates (e.g. today's diary already done,
-  // user opens a past date), wipe transient UI state so a half-typed message
-  // from the previous date doesn't leak into the new chat. Without this, the
-  // input box stays pre-filled and past-diary entry becomes impossible.
+  // Single source of truth: when the user (or diaryDate) changes, wipe
+  // transient state and re-initialise the conversation for that date. One
+  // effect = one welcome message = one TTS = one chime.
   useEffect(() => {
     setInput('');
     setMessages([]);
@@ -176,7 +168,9 @@ export default function Chat() {
     setConversationId(null);
     stopMic('abort');
     stopAssistantSpeech();
-  }, [diaryDate]);
+    if (user) void initConversation();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, diaryDate]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
