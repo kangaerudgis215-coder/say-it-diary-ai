@@ -1,4 +1,5 @@
 import { useCallback, useRef } from 'react';
+import { registerUnlockable } from '@/lib/audioUnlock';
 
 /**
  * Preload an Audio element once and reuse it. Falls back to a fresh Audio
@@ -13,6 +14,7 @@ function makePreloaded(src: string, volume: number) {
       primary = new Audio(src);
       primary.preload = 'auto';
       primary.volume = volume;
+      registerUnlockable(primary);
     } catch {
       primary = null;
     }

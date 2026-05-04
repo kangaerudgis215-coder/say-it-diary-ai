@@ -5,6 +5,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
 import { ThemeProvider } from "@/components/ThemeProvider";
+import { useEffect } from "react";
+import { installAudioUnlock } from "@/lib/audioUnlock";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Chat from "./pages/Chat";
@@ -20,7 +22,11 @@ import QuizPage from "./pages/Quiz";
 
 const queryClient = new QueryClient();
 
-const App = () => (
+const App = () => {
+  useEffect(() => {
+    installAudioUnlock();
+  }, []);
+  return (
   <QueryClientProvider client={queryClient}>
     <AuthProvider>
       <ThemeProvider>
@@ -46,6 +52,7 @@ const App = () => (
       </ThemeProvider>
     </AuthProvider>
   </QueryClientProvider>
-);
+  );
+};
 
 export default App;
