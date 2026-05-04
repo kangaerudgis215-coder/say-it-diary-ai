@@ -109,6 +109,14 @@ export function useSpeechRecognition(
       }, autoStopSilenceMs);
     };
 
+    const hardStopTimer = setTimeout(() => {
+      try {
+        recognition.stop();
+      } catch {
+        /* ignore */
+      }
+    }, 15000);
+
     recognition.onstart = () => {
       setIsListening(true);
       armSilenceTimer();
@@ -120,11 +128,17 @@ export function useSpeechRecognition(
         clearTimeout(silenceTimerRef.current);
         silenceTimerRef.current = null;
       }
+      clearTimeout(hardStopTimer);
     };
 
     recognition.onerror = (event) => {
       console.error('Speech recognition error:', event.error);
       setIsListening(false);
+      if (silenceTimerRef.current) {
+        clearTimeout(silenceTimerRef.current);
+        silenceTimerRef.current = null;
+      }
+      clearTimeout(hardStopTimer);
     };
 
     recognition.onresult = (event) => {
@@ -154,7 +168,12 @@ export function useSpeechRecognition(
 
     return () => {
       if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-      recognition.stop();
+      clearTimeout(hardStopTimer);
+      try {
+        recognition.abort();
+      } catch {
+        /* ignore */
+      }
     };
   }, [continuous, interimResults, lang, isSupported, autoStopSilenceMs]);
 
