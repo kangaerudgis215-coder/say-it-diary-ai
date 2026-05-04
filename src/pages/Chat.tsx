@@ -629,9 +629,11 @@ export default function Chat() {
       (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     const rec = new Ctor();
     rec.lang = 'en-US';
-    // One manual recording session per tap. Avoid auto-restart because iOS
-    // Safari can keep the system mic route active and block later playback.
-    rec.continuous = false;
+    // Manual control: keep the mic open until the user taps again or sends.
+    // Using `continuous = true` lets the browser maintain a single session
+    // across natural pauses, which avoids the start/stop loop that previously
+    // pinned the iOS Safari mic indicator on indefinitely.
+    rec.continuous = true;
     rec.interimResults = true;
     rec.maxAlternatives = 1;
     transcriptBaseRef.current = input.trim();
@@ -645,7 +647,9 @@ export default function Chat() {
     rec.onerror = (e: any) => {
       if (recognitionRef.current !== rec) return;
       const err = e?.error;
-      if (err === 'no-speech' && shouldKeepMicOpenRef.current) return;
+      // Ignore transient `no-speech` events so a brief silence does not kill
+      // the manual session the user explicitly opened.
+      if (err === 'no-speech') return;
       recognitionRef.current = null;
       isStartingMicRef.current = false;
       shouldKeepMicOpenRef.current = false;
@@ -674,14 +678,8 @@ export default function Chat() {
     };
     rec.onend = () => {
       if (recognitionRef.current !== rec) return;
-      if (shouldKeepMicOpenRef.current) {
-        try {
-          rec.start();
-          return;
-        } catch {
-          /* fall through and release the stale session */
-        }
-      }
+      // Session ended (user toggled off, navigated, or browser closed it).
+      // Do NOT auto-restart — that was what kept the Safari mic route alive.
       recognitionRef.current = null;
       isStartingMicRef.current = false;
       shouldKeepMicOpenRef.current = false;
