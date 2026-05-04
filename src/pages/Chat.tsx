@@ -654,6 +654,7 @@ export default function Chat() {
       // the manual session the user explicitly opened.
       if (err === 'no-speech') return;
       recognitionRef.current = null;
+      setActiveRecognition(null);
       isStartingMicRef.current = false;
       setIsListening(false);
       if (!err || err === 'aborted' || err === 'no-speech') return;
@@ -683,6 +684,7 @@ export default function Chat() {
       // Session ended (user toggled off, navigated, or browser closed it).
       // Do NOT auto-restart — that was what kept the Safari mic route alive.
       recognitionRef.current = null;
+      setActiveRecognition(null);
       isStartingMicRef.current = false;
       setIsListening(false);
     };
