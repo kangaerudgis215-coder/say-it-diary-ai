@@ -626,37 +626,22 @@ export default function Chat() {
       (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     const rec = new Ctor();
     rec.lang = 'en-US';
-    // Use a single utterance-style session. Keeping SpeechRecognition open
-    // indefinitely can hijack mobile audio routing, blocking AI voice/chimes
-    // until the page is closed.
-    rec.continuous = false;
+    // Manual toggle only: the mic stays open while the user is speaking and is
+    // released when they tap the mic again, send, generate, or leave the page.
+    rec.continuous = true;
     rec.interimResults = true;
     rec.maxAlternatives = 1;
     transcriptBaseRef.current = input.trim();
     finalTranscriptRef.current = '';
 
-    const armSilenceStop = () => {
-      if (micSilenceTimerRef.current) clearTimeout(micSilenceTimerRef.current);
-      micSilenceTimerRef.current = setTimeout(() => stopMic('stop'), 1800);
-    };
-
     rec.onstart = () => {
       if (recognitionRef.current !== rec) return;
       isStartingMicRef.current = false;
       setIsListening(true);
-      armSilenceStop();
     };
     rec.onerror = (e: any) => {
       if (recognitionRef.current !== rec) return;
       const err = e?.error;
-      if (micSilenceTimerRef.current) {
-        clearTimeout(micSilenceTimerRef.current);
-        micSilenceTimerRef.current = null;
-      }
-      if (micHardStopTimerRef.current) {
-        clearTimeout(micHardStopTimerRef.current);
-        micHardStopTimerRef.current = null;
-      }
       recognitionRef.current = null;
       isStartingMicRef.current = false;
       setIsListening(false);
@@ -684,14 +669,6 @@ export default function Chat() {
     };
     rec.onend = () => {
       if (recognitionRef.current !== rec) return;
-      if (micSilenceTimerRef.current) {
-        clearTimeout(micSilenceTimerRef.current);
-        micSilenceTimerRef.current = null;
-      }
-      if (micHardStopTimerRef.current) {
-        clearTimeout(micHardStopTimerRef.current);
-        micHardStopTimerRef.current = null;
-      }
       recognitionRef.current = null;
       isStartingMicRef.current = false;
       setIsListening(false);
@@ -712,17 +689,13 @@ export default function Chat() {
       const base = transcriptBaseRef.current;
       const live = [finalTranscriptRef.current, interim].filter(Boolean).join(' ');
       setInput((base ? base + ' ' : '') + live);
-      armSilenceStop();
     };
 
     try {
       recognitionRef.current = rec;
       isStartingMicRef.current = true;
       rec.start();
-      micHardStopTimerRef.current = setTimeout(() => stopMic('stop'), 12000);
     } catch (err) {
-      if (micSilenceTimerRef.current) clearTimeout(micSilenceTimerRef.current);
-      if (micHardStopTimerRef.current) clearTimeout(micHardStopTimerRef.current);
       recognitionRef.current = null;
       isStartingMicRef.current = false;
       setIsListening(false);
