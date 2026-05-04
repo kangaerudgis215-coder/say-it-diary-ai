@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { releaseSpeechRecognition } from '@/lib/speechRecognition';
+import { releaseSpeechRecognition, setActiveRecognition } from '@/lib/speechRecognition';
 
 interface UseSpeechRecognitionOptions {
   continuous?: boolean;
@@ -186,8 +186,10 @@ export function useSpeechRecognition(
       setTranscript('');
       setInterimTranscript('');
       try {
+        setActiveRecognition(recognitionRef.current);
         recognitionRef.current.start();
       } catch (error) {
+        setActiveRecognition(null);
         console.error('Failed to start speech recognition:', error);
       }
     }
