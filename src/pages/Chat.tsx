@@ -294,6 +294,12 @@ export default function Chat() {
     releaseSpeechRecognition(rec, mode);
   };
 
+  const navigateAfterClosingMic = (to: string) => {
+    stopMic('abort');
+    stopAssistantSpeech();
+    navigate(to);
+  };
+
   const sendMessage = async (content: string, preparedUtterance?: SpeechSynthesisUtterance | null) => {
     if (!content.trim() || !conversationId || !user) return;
     // Hard guard: never accept new messages once the diary is finalised.
@@ -588,9 +594,9 @@ export default function Chat() {
 
       if (savedEntry) {
         setExistingDiaryId(savedEntry.id);
-        navigate(`/review?diaryId=${savedEntry.id}&date=${diaryDate}`);
+        navigateAfterClosingMic(`/review?diaryId=${savedEntry.id}&date=${diaryDate}`);
       } else {
-        navigate('/');
+        navigateAfterClosingMic('/');
       }
     } catch (error: any) {
       toast({
@@ -717,9 +723,20 @@ export default function Chat() {
     }
   };
 
-  // Stop the mic if the user navigates away mid-recording.
+  // Stop the mic if the user navigates away mid-recording. Safari can keep
+  // the system mic route alive until we explicitly abort before/while leaving.
   useEffect(() => {
+    const closeMicForPageExit = () => stopMic('abort');
+    const closeMicWhenHidden = () => {
+      if (document.visibilityState === 'hidden') stopMic('abort');
+    };
+    window.addEventListener('pagehide', closeMicForPageExit);
+    window.addEventListener('beforeunload', closeMicForPageExit);
+    document.addEventListener('visibilitychange', closeMicWhenHidden);
     return () => {
+      window.removeEventListener('pagehide', closeMicForPageExit);
+      window.removeEventListener('beforeunload', closeMicForPageExit);
+      document.removeEventListener('visibilitychange', closeMicWhenHidden);
       const rec = recognitionRef.current;
       recognitionRef.current = null;
       isStartingMicRef.current = false;
@@ -747,7 +764,7 @@ export default function Chat() {
       <header className="sticky top-0 z-10 glass border-b border-border p-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon" onClick={() => navigate('/')}>
+            <Button variant="ghost" size="icon" onClick={() => navigateAfterClosingMic('/')}>
               <ArrowLeft className="w-5 h-5" />
             </Button>
             
@@ -801,7 +818,7 @@ export default function Chat() {
             <Button
               variant="secondary"
               size="sm"
-              onClick={() => navigate(`/review?diaryId=${existingDiaryId}&date=${diaryDate}`)}
+              onClick={() => navigateAfterClosingMic(`/review?diaryId=${existingDiaryId}&date=${diaryDate}`)}
             >
               <BookOpen className="w-4 h-4" />
               レビュー
@@ -890,7 +907,7 @@ export default function Chat() {
             <Button
               variant="glow"
               size="lg"
-              onClick={() => navigate(`/review?diaryId=${existingDiaryId}&date=${diaryDate}`)}
+              onClick={() => navigateAfterClosingMic(`/review?diaryId=${existingDiaryId}&date=${diaryDate}`)}
               className="gap-2 px-8"
             >
               <BookOpen className="w-5 h-5" />
