@@ -428,6 +428,10 @@ export default function Chat() {
   const handleGenerateDiary = async () => {
     if (!conversationId || !user) return;
 
+    // Make sure recording is fully released before long async work + the final
+    // completion chime, especially on mobile audio routes.
+    stopMic('abort');
+
     setIsGeneratingDiary(true);
 
     try {
@@ -743,6 +747,8 @@ export default function Chat() {
   // Stop the mic if the user navigates away mid-recording.
   useEffect(() => {
     return () => {
+      if (micSilenceTimerRef.current) clearTimeout(micSilenceTimerRef.current);
+      if (micHardStopTimerRef.current) clearTimeout(micHardStopTimerRef.current);
       const rec = recognitionRef.current;
       if (rec) {
         try {
