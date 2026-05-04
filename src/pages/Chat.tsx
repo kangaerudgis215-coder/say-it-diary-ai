@@ -594,9 +594,9 @@ export default function Chat() {
 
       if (savedEntry) {
         setExistingDiaryId(savedEntry.id);
-        navigate(`/review?diaryId=${savedEntry.id}&date=${diaryDate}`);
+        navigateAfterClosingMic(`/review?diaryId=${savedEntry.id}&date=${diaryDate}`);
       } else {
-        navigate('/');
+        navigateAfterClosingMic('/');
       }
     } catch (error: any) {
       toast({
@@ -761,7 +761,7 @@ export default function Chat() {
       <header className="sticky top-0 z-10 glass border-b border-border p-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon" onClick={() => navigate('/')}>
+            <Button variant="ghost" size="icon" onClick={() => navigateAfterClosingMic('/')}>
               <ArrowLeft className="w-5 h-5" />
             </Button>
             
@@ -815,7 +815,7 @@ export default function Chat() {
             <Button
               variant="secondary"
               size="sm"
-              onClick={() => navigate(`/review?diaryId=${existingDiaryId}&date=${diaryDate}`)}
+              onClick={() => navigateAfterClosingMic(`/review?diaryId=${existingDiaryId}&date=${diaryDate}`)}
             >
               <BookOpen className="w-4 h-4" />
               レビュー
@@ -904,7 +904,7 @@ export default function Chat() {
             <Button
               variant="glow"
               size="lg"
-              onClick={() => navigate(`/review?diaryId=${existingDiaryId}&date=${diaryDate}`)}
+              onClick={() => navigateAfterClosingMic(`/review?diaryId=${existingDiaryId}&date=${diaryDate}`)}
               className="gap-2 px-8"
             >
               <BookOpen className="w-5 h-5" />
