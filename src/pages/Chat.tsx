@@ -646,6 +646,7 @@ export default function Chat() {
       const err = e?.error;
       recognitionRef.current = null;
       isStartingMicRef.current = false;
+      shouldKeepMicOpenRef.current = false;
       setIsListening(false);
       if (!err || err === 'aborted' || err === 'no-speech') return;
       if (err === 'not-allowed' || err === 'service-not-allowed') {
@@ -671,8 +672,17 @@ export default function Chat() {
     };
     rec.onend = () => {
       if (recognitionRef.current !== rec) return;
+      if (shouldKeepMicOpenRef.current) {
+        try {
+          rec.start();
+          return;
+        } catch {
+          /* fall through and release the stale session */
+        }
+      }
       recognitionRef.current = null;
       isStartingMicRef.current = false;
+      shouldKeepMicOpenRef.current = false;
       setIsListening(false);
     };
     rec.onresult = (event: any) => {
@@ -696,10 +706,12 @@ export default function Chat() {
     try {
       recognitionRef.current = rec;
       isStartingMicRef.current = true;
+      shouldKeepMicOpenRef.current = true;
       rec.start();
     } catch (err) {
       recognitionRef.current = null;
       isStartingMicRef.current = false;
+      shouldKeepMicOpenRef.current = false;
       setIsListening(false);
       toast({
         variant: 'destructive',
