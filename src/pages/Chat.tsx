@@ -644,6 +644,7 @@ export default function Chat() {
     rec.onerror = (e: any) => {
       if (recognitionRef.current !== rec) return;
       const err = e?.error;
+      if (err === 'no-speech' && shouldKeepMicOpenRef.current) return;
       recognitionRef.current = null;
       isStartingMicRef.current = false;
       shouldKeepMicOpenRef.current = false;
