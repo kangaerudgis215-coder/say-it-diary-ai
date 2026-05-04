@@ -124,6 +124,7 @@ export function useSpeechRecognition(
 
     recognition.onend = () => {
       listeningRef.current = false;
+      setActiveRecognition(null);
       setIsListening(false);
       if (silenceTimerRef.current) {
         clearTimeout(silenceTimerRef.current);
@@ -138,6 +139,7 @@ export function useSpeechRecognition(
     recognition.onerror = (event) => {
       console.error('Speech recognition error:', event.error);
       listeningRef.current = false;
+      setActiveRecognition(null);
       setIsListening(false);
       if (silenceTimerRef.current) {
         clearTimeout(silenceTimerRef.current);
