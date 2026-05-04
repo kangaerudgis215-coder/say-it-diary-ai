@@ -655,7 +655,6 @@ export default function Chat() {
       if (err === 'no-speech') return;
       recognitionRef.current = null;
       isStartingMicRef.current = false;
-      shouldKeepMicOpenRef.current = false;
       setIsListening(false);
       if (!err || err === 'aborted' || err === 'no-speech') return;
       if (err === 'not-allowed' || err === 'service-not-allowed') {
@@ -685,7 +684,6 @@ export default function Chat() {
       // Do NOT auto-restart — that was what kept the Safari mic route alive.
       recognitionRef.current = null;
       isStartingMicRef.current = false;
-      shouldKeepMicOpenRef.current = false;
       setIsListening(false);
     };
     rec.onresult = (event: any) => {
@@ -709,13 +707,11 @@ export default function Chat() {
     try {
       recognitionRef.current = rec;
       isStartingMicRef.current = true;
-      shouldKeepMicOpenRef.current = true;
       rec.start();
       setActiveRecognition(rec);
     } catch (err) {
       recognitionRef.current = null;
       isStartingMicRef.current = false;
-      shouldKeepMicOpenRef.current = false;
       setIsListening(false);
       toast({
         variant: 'destructive',
@@ -736,7 +732,6 @@ export default function Chat() {
       const rec = recognitionRef.current;
       recognitionRef.current = null;
       isStartingMicRef.current = false;
-      shouldKeepMicOpenRef.current = false;
       setIsListening(false);
       if (rec) releaseSpeechRecognition(rec, 'abort');
       forceReleaseActiveRecognition();
