@@ -632,16 +632,25 @@ export default function Chat() {
       (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     const rec = new Ctor();
     rec.lang = 'en-US';
-    rec.continuous = true;
+    // Use a single utterance-style session. Keeping SpeechRecognition open
+    // indefinitely can hijack mobile audio routing, blocking AI voice/chimes
+    // until the page is closed.
+    rec.continuous = false;
     rec.interimResults = true;
     rec.maxAlternatives = 1;
     transcriptBaseRef.current = input.trim();
     finalTranscriptRef.current = '';
 
+    const armSilenceStop = () => {
+      if (micSilenceTimerRef.current) clearTimeout(micSilenceTimerRef.current);
+      micSilenceTimerRef.current = setTimeout(() => stopMic('stop'), 1800);
+    };
+
     rec.onstart = () => {
       if (recognitionRef.current !== rec) return;
       isStartingMicRef.current = false;
       setIsListening(true);
+      armSilenceStop();
     };
     rec.onerror = (e: any) => {
       if (recognitionRef.current !== rec) return;
@@ -693,13 +702,17 @@ export default function Chat() {
       const base = transcriptBaseRef.current;
       const live = [finalTranscriptRef.current, interim].filter(Boolean).join(' ');
       setInput((base ? base + ' ' : '') + live);
+      armSilenceStop();
     };
 
     try {
       recognitionRef.current = rec;
       isStartingMicRef.current = true;
       rec.start();
+      micHardStopTimerRef.current = setTimeout(() => stopMic('stop'), 12000);
     } catch (err) {
+      if (micSilenceTimerRef.current) clearTimeout(micSilenceTimerRef.current);
+      if (micHardStopTimerRef.current) clearTimeout(micHardStopTimerRef.current);
       recognitionRef.current = null;
       isStartingMicRef.current = false;
       setIsListening(false);
