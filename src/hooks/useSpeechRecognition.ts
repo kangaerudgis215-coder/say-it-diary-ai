@@ -104,11 +104,9 @@ export function useSpeechRecognition(
       if (!autoStopSilenceMs) return;
       if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
       silenceTimerRef.current = setTimeout(() => {
-        try {
-          recognition.stop();
-        } catch {
-          /* ignore */
-        }
+        listeningRef.current = false;
+        setIsListening(false);
+        releaseSpeechRecognition(recognition, 'stop');
       }, autoStopSilenceMs);
     };
 
@@ -118,11 +116,9 @@ export function useSpeechRecognition(
       armSilenceTimer();
       if (hardStopTimerRef.current) clearTimeout(hardStopTimerRef.current);
       hardStopTimerRef.current = setTimeout(() => {
-        try {
-          recognition.stop();
-        } catch {
-          /* ignore */
-        }
+        listeningRef.current = false;
+        setIsListening(false);
+        releaseSpeechRecognition(recognition, 'stop');
       }, 15000);
     };
 
