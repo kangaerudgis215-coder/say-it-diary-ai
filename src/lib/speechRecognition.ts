@@ -69,13 +69,32 @@ export async function releaseSpeechRecognitionBeforeNavigation(
 ): Promise<void> {
   if (!recognition && !hasActiveSpeechRecognition()) return;
 
-  if (recognition) releaseSpeechRecognition(recognition, 'abort');
-  forceReleaseActiveRecognition();
+  const rec = recognition ?? activeRecognition;
+  activeRecognition = null;
+  if (!rec) return;
 
-  // Do not navigate while Safari's delayed release taps are still running.
-  // There is no browser API for the mic indicator state, so wait until every
-  // scheduled abort/stop retry has completed before letting audio play elsewhere.
-  await new Promise<void>((resolve) => window.setTimeout(resolve, 650));
+  await new Promise<void>((resolve) => {
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      rec.onstart = null;
+      rec.onend = null;
+      rec.onerror = null;
+      rec.onresult = null;
+      resolve();
+    };
+
+    rec.onend = finish;
+    rec.onerror = finish;
+    safelyCall(rec, 'abort');
+    safelyCall(rec, 'stop');
+    window.setTimeout(finish, 900);
+  });
+
+  // Small settle window after WebKit fires `end`; avoids clipping the first
+  // effect sound on the destination screen without touching the mic again.
+  await new Promise<void>((resolve) => window.setTimeout(resolve, 120));
 }
 
 // Install a one-time global safety net so that browser back / tab hide /
