@@ -948,8 +948,8 @@ export default function Chat() {
           <Button
             variant="ghost"
             size="icon"
+            silent
             onClick={() => {
-              playTap();
               const utterance = createAssistantUtterance();
               void sendMessage(input, utterance);
             }}
