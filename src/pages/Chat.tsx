@@ -149,8 +149,6 @@ export default function Chat() {
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef<any>(null);
   const isStartingMicRef = useRef(false);
-  const micSilenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const micHardStopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const finalTranscriptRef = useRef('');
   const transcriptBaseRef = useRef<string>('');
   const speechSupported =
@@ -286,14 +284,6 @@ export default function Chat() {
   };
 
   const stopMic = (mode: 'stop' | 'abort' = 'stop') => {
-    if (micSilenceTimerRef.current) {
-      clearTimeout(micSilenceTimerRef.current);
-      micSilenceTimerRef.current = null;
-    }
-    if (micHardStopTimerRef.current) {
-      clearTimeout(micHardStopTimerRef.current);
-      micHardStopTimerRef.current = null;
-    }
     const rec = recognitionRef.current;
     recognitionRef.current = null;
     isStartingMicRef.current = false;
