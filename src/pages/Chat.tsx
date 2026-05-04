@@ -149,8 +149,7 @@ export default function Chat() {
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef<any>(null);
   const isStartingMicRef = useRef(false);
-  const micSilenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const micHardStopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const shouldKeepMicOpenRef = useRef(false);
   const finalTranscriptRef = useRef('');
   const transcriptBaseRef = useRef<string>('');
   const speechSupported =
@@ -286,17 +285,10 @@ export default function Chat() {
   };
 
   const stopMic = (mode: 'stop' | 'abort' = 'stop') => {
-    if (micSilenceTimerRef.current) {
-      clearTimeout(micSilenceTimerRef.current);
-      micSilenceTimerRef.current = null;
-    }
-    if (micHardStopTimerRef.current) {
-      clearTimeout(micHardStopTimerRef.current);
-      micHardStopTimerRef.current = null;
-    }
     const rec = recognitionRef.current;
     recognitionRef.current = null;
     isStartingMicRef.current = false;
+    shouldKeepMicOpenRef.current = false;
     setIsListening(false);
     if (!rec) return;
     try {
@@ -636,39 +628,26 @@ export default function Chat() {
       (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     const rec = new Ctor();
     rec.lang = 'en-US';
-    // Use a single utterance-style session. Keeping SpeechRecognition open
-    // indefinitely can hijack mobile audio routing, blocking AI voice/chimes
-    // until the page is closed.
-    rec.continuous = false;
+    // Manual toggle only: the mic stays open while the user is speaking and is
+    // released when they tap the mic again, send, generate, or leave the page.
+    rec.continuous = true;
     rec.interimResults = true;
     rec.maxAlternatives = 1;
     transcriptBaseRef.current = input.trim();
     finalTranscriptRef.current = '';
 
-    const armSilenceStop = () => {
-      if (micSilenceTimerRef.current) clearTimeout(micSilenceTimerRef.current);
-      micSilenceTimerRef.current = setTimeout(() => stopMic('stop'), 1800);
-    };
-
     rec.onstart = () => {
       if (recognitionRef.current !== rec) return;
       isStartingMicRef.current = false;
       setIsListening(true);
-      armSilenceStop();
     };
     rec.onerror = (e: any) => {
       if (recognitionRef.current !== rec) return;
       const err = e?.error;
-      if (micSilenceTimerRef.current) {
-        clearTimeout(micSilenceTimerRef.current);
-        micSilenceTimerRef.current = null;
-      }
-      if (micHardStopTimerRef.current) {
-        clearTimeout(micHardStopTimerRef.current);
-        micHardStopTimerRef.current = null;
-      }
+      if (err === 'no-speech' && shouldKeepMicOpenRef.current) return;
       recognitionRef.current = null;
       isStartingMicRef.current = false;
+      shouldKeepMicOpenRef.current = false;
       setIsListening(false);
       if (!err || err === 'aborted' || err === 'no-speech') return;
       if (err === 'not-allowed' || err === 'service-not-allowed') {
@@ -694,16 +673,17 @@ export default function Chat() {
     };
     rec.onend = () => {
       if (recognitionRef.current !== rec) return;
-      if (micSilenceTimerRef.current) {
-        clearTimeout(micSilenceTimerRef.current);
-        micSilenceTimerRef.current = null;
-      }
-      if (micHardStopTimerRef.current) {
-        clearTimeout(micHardStopTimerRef.current);
-        micHardStopTimerRef.current = null;
+      if (shouldKeepMicOpenRef.current) {
+        try {
+          rec.start();
+          return;
+        } catch {
+          /* fall through and release the stale session */
+        }
       }
       recognitionRef.current = null;
       isStartingMicRef.current = false;
+      shouldKeepMicOpenRef.current = false;
       setIsListening(false);
     };
     rec.onresult = (event: any) => {
@@ -722,19 +702,17 @@ export default function Chat() {
       const base = transcriptBaseRef.current;
       const live = [finalTranscriptRef.current, interim].filter(Boolean).join(' ');
       setInput((base ? base + ' ' : '') + live);
-      armSilenceStop();
     };
 
     try {
       recognitionRef.current = rec;
       isStartingMicRef.current = true;
+      shouldKeepMicOpenRef.current = true;
       rec.start();
-      micHardStopTimerRef.current = setTimeout(() => stopMic('stop'), 12000);
     } catch (err) {
-      if (micSilenceTimerRef.current) clearTimeout(micSilenceTimerRef.current);
-      if (micHardStopTimerRef.current) clearTimeout(micHardStopTimerRef.current);
       recognitionRef.current = null;
       isStartingMicRef.current = false;
+      shouldKeepMicOpenRef.current = false;
       setIsListening(false);
       toast({
         variant: 'destructive',
@@ -747,8 +725,6 @@ export default function Chat() {
   // Stop the mic if the user navigates away mid-recording.
   useEffect(() => {
     return () => {
-      if (micSilenceTimerRef.current) clearTimeout(micSilenceTimerRef.current);
-      if (micHardStopTimerRef.current) clearTimeout(micHardStopTimerRef.current);
       const rec = recognitionRef.current;
       if (rec) {
         try {
@@ -960,7 +936,7 @@ export default function Chat() {
           </Button>
         </div>
 
-        {/* Big centered mic — press and hold to speak. */}
+        {/* Big centered mic — tap once to record, tap again to stop. */}
         <div className="flex flex-col items-center justify-center gap-2">
           {speechSupported ? (
             <button
