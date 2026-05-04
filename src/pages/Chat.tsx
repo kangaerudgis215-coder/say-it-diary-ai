@@ -142,6 +142,7 @@ export default function Chat() {
   const [isLoading, setIsLoading] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [isGeneratingDiary, setIsGeneratingDiary] = useState(false);
+  const [isClosingMicForNavigation, setIsClosingMicForNavigation] = useState(false);
   // Once a diary has been generated for this date, the chat becomes read-only
   // so the entry can't be re-edited or accidentally regenerated. The dedicated
   // "Edit / regenerate" flow lives on the Review screen.
@@ -298,11 +299,16 @@ export default function Chat() {
     releaseSpeechRecognition(rec, mode);
   };
 
-  const navigateAfterClosingMic = (to: string) => {
-    stopMic('abort');
-    forceReleaseActiveRecognition();
+  const navigateAfterClosingMic = async (to: string) => {
+    if (isClosingMicForNavigation) return;
+    setIsClosingMicForNavigation(true);
+    const rec = recognitionRef.current;
+    recognitionRef.current = null;
+    isStartingMicRef.current = false;
+    setIsListening(false);
     stopAssistantSpeech();
-    window.setTimeout(() => navigate(to), 120);
+    await releaseSpeechRecognitionBeforeNavigation(rec);
+    navigate(to);
   };
 
   const sendMessage = async (content: string, preparedUtterance?: SpeechSynthesisUtterance | null) => {
