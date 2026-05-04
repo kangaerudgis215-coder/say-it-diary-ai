@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { releaseSpeechRecognition } from '@/lib/speechRecognition';
+import { clearActiveRecognition, releaseSpeechRecognition, setActiveRecognition } from '@/lib/speechRecognition';
 
 interface UseSpeechRecognitionOptions {
   continuous?: boolean;
@@ -124,6 +124,7 @@ export function useSpeechRecognition(
 
     recognition.onend = () => {
       listeningRef.current = false;
+      clearActiveRecognition(recognition);
       setIsListening(false);
       if (silenceTimerRef.current) {
         clearTimeout(silenceTimerRef.current);
@@ -138,6 +139,7 @@ export function useSpeechRecognition(
     recognition.onerror = (event) => {
       console.error('Speech recognition error:', event.error);
       listeningRef.current = false;
+      clearActiveRecognition(recognition);
       setIsListening(false);
       if (silenceTimerRef.current) {
         clearTimeout(silenceTimerRef.current);
@@ -186,8 +188,10 @@ export function useSpeechRecognition(
       setTranscript('');
       setInterimTranscript('');
       try {
+        setActiveRecognition(recognitionRef.current);
         recognitionRef.current.start();
       } catch (error) {
+        setActiveRecognition(null);
         console.error('Failed to start speech recognition:', error);
       }
     }

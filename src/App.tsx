@@ -2,11 +2,12 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { useEffect } from "react";
 import { installAudioUnlock } from "@/lib/audioUnlock";
+import { forceReleaseActiveRecognition } from "@/lib/speechRecognition";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Chat from "./pages/Chat";
@@ -21,6 +22,16 @@ import QuizPage from "./pages/Quiz";
 
 const queryClient = new QueryClient();
 
+const RouteMicReleaseGuard = () => {
+  const location = useLocation();
+
+  useEffect(() => {
+    forceReleaseActiveRecognition();
+  }, [location.pathname, location.search]);
+
+  return null;
+};
+
 const App = () => {
   useEffect(() => {
     installAudioUnlock();
@@ -33,6 +44,7 @@ const App = () => {
           <Toaster />
           <Sonner />
           <BrowserRouter>
+            <RouteMicReleaseGuard />
             <Routes>
               <Route path="/" element={<Index />} />
               <Route path="/auth" element={<Auth />} />

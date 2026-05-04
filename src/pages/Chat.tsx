@@ -25,6 +25,7 @@ import { persistDiarySentences } from '@/lib/practiceBuilder';
 import {
   releaseSpeechRecognition,
   setActiveRecognition,
+  clearActiveRecognition,
   forceReleaseActiveRecognition,
 } from '@/lib/speechRecognition';
 import { format, parseISO, isToday as isTodayFn } from 'date-fns';
@@ -154,7 +155,6 @@ export default function Chat() {
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef<any>(null);
   const isStartingMicRef = useRef(false);
-  const shouldKeepMicOpenRef = useRef(false);
   const finalTranscriptRef = useRef('');
   const transcriptBaseRef = useRef<string>('');
   const speechSupported =
@@ -293,16 +293,15 @@ export default function Chat() {
     const rec = recognitionRef.current;
     recognitionRef.current = null;
     isStartingMicRef.current = false;
-    shouldKeepMicOpenRef.current = false;
     setIsListening(false);
     releaseSpeechRecognition(rec, mode);
-    setActiveRecognition(null);
   };
 
   const navigateAfterClosingMic = (to: string) => {
     stopMic('abort');
+    forceReleaseActiveRecognition();
     stopAssistantSpeech();
-    navigate(to);
+    window.setTimeout(() => navigate(to), 120);
   };
 
   const sendMessage = async (content: string, preparedUtterance?: SpeechSynthesisUtterance | null) => {
@@ -656,8 +655,8 @@ export default function Chat() {
       // the manual session the user explicitly opened.
       if (err === 'no-speech') return;
       recognitionRef.current = null;
+      clearActiveRecognition(rec);
       isStartingMicRef.current = false;
-      shouldKeepMicOpenRef.current = false;
       setIsListening(false);
       if (!err || err === 'aborted' || err === 'no-speech') return;
       if (err === 'not-allowed' || err === 'service-not-allowed') {
@@ -686,8 +685,8 @@ export default function Chat() {
       // Session ended (user toggled off, navigated, or browser closed it).
       // Do NOT auto-restart — that was what kept the Safari mic route alive.
       recognitionRef.current = null;
+      clearActiveRecognition(rec);
       isStartingMicRef.current = false;
-      shouldKeepMicOpenRef.current = false;
       setIsListening(false);
     };
     rec.onresult = (event: any) => {
@@ -711,13 +710,11 @@ export default function Chat() {
     try {
       recognitionRef.current = rec;
       isStartingMicRef.current = true;
-      shouldKeepMicOpenRef.current = true;
       rec.start();
       setActiveRecognition(rec);
     } catch (err) {
       recognitionRef.current = null;
       isStartingMicRef.current = false;
-      shouldKeepMicOpenRef.current = false;
       setIsListening(false);
       toast({
         variant: 'destructive',
@@ -738,7 +735,6 @@ export default function Chat() {
       const rec = recognitionRef.current;
       recognitionRef.current = null;
       isStartingMicRef.current = false;
-      shouldKeepMicOpenRef.current = false;
       setIsListening(false);
       if (rec) releaseSpeechRecognition(rec, 'abort');
       forceReleaseActiveRecognition();

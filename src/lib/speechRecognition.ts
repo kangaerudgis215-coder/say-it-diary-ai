@@ -11,9 +11,37 @@ export interface SpeechRecognitionLike {
  * has already unmounted.
  */
 let activeRecognition: SpeechRecognitionLike | null = null;
+const pendingReleaseRecognitions = new Set<SpeechRecognitionLike>();
+
+function safelyCall(rec: SpeechRecognitionLike, method: 'stop' | 'abort'): void {
+  try {
+    rec[method]();
+  } catch {
+    /* stale recognition session */
+  }
+}
+
+function scheduleSafariReleaseFallback(rec: SpeechRecognitionLike, mode: 'stop' | 'abort'): void {
+  if (typeof window === 'undefined') return;
+  pendingReleaseRecognitions.add(rec);
+
+  window.setTimeout(() => {
+    safelyCall(rec, 'stop');
+  }, 80);
+
+  window.setTimeout(() => {
+    safelyCall(rec, 'stop');
+    if (mode === 'abort') safelyCall(rec, 'abort');
+    pendingReleaseRecognitions.delete(rec);
+  }, 260);
+}
 
 export function setActiveRecognition(rec: SpeechRecognitionLike | null): void {
   activeRecognition = rec;
+}
+
+export function clearActiveRecognition(rec: SpeechRecognitionLike): void {
+  if (activeRecognition === rec) activeRecognition = null;
 }
 
 export function getActiveRecognition(): SpeechRecognitionLike | null {
@@ -21,13 +49,14 @@ export function getActiveRecognition(): SpeechRecognitionLike | null {
 }
 
 export function forceReleaseActiveRecognition(): void {
-  const rec = activeRecognition;
+  const recognitions = new Set(pendingReleaseRecognitions);
+  if (activeRecognition) recognitions.add(activeRecognition);
   activeRecognition = null;
-  if (!rec) return;
-  // Safari sometimes ignores a single abort() — call abort then stop in
-  // sequence so the audio route is always handed back to the system.
-  try { rec.abort(); } catch { /* ignore */ }
-  try { rec.stop(); } catch { /* ignore */ }
+  recognitions.forEach((rec) => {
+    safelyCall(rec, 'abort');
+    safelyCall(rec, 'stop');
+    scheduleSafariReleaseFallback(rec, 'abort');
+  });
 }
 
 /**
@@ -42,18 +71,11 @@ export function releaseSpeechRecognition(
 ): void {
   if (!recognition) return;
   if (activeRecognition === recognition) activeRecognition = null;
-  try {
-    if (mode === 'abort') {
-      recognition.abort();
-      // Safari: belt-and-suspenders — also call stop() so the underlying
-      // AudioSession is definitely released even if abort() was a no-op.
-      try { recognition.stop(); } catch { /* ignore */ }
-    } else {
-      recognition.stop();
-    }
-  } catch {
-    /* stale recognition session */
-  }
+  safelyCall(recognition, mode);
+  // Safari can keep the system mic indicator alive if navigation happens in
+  // the same tick as abort()/stop(). Hold the native instance briefly and retry
+  // on later turns of the event loop so the AudioSession actually releases.
+  scheduleSafariReleaseFallback(recognition, mode);
 }
 
 // Install a one-time global safety net so that browser back / tab hide /
