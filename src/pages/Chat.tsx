@@ -154,7 +154,6 @@ export default function Chat() {
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef<any>(null);
   const isStartingMicRef = useRef(false);
-  const shouldKeepMicOpenRef = useRef(false);
   const finalTranscriptRef = useRef('');
   const transcriptBaseRef = useRef<string>('');
   const speechSupported =
@@ -293,16 +292,15 @@ export default function Chat() {
     const rec = recognitionRef.current;
     recognitionRef.current = null;
     isStartingMicRef.current = false;
-    shouldKeepMicOpenRef.current = false;
     setIsListening(false);
     releaseSpeechRecognition(rec, mode);
-    setActiveRecognition(null);
   };
 
   const navigateAfterClosingMic = (to: string) => {
     stopMic('abort');
+    forceReleaseActiveRecognition();
     stopAssistantSpeech();
-    navigate(to);
+    window.setTimeout(() => navigate(to), 120);
   };
 
   const sendMessage = async (content: string, preparedUtterance?: SpeechSynthesisUtterance | null) => {
