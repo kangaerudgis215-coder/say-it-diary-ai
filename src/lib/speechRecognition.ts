@@ -2,6 +2,10 @@ export interface SpeechRecognitionLike {
   start(): void;
   stop(): void;
   abort(): void;
+  onstart?: ((...args: any[]) => void) | null;
+  onend?: ((...args: any[]) => void) | null;
+  onerror?: ((...args: any[]) => void) | null;
+  onresult?: ((...args: any[]) => void) | null;
 }
 
 /**
@@ -11,7 +15,6 @@ export interface SpeechRecognitionLike {
  * has already unmounted.
  */
 let activeRecognition: SpeechRecognitionLike | null = null;
-const pendingReleaseRecognitions = new Set<SpeechRecognitionLike>();
 
 function safelyCall(rec: SpeechRecognitionLike, method: 'stop' | 'abort'): void {
   try {
@@ -19,21 +22,6 @@ function safelyCall(rec: SpeechRecognitionLike, method: 'stop' | 'abort'): void 
   } catch {
     /* stale recognition session */
   }
-}
-
-function scheduleSafariReleaseFallback(rec: SpeechRecognitionLike, mode: 'stop' | 'abort'): void {
-  if (typeof window === 'undefined') return;
-  pendingReleaseRecognitions.add(rec);
-
-  window.setTimeout(() => {
-    safelyCall(rec, 'stop');
-  }, 80);
-
-  window.setTimeout(() => {
-    safelyCall(rec, 'stop');
-    if (mode === 'abort') safelyCall(rec, 'abort');
-    pendingReleaseRecognitions.delete(rec);
-  }, 260);
 }
 
 export function setActiveRecognition(rec: SpeechRecognitionLike | null): void {
