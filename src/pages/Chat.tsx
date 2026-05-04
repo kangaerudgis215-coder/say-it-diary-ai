@@ -592,9 +592,6 @@ export default function Chat() {
         description: "Now let's review and memorize it!",
       });
 
-      // Triumphant chime on diary completion
-      playBigSuccess();
-
       // Get the diary entry ID and navigate to review page
       const { data: savedEntry } = await supabase
         .from('diary_entries')
@@ -717,8 +714,8 @@ export default function Chat() {
     try {
       recognitionRef.current = rec;
       isStartingMicRef.current = true;
-      rec.start();
       setActiveRecognition(rec);
+      rec.start();
     } catch (err) {
       recognitionRef.current = null;
       isStartingMicRef.current = false;
