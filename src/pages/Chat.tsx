@@ -314,7 +314,11 @@ export default function Chat() {
     // Hard guard: never accept new messages once the diary is finalised.
     if (existingDiaryId) return;
 
-    stopMic('abort');
+    const rec = recognitionRef.current;
+    recognitionRef.current = null;
+    isStartingMicRef.current = false;
+    setIsListening(false);
+    await releaseSpeechRecognitionBeforeNavigation(rec);
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -432,7 +436,11 @@ export default function Chat() {
 
     // Make sure recording is fully released before long async work + the final
     // completion chime, especially on mobile audio routes.
-    stopMic('abort');
+    const rec = recognitionRef.current;
+    recognitionRef.current = null;
+    isStartingMicRef.current = false;
+    setIsListening(false);
+    await releaseSpeechRecognitionBeforeNavigation(rec);
 
     setIsGeneratingDiary(true);
 
