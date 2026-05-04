@@ -374,21 +374,23 @@ export function WordReorderQuiz({ sentence, japaneseSentence, onCorrect }: WordR
       </div>
 
       {/* Word cards */}
-      <div className="flex flex-wrap gap-2 justify-center mt-auto">
-        {available.map((item, idx) => {
+      <div className="grid grid-cols-3 gap-2 mt-auto sm:grid-cols-4">
+        {slots.map((item, idx) => {
           const isHinted = hintIndex !== null && item.origIdx === hintIndex;
           return (
             <button
               key={`avail-${idx}-${item.origIdx}`}
               onClick={() => handleTapAvailable(item)}
+              disabled={item.selected || isCorrect}
               className={cn(
-                'px-4 py-2.5 rounded-xl text-sm font-medium border transition-all duration-200',
-                'bg-card border-border text-foreground shadow-sm',
-                'active:scale-90',
-                isHinted && 'ring-2 ring-primary border-primary bg-primary/10 animate-pulse'
+                'min-h-11 px-2 py-2.5 rounded-xl text-sm font-medium border transition-colors duration-200',
+                item.selected
+                  ? 'bg-muted/30 border-border/40 text-transparent shadow-none pointer-events-none'
+                  : 'bg-card border-border text-foreground shadow-sm active:scale-95',
+                isHinted && !item.selected && 'ring-2 ring-primary border-primary bg-primary/10 animate-pulse'
               )}
             >
-              {item.word}
+              <span className={item.selected ? 'opacity-0' : undefined}>{item.word}</span>
             </button>
           );
         })}
