@@ -13,7 +13,6 @@ import Chat from "./pages/Chat";
 import Recall from "./pages/Recall";
 import Calendar from "./pages/Calendar";
 import Expressions from "./pages/Expressions";
-import DiaryReview from "./pages/DiaryReview";
 import InstantComposition from "./pages/InstantComposition";
 import Progress from "./pages/Progress";
 import NotFound from "./pages/NotFound";

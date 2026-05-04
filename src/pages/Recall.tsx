@@ -122,11 +122,7 @@ export default function Recall() {
   }, []);
 
   const handleGoBack = () => {
-    if (sourceMode === 'calendar' || sourceMode === 'random') {
-      navigate('/calendar');
-    } else {
-      navigate('/');
-    }
+    navigate('/');
   };
 
   const handleStartRecallQuiz = () => {
@@ -164,7 +160,7 @@ export default function Recall() {
           </Button>
         )}
         <Button variant="ghost" onClick={handleGoBack} className="mt-3">
-          {sourceMode !== 'latest' ? 'Back to calendar' : 'Go back home'}
+          ホームに戻る
         </Button>
       </div>
     );
@@ -266,9 +262,6 @@ export default function Recall() {
         >
           <Sparkles className="w-4 h-4" />
           問題を解いて復習を完了する
-        </Button>
-        <Button variant="ghost" size="sm" className="w-full mt-2" onClick={handleGoBack}>
-          Back
         </Button>
       </div>
     </div>

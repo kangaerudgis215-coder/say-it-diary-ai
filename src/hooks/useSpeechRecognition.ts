@@ -82,6 +82,7 @@ export function useSpeechRecognition(
   
   const recognitionRef = useRef<ISpeechRecognition | null>(null);
   const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hardStopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   
   // Check for browser support
   const isSupported = typeof window !== 'undefined' && 
@@ -112,6 +113,14 @@ export function useSpeechRecognition(
     recognition.onstart = () => {
       setIsListening(true);
       armSilenceTimer();
+      if (hardStopTimerRef.current) clearTimeout(hardStopTimerRef.current);
+      hardStopTimerRef.current = setTimeout(() => {
+        try {
+          recognition.stop();
+        } catch {
+          /* ignore */
+        }
+      }, 15000);
     };
 
     recognition.onend = () => {
@@ -120,11 +129,23 @@ export function useSpeechRecognition(
         clearTimeout(silenceTimerRef.current);
         silenceTimerRef.current = null;
       }
+      if (hardStopTimerRef.current) {
+        clearTimeout(hardStopTimerRef.current);
+        hardStopTimerRef.current = null;
+      }
     };
 
     recognition.onerror = (event) => {
       console.error('Speech recognition error:', event.error);
       setIsListening(false);
+      if (silenceTimerRef.current) {
+        clearTimeout(silenceTimerRef.current);
+        silenceTimerRef.current = null;
+      }
+      if (hardStopTimerRef.current) {
+        clearTimeout(hardStopTimerRef.current);
+        hardStopTimerRef.current = null;
+      }
     };
 
     recognition.onresult = (event) => {
@@ -154,7 +175,12 @@ export function useSpeechRecognition(
 
     return () => {
       if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-      recognition.stop();
+      if (hardStopTimerRef.current) clearTimeout(hardStopTimerRef.current);
+      try {
+        recognition.abort();
+      } catch {
+        /* ignore */
+      }
     };
   }, [continuous, interimResults, lang, isSupported, autoStopSilenceMs]);
 

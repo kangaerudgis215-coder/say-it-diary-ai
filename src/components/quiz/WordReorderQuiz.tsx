@@ -22,6 +22,7 @@ function shuffleArray<T>(arr: T[]): T[] {
 }
 
 type WordItem = { word: string; origIdx: number };
+type WordSlot = WordItem & { selected: boolean };
 
 export function WordReorderQuiz({ sentence, japaneseSentence, onCorrect }: WordReorderQuizProps) {
   const correctWords = sentence.match(/[\w'']+[.,!?;:]*|[.,!?;:]+/g) || sentence.split(/\s+/);
@@ -35,7 +36,7 @@ export function WordReorderQuiz({ sentence, japaneseSentence, onCorrect }: WordR
   });
 
   const [placed, setPlaced] = useState<WordItem[]>([]);
-  const [available, setAvailable] = useState<WordItem[]>(shuffled);
+  const [slots, setSlots] = useState<WordSlot[]>(() => shuffled.map((item) => ({ ...item, selected: false })));
   const [isCorrect, setIsCorrect] = useState(false);
   const [isWrong, setIsWrong] = useState(false);
   const [hintIndex, setHintIndex] = useState<number | null>(null);
@@ -79,13 +80,13 @@ export function WordReorderQuiz({ sentence, japaneseSentence, onCorrect }: WordR
   const placedRefs = useRef<(HTMLElement | null)[]>([]);
 
   const handleTapAvailable = useCallback((item: WordItem) => {
-    if (isCorrect) return;
+    if (isCorrect || slots.find((slot) => slot.origIdx === item.origIdx)?.selected) return;
     setIsWrong(false);
     setHintIndex(null);
     speak(item.word);
-    setPlaced((prev) => [...prev, item]);
-    setAvailable((prev) => prev.filter((x) => x !== item));
-  }, [isCorrect, speak]);
+    setPlaced((prev) => prev.some((p) => p.origIdx === item.origIdx) ? prev : [...prev, item]);
+    setSlots((prev) => prev.map((slot) => slot.origIdx === item.origIdx ? { ...slot, selected: true } : slot));
+  }, [isCorrect, slots, speak]);
 
   const handleTapPlaced = useCallback((item: WordItem, idx: number) => {
     if (isCorrect) return;
@@ -93,7 +94,7 @@ export function WordReorderQuiz({ sentence, japaneseSentence, onCorrect }: WordR
     setHintIndex(null);
     speak(item.word);
     setPlaced((prev) => prev.filter((_, i) => i !== idx));
-    setAvailable((prev) => [...prev, item]);
+    setSlots((prev) => prev.map((slot) => slot.origIdx === item.origIdx ? { ...slot, selected: false } : slot));
   }, [isCorrect, speak]);
 
   // Check answer when all words are placed
@@ -131,8 +132,8 @@ export function WordReorderQuiz({ sentence, japaneseSentence, onCorrect }: WordR
     if (firstWrongIdx === -1 && placed.length < correctWords.length) {
       // All placed so far are correct, hint the next one needed
       const nextOrigIdx = placed.length;
-      // Find in available
-      const availIdx = available.findIndex(a => a.origIdx === nextOrigIdx);
+      // Find in fixed slots that have not been selected yet.
+      const availIdx = slots.findIndex(a => a.origIdx === nextOrigIdx && !a.selected);
       if (availIdx !== -1) {
         setHintIndex(nextOrigIdx);
       }
@@ -145,8 +146,8 @@ export function WordReorderQuiz({ sentence, japaneseSentence, onCorrect }: WordR
   };
 
   const handleRetry = () => {
-    setAvailable([...available, ...placed]);
     setPlaced([]);
+    setSlots((prev) => prev.map((slot) => ({ ...slot, selected: false })));
     setIsWrong(false);
     setHintIndex(null);
   };
@@ -373,21 +374,23 @@ export function WordReorderQuiz({ sentence, japaneseSentence, onCorrect }: WordR
       </div>
 
       {/* Word cards */}
-      <div className="flex flex-wrap gap-2 justify-center mt-auto">
-        {available.map((item, idx) => {
+      <div className="grid grid-cols-3 gap-2 mt-auto sm:grid-cols-4">
+        {slots.map((item, idx) => {
           const isHinted = hintIndex !== null && item.origIdx === hintIndex;
           return (
             <button
               key={`avail-${idx}-${item.origIdx}`}
               onClick={() => handleTapAvailable(item)}
+              disabled={item.selected || isCorrect}
               className={cn(
-                'px-4 py-2.5 rounded-xl text-sm font-medium border transition-all duration-200',
-                'bg-card border-border text-foreground shadow-sm',
-                'active:scale-90',
-                isHinted && 'ring-2 ring-primary border-primary bg-primary/10 animate-pulse'
+                'min-h-11 px-2 py-2.5 rounded-xl text-sm font-medium border transition-colors duration-200',
+                item.selected
+                  ? 'bg-muted/30 border-border/40 text-transparent shadow-none pointer-events-none'
+                  : 'bg-card border-border text-foreground shadow-sm active:scale-95',
+                isHinted && !item.selected && 'ring-2 ring-primary border-primary bg-primary/10 animate-pulse'
               )}
             >
-              {item.word}
+              <span className={item.selected ? 'opacity-0' : undefined}>{item.word}</span>
             </button>
           );
         })}

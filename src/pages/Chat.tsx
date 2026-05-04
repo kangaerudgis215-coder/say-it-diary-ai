@@ -149,6 +149,8 @@ export default function Chat() {
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef<any>(null);
   const isStartingMicRef = useRef(false);
+  const micSilenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const micHardStopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const finalTranscriptRef = useRef('');
   const transcriptBaseRef = useRef<string>('');
   const speechSupported =
@@ -229,12 +231,20 @@ export default function Chat() {
         const tb = new Date(b.created_at ?? 0).getTime();
         return ta - tb;
       });
-      setMessages(ordered.map((m: any) => ({
+      const restoredMessages = ordered.map((m: any) => ({
         id: m.id,
         role: m.role,
         content: m.content,
         japanese: m.japanese ?? undefined,
-      })));
+      }));
+      setMessages(restoredMessages);
+      // When reopening an unfinished chat, replay the original AI welcome so
+      // the flow still starts as a spoken conversation. Completed diaries stay
+      // locked/review-only and do not autoplay old chat audio.
+      if (!existingDiary?.id) {
+        const welcome = restoredMessages.find((m) => m.role === 'assistant');
+        if (welcome) window.setTimeout(() => speakAssistant(welcome.content), 250);
+      }
     } else {
       // Create new conversation for this diary date
       const { data: newConv, error } = await supabase
@@ -276,6 +286,14 @@ export default function Chat() {
   };
 
   const stopMic = (mode: 'stop' | 'abort' = 'stop') => {
+    if (micSilenceTimerRef.current) {
+      clearTimeout(micSilenceTimerRef.current);
+      micSilenceTimerRef.current = null;
+    }
+    if (micHardStopTimerRef.current) {
+      clearTimeout(micHardStopTimerRef.current);
+      micHardStopTimerRef.current = null;
+    }
     const rec = recognitionRef.current;
     recognitionRef.current = null;
     isStartingMicRef.current = false;
@@ -409,6 +427,10 @@ export default function Chat() {
 
   const handleGenerateDiary = async () => {
     if (!conversationId || !user) return;
+
+    // Make sure recording is fully released before long async work + the final
+    // completion chime, especially on mobile audio routes.
+    stopMic('abort');
 
     setIsGeneratingDiary(true);
 
@@ -581,7 +603,7 @@ export default function Chat() {
         setExistingDiaryId(savedEntry.id);
         navigate(`/review?diaryId=${savedEntry.id}&date=${diaryDate}`);
       } else {
-        navigate('/calendar');
+        navigate('/');
       }
     } catch (error: any) {
       toast({
@@ -614,20 +636,37 @@ export default function Chat() {
       (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     const rec = new Ctor();
     rec.lang = 'en-US';
-    rec.continuous = true;
+    // Use a single utterance-style session. Keeping SpeechRecognition open
+    // indefinitely can hijack mobile audio routing, blocking AI voice/chimes
+    // until the page is closed.
+    rec.continuous = false;
     rec.interimResults = true;
     rec.maxAlternatives = 1;
     transcriptBaseRef.current = input.trim();
     finalTranscriptRef.current = '';
 
+    const armSilenceStop = () => {
+      if (micSilenceTimerRef.current) clearTimeout(micSilenceTimerRef.current);
+      micSilenceTimerRef.current = setTimeout(() => stopMic('stop'), 1800);
+    };
+
     rec.onstart = () => {
       if (recognitionRef.current !== rec) return;
       isStartingMicRef.current = false;
       setIsListening(true);
+      armSilenceStop();
     };
     rec.onerror = (e: any) => {
       if (recognitionRef.current !== rec) return;
       const err = e?.error;
+      if (micSilenceTimerRef.current) {
+        clearTimeout(micSilenceTimerRef.current);
+        micSilenceTimerRef.current = null;
+      }
+      if (micHardStopTimerRef.current) {
+        clearTimeout(micHardStopTimerRef.current);
+        micHardStopTimerRef.current = null;
+      }
       recognitionRef.current = null;
       isStartingMicRef.current = false;
       setIsListening(false);
@@ -655,6 +694,14 @@ export default function Chat() {
     };
     rec.onend = () => {
       if (recognitionRef.current !== rec) return;
+      if (micSilenceTimerRef.current) {
+        clearTimeout(micSilenceTimerRef.current);
+        micSilenceTimerRef.current = null;
+      }
+      if (micHardStopTimerRef.current) {
+        clearTimeout(micHardStopTimerRef.current);
+        micHardStopTimerRef.current = null;
+      }
       recognitionRef.current = null;
       isStartingMicRef.current = false;
       setIsListening(false);
@@ -675,13 +722,17 @@ export default function Chat() {
       const base = transcriptBaseRef.current;
       const live = [finalTranscriptRef.current, interim].filter(Boolean).join(' ');
       setInput((base ? base + ' ' : '') + live);
+      armSilenceStop();
     };
 
     try {
       recognitionRef.current = rec;
       isStartingMicRef.current = true;
       rec.start();
+      micHardStopTimerRef.current = setTimeout(() => stopMic('stop'), 12000);
     } catch (err) {
+      if (micSilenceTimerRef.current) clearTimeout(micSilenceTimerRef.current);
+      if (micHardStopTimerRef.current) clearTimeout(micHardStopTimerRef.current);
       recognitionRef.current = null;
       isStartingMicRef.current = false;
       setIsListening(false);
@@ -696,6 +747,8 @@ export default function Chat() {
   // Stop the mic if the user navigates away mid-recording.
   useEffect(() => {
     return () => {
+      if (micSilenceTimerRef.current) clearTimeout(micSilenceTimerRef.current);
+      if (micHardStopTimerRef.current) clearTimeout(micHardStopTimerRef.current);
       const rec = recognitionRef.current;
       if (rec) {
         try {

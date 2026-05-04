@@ -26,7 +26,7 @@ export function ReadAloudPrompt({ englishText, japaneseText, onComplete, onSkip 
   const { playSuccess } = useSuccessSound();
 
   const { isListening, transcript, isSupported, startListening, stopListening, resetTranscript } =
-    useSpeechRecognition({ lang: 'en-US' });
+    useSpeechRecognition({ lang: 'en-US', continuous: false, autoStopSilenceMs: 1800 });
 
   // Check transcript accuracy against the full diary. We watch the *interim*
   // transcript too so we can pass the user the moment they hit the threshold,

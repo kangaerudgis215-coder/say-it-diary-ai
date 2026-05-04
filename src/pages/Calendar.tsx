@@ -186,10 +186,14 @@ export default function Calendar() {
           <Button
             variant="glow"
             className="w-full mt-2 gap-2"
-            onClick={() => navigate(`/quiz?diaryId=${selectedEntry.id}&date=${selectedEntry.date}`)}
+            onClick={() => navigate(
+              `/quiz?diaryId=${selectedEntry.id}&date=${selectedEntry.date}${selectedEntry.sentences_review_completed && recallHistory.length === 0 ? '&recall=1' : ''}`,
+            )}
           >
             <Brain className="w-4 h-4" />
-            並び替え問題へ
+            {selectedEntry.sentences_review_completed && recallHistory.length === 0
+              ? '並び替え問題を解いて復習を完了する'
+              : '並び替え問題へ'}
           </Button>
 
           {/* Recall History */}
