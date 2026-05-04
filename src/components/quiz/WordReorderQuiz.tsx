@@ -132,8 +132,8 @@ export function WordReorderQuiz({ sentence, japaneseSentence, onCorrect }: WordR
     if (firstWrongIdx === -1 && placed.length < correctWords.length) {
       // All placed so far are correct, hint the next one needed
       const nextOrigIdx = placed.length;
-      // Find in available
-      const availIdx = available.findIndex(a => a.origIdx === nextOrigIdx);
+      // Find in fixed slots that have not been selected yet.
+      const availIdx = slots.findIndex(a => a.origIdx === nextOrigIdx && !a.selected);
       if (availIdx !== -1) {
         setHintIndex(nextOrigIdx);
       }
@@ -146,8 +146,8 @@ export function WordReorderQuiz({ sentence, japaneseSentence, onCorrect }: WordR
   };
 
   const handleRetry = () => {
-    setAvailable([...available, ...placed]);
     setPlaced([]);
+    setSlots((prev) => prev.map((slot) => ({ ...slot, selected: false })));
     setIsWrong(false);
     setHintIndex(null);
   };
