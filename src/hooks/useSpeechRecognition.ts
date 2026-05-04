@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
+import { releaseSpeechRecognition } from '@/lib/speechRecognition';
 
 interface UseSpeechRecognitionOptions {
   continuous?: boolean;
@@ -83,6 +84,7 @@ export function useSpeechRecognition(
   const recognitionRef = useRef<ISpeechRecognition | null>(null);
   const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hardStopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const listeningRef = useRef(false);
   
   // Check for browser support
   const isSupported = typeof window !== 'undefined' && 
@@ -102,28 +104,26 @@ export function useSpeechRecognition(
       if (!autoStopSilenceMs) return;
       if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
       silenceTimerRef.current = setTimeout(() => {
-        try {
-          recognition.stop();
-        } catch {
-          /* ignore */
-        }
+        listeningRef.current = false;
+        setIsListening(false);
+        releaseSpeechRecognition(recognition, 'stop');
       }, autoStopSilenceMs);
     };
 
     recognition.onstart = () => {
+      listeningRef.current = true;
       setIsListening(true);
       armSilenceTimer();
       if (hardStopTimerRef.current) clearTimeout(hardStopTimerRef.current);
       hardStopTimerRef.current = setTimeout(() => {
-        try {
-          recognition.stop();
-        } catch {
-          /* ignore */
-        }
+        listeningRef.current = false;
+        setIsListening(false);
+        releaseSpeechRecognition(recognition, 'stop');
       }, 15000);
     };
 
     recognition.onend = () => {
+      listeningRef.current = false;
       setIsListening(false);
       if (silenceTimerRef.current) {
         clearTimeout(silenceTimerRef.current);
@@ -137,6 +137,7 @@ export function useSpeechRecognition(
 
     recognition.onerror = (event) => {
       console.error('Speech recognition error:', event.error);
+      listeningRef.current = false;
       setIsListening(false);
       if (silenceTimerRef.current) {
         clearTimeout(silenceTimerRef.current);
@@ -176,11 +177,7 @@ export function useSpeechRecognition(
     return () => {
       if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
       if (hardStopTimerRef.current) clearTimeout(hardStopTimerRef.current);
-      try {
-        recognition.abort();
-      } catch {
-        /* ignore */
-      }
+      releaseSpeechRecognition(recognition, 'abort');
     };
   }, [continuous, interimResults, lang, isSupported, autoStopSilenceMs]);
 
@@ -197,10 +194,13 @@ export function useSpeechRecognition(
   }, [isListening]);
 
   const stopListening = useCallback(() => {
-    if (recognitionRef.current && isListening) {
-      recognitionRef.current.stop();
+    const recognition = recognitionRef.current;
+    if (recognition && listeningRef.current) {
+      listeningRef.current = false;
+      setIsListening(false);
+      releaseSpeechRecognition(recognition, 'stop');
     }
-  }, [isListening]);
+  }, []);
 
   const resetTranscript = useCallback(() => {
     setTranscript('');

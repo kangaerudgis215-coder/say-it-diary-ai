@@ -22,6 +22,7 @@ import { useUISound } from '@/hooks/useUISound';
 import { useSuccessSound } from '@/hooks/useSuccessSound';
 import { normalizeForExpression } from '@/lib/textComparison';
 import { persistDiarySentences } from '@/lib/practiceBuilder';
+import { releaseSpeechRecognition } from '@/lib/speechRecognition';
 import { format, parseISO, isToday as isTodayFn } from 'date-fns';
 
 function stopAssistantSpeech(): void {
@@ -290,13 +291,7 @@ export default function Chat() {
     isStartingMicRef.current = false;
     shouldKeepMicOpenRef.current = false;
     setIsListening(false);
-    if (!rec) return;
-    try {
-      if (mode === 'abort') rec.abort();
-      else rec.stop();
-    } catch {
-      /* ignore stale recognition sessions */
-    }
+    releaseSpeechRecognition(rec, mode);
   };
 
   const sendMessage = async (content: string, preparedUtterance?: SpeechSynthesisUtterance | null) => {
@@ -628,9 +623,9 @@ export default function Chat() {
       (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     const rec = new Ctor();
     rec.lang = 'en-US';
-    // Manual toggle only: the mic stays open while the user is speaking and is
-    // released when they tap the mic again, send, generate, or leave the page.
-    rec.continuous = true;
+    // One manual recording session per tap. Avoid auto-restart because iOS
+    // Safari can keep the system mic route active and block later playback.
+    rec.continuous = false;
     rec.interimResults = true;
     rec.maxAlternatives = 1;
     transcriptBaseRef.current = input.trim();
@@ -726,12 +721,12 @@ export default function Chat() {
   useEffect(() => {
     return () => {
       const rec = recognitionRef.current;
+      recognitionRef.current = null;
+      isStartingMicRef.current = false;
+      shouldKeepMicOpenRef.current = false;
+      setIsListening(false);
       if (rec) {
-        try {
-          rec.abort();
-        } catch {
-          /* ignore */
-        }
+        releaseSpeechRecognition(rec, 'abort');
       }
     };
   }, []);
