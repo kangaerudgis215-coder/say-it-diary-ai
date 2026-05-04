@@ -603,7 +603,7 @@ export default function Chat() {
         setExistingDiaryId(savedEntry.id);
         navigate(`/review?diaryId=${savedEntry.id}&date=${diaryDate}`);
       } else {
-        navigate('/calendar');
+        navigate('/');
       }
     } catch (error: any) {
       toast({
