@@ -727,13 +727,16 @@ export default function Chat() {
   // the system mic route alive until we explicitly abort before/while leaving.
   useEffect(() => {
     const closeMicForPageExit = () => stopMic('abort');
+    const closeMicWhenHidden = () => {
+      if (document.visibilityState === 'hidden') stopMic('abort');
+    };
     window.addEventListener('pagehide', closeMicForPageExit);
     window.addEventListener('beforeunload', closeMicForPageExit);
-    document.addEventListener('visibilitychange', closeMicForPageExit);
+    document.addEventListener('visibilitychange', closeMicWhenHidden);
     return () => {
       window.removeEventListener('pagehide', closeMicForPageExit);
       window.removeEventListener('beforeunload', closeMicForPageExit);
-      document.removeEventListener('visibilitychange', closeMicForPageExit);
+      document.removeEventListener('visibilitychange', closeMicWhenHidden);
       const rec = recognitionRef.current;
       recognitionRef.current = null;
       isStartingMicRef.current = false;
