@@ -723,6 +723,7 @@ export default function Chat() {
       const rec = recognitionRef.current;
       recognitionRef.current = null;
       isStartingMicRef.current = false;
+      shouldKeepMicOpenRef.current = false;
       setIsListening(false);
       if (rec) {
         releaseSpeechRecognition(rec, 'abort');
