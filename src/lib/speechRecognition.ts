@@ -26,7 +26,7 @@ function scheduleSafariReleaseFallback(rec: SpeechRecognitionLike, mode: 'stop' 
   pendingReleaseRecognitions.add(rec);
 
   window.setTimeout(() => {
-    safelyCall(rec, mode === 'abort' ? 'stop' : 'stop');
+    safelyCall(rec, 'stop');
   }, 80);
 
   window.setTimeout(() => {
