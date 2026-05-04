@@ -1,4 +1,5 @@
 import { useCallback, useRef } from 'react';
+import { registerUnlockable } from '@/lib/audioUnlock';
 
 /**
  * Pre-load a single Audio element per src so playback is reliable even after
@@ -14,6 +15,7 @@ function makePreloaded(src: string, volume: number) {
       primary = new Audio(src);
       primary.preload = 'auto';
       primary.volume = volume;
+      registerUnlockable(primary);
     } catch {
       primary = null;
     }
