@@ -91,6 +91,7 @@ export function ReviewHub() {
     const { count } = await supabase
       .from('recall_sessions')
       .select('id', { count: 'exact', head: true })
+      .eq('user_id', user.id)
       .eq('diary_entry_id', entry.id)
       .eq('completed', true);
     setRecallCompleted((count ?? 0) > 0);
@@ -282,6 +283,7 @@ export function ReviewHub() {
   const dayLabel = format(parsedDate, 'd');
   const yearLabel = format(parsedDate, 'yyyy');
   const weekdayLabel = format(parsedDate, 'EEEE');
+  const needsRecallCompletion = Boolean(diaryEntry?.sentences_review_completed && !recallCompleted);
 
   if (isLoading) {
     return <SandyLoader fullscreen label="Loading diary..." />;
@@ -471,9 +473,9 @@ export function ReviewHub() {
         <Button
           className="w-full gap-2"
           size="lg"
-          onClick={() => navigate(`/quiz?diaryId=${diaryId}&date=${diaryDateParam}`)}
+          onClick={() => navigate(`/quiz?diaryId=${diaryId}&date=${diaryDateParam}${needsRecallCompletion ? '&recall=1' : ''}`)}
         >
-          🏋️ 並び替え問題に挑戦
+          🏋️ {needsRecallCompletion ? '並び替え問題を解いて復習を完了する' : '並び替え問題に挑戦'}
         </Button>
       </div>
     </div>
