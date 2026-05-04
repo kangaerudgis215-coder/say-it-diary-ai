@@ -22,6 +22,7 @@ import { useUISound } from '@/hooks/useUISound';
 import { normalizeForExpression } from '@/lib/textComparison';
 import { persistDiarySentences } from '@/lib/practiceBuilder';
 import { format, parseISO, isToday as isTodayFn } from 'date-fns';
+import { registerUnlockable } from '@/lib/audioUnlock';
 
 function stopAssistantSpeech(): void {
   if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
@@ -105,6 +106,8 @@ function speakAssistant(text: string, preparedUtterance?: SpeechSynthesisUtteran
     if (v) utterance.voice = v;
   }
   try {
+    // Some browsers pause the engine after long async waits — resume first.
+    try { window.speechSynthesis.resume(); } catch { /* ignore */ }
     window.speechSynthesis.speak(utterance);
   } catch {
     /* Browser may block speech before the first user gesture. */
@@ -152,6 +155,7 @@ export default function Chat() {
       a.preload = 'auto';
       a.volume = 0.75;
       diaryCompleteAudioRef.current = a;
+      registerUnlockable(a);
     } catch {
       /* no-op */
     }
