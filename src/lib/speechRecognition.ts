@@ -45,8 +45,14 @@ export function getActiveRecognition(): SpeechRecognitionLike | null {
 }
 
 export function forceReleaseActiveRecognition(): void {
-  const rec = activeRecognition;
-  if (rec) releaseSpeechRecognition(rec, 'abort');
+  const recognitions = new Set(pendingReleaseRecognitions);
+  if (activeRecognition) recognitions.add(activeRecognition);
+  activeRecognition = null;
+  recognitions.forEach((rec) => {
+    safelyCall(rec, 'abort');
+    safelyCall(rec, 'stop');
+    scheduleSafariReleaseFallback(rec, 'abort');
+  });
 }
 
 /**
