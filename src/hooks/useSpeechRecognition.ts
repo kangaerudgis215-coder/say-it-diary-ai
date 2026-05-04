@@ -181,11 +181,7 @@ export function useSpeechRecognition(
     return () => {
       if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
       if (hardStopTimerRef.current) clearTimeout(hardStopTimerRef.current);
-      try {
-        recognition.abort();
-      } catch {
-        /* ignore */
-      }
+      releaseSpeechRecognition(recognition, 'abort');
     };
   }, [continuous, interimResults, lang, isSupported, autoStopSilenceMs]);
 
@@ -202,10 +198,13 @@ export function useSpeechRecognition(
   }, [isListening]);
 
   const stopListening = useCallback(() => {
-    if (recognitionRef.current && isListening) {
-      recognitionRef.current.stop();
+    const recognition = recognitionRef.current;
+    if (recognition && listeningRef.current) {
+      listeningRef.current = false;
+      setIsListening(false);
+      releaseSpeechRecognition(recognition, 'stop');
     }
-  }, [isListening]);
+  }, []);
 
   const resetTranscript = useCallback(() => {
     setTranscript('');
