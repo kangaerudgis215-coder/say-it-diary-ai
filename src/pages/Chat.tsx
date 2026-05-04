@@ -149,6 +149,7 @@ export default function Chat() {
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef<any>(null);
   const isStartingMicRef = useRef(false);
+  const shouldKeepMicOpenRef = useRef(false);
   const finalTranscriptRef = useRef('');
   const transcriptBaseRef = useRef<string>('');
   const speechSupported =
@@ -287,6 +288,7 @@ export default function Chat() {
     const rec = recognitionRef.current;
     recognitionRef.current = null;
     isStartingMicRef.current = false;
+    shouldKeepMicOpenRef.current = false;
     setIsListening(false);
     if (!rec) return;
     try {
