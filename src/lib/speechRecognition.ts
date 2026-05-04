@@ -37,18 +37,15 @@ export function getActiveRecognition(): SpeechRecognitionLike | null {
 }
 
 export function hasActiveSpeechRecognition(): boolean {
-  return Boolean(activeRecognition) || pendingReleaseRecognitions.size > 0;
+  return Boolean(activeRecognition);
 }
 
 export function forceReleaseActiveRecognition(): void {
-  const recognitions = new Set(pendingReleaseRecognitions);
-  if (activeRecognition) recognitions.add(activeRecognition);
+  const rec = activeRecognition;
   activeRecognition = null;
-  recognitions.forEach((rec) => {
-    safelyCall(rec, 'abort');
-    safelyCall(rec, 'stop');
-    scheduleSafariReleaseFallback(rec, 'abort');
-  });
+  if (!rec) return;
+  safelyCall(rec, 'abort');
+  safelyCall(rec, 'stop');
 }
 
 /**
@@ -64,10 +61,7 @@ export function releaseSpeechRecognition(
   if (!recognition) return;
   if (activeRecognition === recognition) activeRecognition = null;
   safelyCall(recognition, mode);
-  // Safari can keep the system mic indicator alive if navigation happens in
-  // the same tick as abort()/stop(). Hold the native instance briefly and retry
-  // on later turns of the event loop so the AudioSession actually releases.
-  scheduleSafariReleaseFallback(recognition, mode);
+  if (mode === 'abort') safelyCall(recognition, 'stop');
 }
 
 export async function releaseSpeechRecognitionBeforeNavigation(
