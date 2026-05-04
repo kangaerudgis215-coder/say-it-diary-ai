@@ -24,6 +24,7 @@ import { normalizeForExpression } from '@/lib/textComparison';
 import { persistDiarySentences } from '@/lib/practiceBuilder';
 import {
   releaseSpeechRecognition,
+  releaseSpeechRecognitionBeforeNavigation,
   setActiveRecognition,
   clearActiveRecognition,
   forceReleaseActiveRecognition,
