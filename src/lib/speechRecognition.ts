@@ -48,6 +48,10 @@ export function getActiveRecognition(): SpeechRecognitionLike | null {
   return activeRecognition;
 }
 
+export function hasActiveSpeechRecognition(): boolean {
+  return Boolean(activeRecognition) || pendingReleaseRecognitions.size > 0;
+}
+
 export function forceReleaseActiveRecognition(): void {
   const recognitions = new Set(pendingReleaseRecognitions);
   if (activeRecognition) recognitions.add(activeRecognition);
@@ -76,6 +80,20 @@ export function releaseSpeechRecognition(
   // the same tick as abort()/stop(). Hold the native instance briefly and retry
   // on later turns of the event loop so the AudioSession actually releases.
   scheduleSafariReleaseFallback(recognition, mode);
+}
+
+export async function releaseSpeechRecognitionBeforeNavigation(
+  recognition: SpeechRecognitionLike | null | undefined,
+): Promise<void> {
+  if (!recognition && !hasActiveSpeechRecognition()) return;
+
+  if (recognition) releaseSpeechRecognition(recognition, 'abort');
+  forceReleaseActiveRecognition();
+
+  // Do not navigate while Safari's delayed release taps are still running.
+  // There is no browser API for the mic indicator state, so wait until every
+  // scheduled abort/stop retry has completed before letting audio play elsewhere.
+  await new Promise<void>((resolve) => window.setTimeout(resolve, 650));
 }
 
 // Install a one-time global safety net so that browser back / tab hide /
