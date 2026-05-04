@@ -19,10 +19,10 @@ import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
 import { useVocabularyLog } from '@/hooks/useVocabularyLog';
 import { useUISound } from '@/hooks/useUISound';
+import { useSuccessSound } from '@/hooks/useSuccessSound';
 import { normalizeForExpression } from '@/lib/textComparison';
 import { persistDiarySentences } from '@/lib/practiceBuilder';
 import { format, parseISO, isToday as isTodayFn } from 'date-fns';
-import { registerUnlockable } from '@/lib/audioUnlock';
 
 function stopAssistantSpeech(): void {
   if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
@@ -128,6 +128,7 @@ export default function Chat() {
   const { toast } = useToast();
   const { logSpokenWords } = useVocabularyLog();
   const { playTap } = useUISound();
+  const { playBigSuccess } = useSuccessSound();
   
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
@@ -145,21 +146,6 @@ export default function Chat() {
   const isStartingMicRef = useRef(false);
   const finalTranscriptRef = useRef('');
   const transcriptBaseRef = useRef<string>('');
-  // Pre-loaded chime — created once so it can be played reliably even after
-  // long async work (past-diary generation), where a freshly-constructed
-  // Audio object is sometimes blocked by autoplay policies.
-  const diaryCompleteAudioRef = useRef<HTMLAudioElement | null>(null);
-  if (typeof window !== 'undefined' && !diaryCompleteAudioRef.current) {
-    try {
-      const a = new Audio('/sounds/diary-complete.mp3');
-      a.preload = 'auto';
-      a.volume = 0.75;
-      diaryCompleteAudioRef.current = a;
-      registerUnlockable(a);
-    } catch {
-      /* no-op */
-    }
-  }
   const speechSupported =
     typeof window !== 'undefined' &&
     ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window);
@@ -168,11 +154,11 @@ export default function Chat() {
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    // Get the diary date from URL params or default to today
+    // Pen-icon FAB navigates to /chat with no date param — that always means
+    // "today's diary". Without resetting, the previously-viewed past date
+    // would leak in and lock the input.
     const dateParam = searchParams.get('date');
-    if (dateParam) {
-      setDiaryDate(dateParam);
-    }
+    setDiaryDate(dateParam ?? format(new Date(), 'yyyy-MM-dd'));
   }, [searchParams]);
 
   useEffect(() => {
@@ -587,24 +573,7 @@ export default function Chat() {
       });
 
       // Triumphant chime on diary completion
-      try {
-        const a = diaryCompleteAudioRef.current;
-        if (a) {
-          a.currentTime = 0;
-          void a.play().catch(() => {
-            // Final fallback: a fresh Audio object.
-            try {
-              const fresh = new Audio('/sounds/diary-complete.mp3');
-              fresh.volume = 0.75;
-              void fresh.play().catch(() => {});
-            } catch {
-              /* no-op */
-            }
-          });
-        }
-      } catch {
-        /* no-op */
-      }
+      playBigSuccess();
 
       // Get the diary entry ID and navigate to review page
       const { data: savedEntry } = await supabase
