@@ -22,7 +22,11 @@ import { useUISound } from '@/hooks/useUISound';
 import { useSuccessSound } from '@/hooks/useSuccessSound';
 import { normalizeForExpression } from '@/lib/textComparison';
 import { persistDiarySentences } from '@/lib/practiceBuilder';
-import { releaseSpeechRecognition } from '@/lib/speechRecognition';
+import {
+  releaseSpeechRecognition,
+  setActiveRecognition,
+  forceReleaseActiveRecognition,
+} from '@/lib/speechRecognition';
 import { format, parseISO, isToday as isTodayFn } from 'date-fns';
 
 function stopAssistantSpeech(): void {
@@ -292,6 +296,7 @@ export default function Chat() {
     shouldKeepMicOpenRef.current = false;
     setIsListening(false);
     releaseSpeechRecognition(rec, mode);
+    setActiveRecognition(null);
   };
 
   const navigateAfterClosingMic = (to: string) => {
@@ -708,6 +713,7 @@ export default function Chat() {
       isStartingMicRef.current = true;
       shouldKeepMicOpenRef.current = true;
       rec.start();
+      setActiveRecognition(rec);
     } catch (err) {
       recognitionRef.current = null;
       isStartingMicRef.current = false;
@@ -724,25 +730,18 @@ export default function Chat() {
   // Stop the mic if the user navigates away mid-recording. Safari can keep
   // the system mic route alive until we explicitly abort before/while leaving.
   useEffect(() => {
-    const closeMicForPageExit = () => stopMic('abort');
-    const closeMicWhenHidden = () => {
-      if (document.visibilityState === 'hidden') stopMic('abort');
-    };
-    window.addEventListener('pagehide', closeMicForPageExit);
-    window.addEventListener('beforeunload', closeMicForPageExit);
-    document.addEventListener('visibilitychange', closeMicWhenHidden);
+    // The global guard in `@/lib/speechRecognition` already handles
+    // popstate / pagehide / beforeunload / visibilitychange. Here we only
+    // need to make sure unmount (e.g. browser back gesture on iOS Safari)
+    // releases the mic immediately and forcefully.
     return () => {
-      window.removeEventListener('pagehide', closeMicForPageExit);
-      window.removeEventListener('beforeunload', closeMicForPageExit);
-      document.removeEventListener('visibilitychange', closeMicWhenHidden);
       const rec = recognitionRef.current;
       recognitionRef.current = null;
       isStartingMicRef.current = false;
       shouldKeepMicOpenRef.current = false;
       setIsListening(false);
-      if (rec) {
-        releaseSpeechRecognition(rec, 'abort');
-      }
+      if (rec) releaseSpeechRecognition(rec, 'abort');
+      forceReleaseActiveRecognition();
     };
   }, []);
 
