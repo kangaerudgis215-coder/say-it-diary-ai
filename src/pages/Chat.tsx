@@ -772,7 +772,7 @@ export default function Chat() {
       <header className="sticky top-0 z-10 glass border-b border-border p-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon" onClick={() => navigateAfterClosingMic('/')}>
+            <Button variant="ghost" size="icon" silent onClick={() => navigateAfterClosingMic('/')}>
               <ArrowLeft className="w-5 h-5" />
             </Button>
             
@@ -826,6 +826,7 @@ export default function Chat() {
             <Button
               variant="secondary"
               size="sm"
+              silent
               onClick={() => navigateAfterClosingMic(`/review?diaryId=${existingDiaryId}&date=${diaryDate}`)}
             >
               <BookOpen className="w-4 h-4" />
@@ -835,6 +836,7 @@ export default function Chat() {
             <Button
               variant="success"
               size="sm"
+              silent
               onClick={handleGenerateDiary}
               disabled={!hasEnoughContent || isGeneratingDiary}
               className={hasEnoughContent ? 'animate-pulse' : ''}
@@ -892,6 +894,7 @@ export default function Chat() {
             <Button
               variant="glow"
               size="lg"
+              silent
               onClick={handleGenerateDiary}
               className="gap-2 px-8 text-base animate-pulse"
             >
@@ -915,6 +918,7 @@ export default function Chat() {
             <Button
               variant="glow"
               size="lg"
+              silent
               onClick={() => navigateAfterClosingMic(`/review?diaryId=${existingDiaryId}&date=${diaryDate}`)}
               className="gap-2 px-8"
             >
