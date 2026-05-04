@@ -40,6 +40,10 @@ export function setActiveRecognition(rec: SpeechRecognitionLike | null): void {
   activeRecognition = rec;
 }
 
+export function clearActiveRecognition(rec: SpeechRecognitionLike): void {
+  if (activeRecognition === rec) activeRecognition = null;
+}
+
 export function getActiveRecognition(): SpeechRecognitionLike | null {
   return activeRecognition;
 }
