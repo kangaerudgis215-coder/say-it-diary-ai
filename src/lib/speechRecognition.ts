@@ -2,6 +2,10 @@ export interface SpeechRecognitionLike {
   start(): void;
   stop(): void;
   abort(): void;
+  onstart?: ((...args: any[]) => void) | null;
+  onend?: ((...args: any[]) => void) | null;
+  onerror?: ((...args: any[]) => void) | null;
+  onresult?: ((...args: any[]) => void) | null;
 }
 
 /**
@@ -11,7 +15,6 @@ export interface SpeechRecognitionLike {
  * has already unmounted.
  */
 let activeRecognition: SpeechRecognitionLike | null = null;
-const pendingReleaseRecognitions = new Set<SpeechRecognitionLike>();
 
 function safelyCall(rec: SpeechRecognitionLike, method: 'stop' | 'abort'): void {
   try {
@@ -19,21 +22,6 @@ function safelyCall(rec: SpeechRecognitionLike, method: 'stop' | 'abort'): void 
   } catch {
     /* stale recognition session */
   }
-}
-
-function scheduleSafariReleaseFallback(rec: SpeechRecognitionLike, mode: 'stop' | 'abort'): void {
-  if (typeof window === 'undefined') return;
-  pendingReleaseRecognitions.add(rec);
-
-  window.setTimeout(() => {
-    safelyCall(rec, 'stop');
-  }, 80);
-
-  window.setTimeout(() => {
-    safelyCall(rec, 'stop');
-    if (mode === 'abort') safelyCall(rec, 'abort');
-    pendingReleaseRecognitions.delete(rec);
-  }, 260);
 }
 
 export function setActiveRecognition(rec: SpeechRecognitionLike | null): void {
@@ -49,18 +37,15 @@ export function getActiveRecognition(): SpeechRecognitionLike | null {
 }
 
 export function hasActiveSpeechRecognition(): boolean {
-  return Boolean(activeRecognition) || pendingReleaseRecognitions.size > 0;
+  return Boolean(activeRecognition);
 }
 
 export function forceReleaseActiveRecognition(): void {
-  const recognitions = new Set(pendingReleaseRecognitions);
-  if (activeRecognition) recognitions.add(activeRecognition);
+  const rec = activeRecognition;
   activeRecognition = null;
-  recognitions.forEach((rec) => {
-    safelyCall(rec, 'abort');
-    safelyCall(rec, 'stop');
-    scheduleSafariReleaseFallback(rec, 'abort');
-  });
+  if (!rec) return;
+  safelyCall(rec, 'abort');
+  safelyCall(rec, 'stop');
 }
 
 /**
@@ -76,10 +61,7 @@ export function releaseSpeechRecognition(
   if (!recognition) return;
   if (activeRecognition === recognition) activeRecognition = null;
   safelyCall(recognition, mode);
-  // Safari can keep the system mic indicator alive if navigation happens in
-  // the same tick as abort()/stop(). Hold the native instance briefly and retry
-  // on later turns of the event loop so the AudioSession actually releases.
-  scheduleSafariReleaseFallback(recognition, mode);
+  if (mode === 'abort') safelyCall(recognition, 'stop');
 }
 
 export async function releaseSpeechRecognitionBeforeNavigation(
@@ -87,13 +69,32 @@ export async function releaseSpeechRecognitionBeforeNavigation(
 ): Promise<void> {
   if (!recognition && !hasActiveSpeechRecognition()) return;
 
-  if (recognition) releaseSpeechRecognition(recognition, 'abort');
-  forceReleaseActiveRecognition();
+  const rec = recognition ?? activeRecognition;
+  activeRecognition = null;
+  if (!rec) return;
 
-  // Do not navigate while Safari's delayed release taps are still running.
-  // There is no browser API for the mic indicator state, so wait until every
-  // scheduled abort/stop retry has completed before letting audio play elsewhere.
-  await new Promise<void>((resolve) => window.setTimeout(resolve, 650));
+  await new Promise<void>((resolve) => {
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      rec.onstart = null;
+      rec.onend = null;
+      rec.onerror = null;
+      rec.onresult = null;
+      resolve();
+    };
+
+    rec.onend = finish;
+    rec.onerror = finish;
+    safelyCall(rec, 'abort');
+    safelyCall(rec, 'stop');
+    window.setTimeout(finish, 900);
+  });
+
+  // Small settle window after WebKit fires `end`; avoids clipping the first
+  // effect sound on the destination screen without touching the mic again.
+  await new Promise<void>((resolve) => window.setTimeout(resolve, 120));
 }
 
 // Install a one-time global safety net so that browser back / tab hide /

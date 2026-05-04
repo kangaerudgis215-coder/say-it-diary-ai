@@ -18,8 +18,6 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
 import { useVocabularyLog } from '@/hooks/useVocabularyLog';
-import { useUISound } from '@/hooks/useUISound';
-import { useSuccessSound } from '@/hooks/useSuccessSound';
 import { normalizeForExpression } from '@/lib/textComparison';
 import { persistDiarySentences } from '@/lib/practiceBuilder';
 import {
@@ -134,8 +132,6 @@ export default function Chat() {
   const [searchParams] = useSearchParams();
   const { toast } = useToast();
   const { logSpokenWords } = useVocabularyLog();
-  const { playTap } = useUISound();
-  const { playBigSuccess } = useSuccessSound();
   
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
@@ -316,7 +312,11 @@ export default function Chat() {
     // Hard guard: never accept new messages once the diary is finalised.
     if (existingDiaryId) return;
 
-    stopMic('abort');
+    const rec = recognitionRef.current;
+    recognitionRef.current = null;
+    isStartingMicRef.current = false;
+    setIsListening(false);
+    await releaseSpeechRecognitionBeforeNavigation(rec);
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -434,7 +434,11 @@ export default function Chat() {
 
     // Make sure recording is fully released before long async work + the final
     // completion chime, especially on mobile audio routes.
-    stopMic('abort');
+    const rec = recognitionRef.current;
+    recognitionRef.current = null;
+    isStartingMicRef.current = false;
+    setIsListening(false);
+    await releaseSpeechRecognitionBeforeNavigation(rec);
 
     setIsGeneratingDiary(true);
 
@@ -592,9 +596,6 @@ export default function Chat() {
         description: "Now let's review and memorize it!",
       });
 
-      // Triumphant chime on diary completion
-      playBigSuccess();
-
       // Get the diary entry ID and navigate to review page
       const { data: savedEntry } = await supabase
         .from('diary_entries')
@@ -717,8 +718,8 @@ export default function Chat() {
     try {
       recognitionRef.current = rec;
       isStartingMicRef.current = true;
-      rec.start();
       setActiveRecognition(rec);
+      rec.start();
     } catch (err) {
       recognitionRef.current = null;
       isStartingMicRef.current = false;
@@ -769,7 +770,7 @@ export default function Chat() {
       <header className="sticky top-0 z-10 glass border-b border-border p-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon" onClick={() => navigateAfterClosingMic('/')}>
+            <Button variant="ghost" size="icon" silent onClick={() => navigateAfterClosingMic('/')}>
               <ArrowLeft className="w-5 h-5" />
             </Button>
             
@@ -823,6 +824,7 @@ export default function Chat() {
             <Button
               variant="secondary"
               size="sm"
+              silent
               onClick={() => navigateAfterClosingMic(`/review?diaryId=${existingDiaryId}&date=${diaryDate}`)}
             >
               <BookOpen className="w-4 h-4" />
@@ -832,6 +834,7 @@ export default function Chat() {
             <Button
               variant="success"
               size="sm"
+              silent
               onClick={handleGenerateDiary}
               disabled={!hasEnoughContent || isGeneratingDiary}
               className={hasEnoughContent ? 'animate-pulse' : ''}
@@ -889,6 +892,7 @@ export default function Chat() {
             <Button
               variant="glow"
               size="lg"
+              silent
               onClick={handleGenerateDiary}
               className="gap-2 px-8 text-base animate-pulse"
             >
@@ -912,6 +916,7 @@ export default function Chat() {
             <Button
               variant="glow"
               size="lg"
+              silent
               onClick={() => navigateAfterClosingMic(`/review?diaryId=${existingDiaryId}&date=${diaryDate}`)}
               className="gap-2 px-8"
             >
@@ -929,7 +934,6 @@ export default function Chat() {
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
-                playTap();
                 const utterance = createAssistantUtterance();
                 void sendMessage(input, utterance);
               }
@@ -941,8 +945,8 @@ export default function Chat() {
           <Button
             variant="ghost"
             size="icon"
+            silent
             onClick={() => {
-              playTap();
               const utterance = createAssistantUtterance();
               void sendMessage(input, utterance);
             }}
