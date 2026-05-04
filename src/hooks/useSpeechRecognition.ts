@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
+import { releaseSpeechRecognition } from '@/lib/speechRecognition';
 
 interface UseSpeechRecognitionOptions {
   continuous?: boolean;
@@ -83,6 +84,7 @@ export function useSpeechRecognition(
   const recognitionRef = useRef<ISpeechRecognition | null>(null);
   const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hardStopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const listeningRef = useRef(false);
   
   // Check for browser support
   const isSupported = typeof window !== 'undefined' && 
@@ -111,6 +113,7 @@ export function useSpeechRecognition(
     };
 
     recognition.onstart = () => {
+      listeningRef.current = true;
       setIsListening(true);
       armSilenceTimer();
       if (hardStopTimerRef.current) clearTimeout(hardStopTimerRef.current);
@@ -124,6 +127,7 @@ export function useSpeechRecognition(
     };
 
     recognition.onend = () => {
+      listeningRef.current = false;
       setIsListening(false);
       if (silenceTimerRef.current) {
         clearTimeout(silenceTimerRef.current);
@@ -137,6 +141,7 @@ export function useSpeechRecognition(
 
     recognition.onerror = (event) => {
       console.error('Speech recognition error:', event.error);
+      listeningRef.current = false;
       setIsListening(false);
       if (silenceTimerRef.current) {
         clearTimeout(silenceTimerRef.current);
