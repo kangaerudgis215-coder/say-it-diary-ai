@@ -23,28 +23,13 @@ let installed = false;
 
 function primeOne(a: HTMLAudioElement) {
   try {
-    const prevMuted = a.muted;
-    const prevVolume = a.volume;
-    a.muted = true;
-    const p = a.play();
-    if (p && typeof p.then === 'function') {
-      void p
-        .then(() => {
-          a.pause();
-          a.currentTime = 0;
-          a.muted = prevMuted;
-          a.volume = prevVolume;
-        })
-        .catch(() => {
-          a.muted = prevMuted;
-          a.volume = prevVolume;
-        });
-    } else {
-      a.pause();
-      a.currentTime = 0;
-      a.muted = prevMuted;
-      a.volume = prevVolume;
-    }
+    // Silent warm-up only: load buffers so the first real play() is snappy.
+    // We must NOT call play() here (even muted) — on some mobile browsers a
+    // muted-then-unmuted prime can leak an audible blip, which was firing the
+    // "correct" chime when the Chat screen mounted on a past diary.
+    // HTMLAudio's autoplay policy is satisfied as long as the document has
+    // received any user gesture, which is what `installAudioUnlock` ensures.
+    a.load();
   } catch {
     /* no-op */
   }
