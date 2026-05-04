@@ -921,7 +921,7 @@ export default function Chat() {
           </Button>
         </div>
 
-        {/* Big centered mic — press and hold to speak. */}
+        {/* Big centered mic — tap once to record, tap again to stop. */}
         <div className="flex flex-col items-center justify-center gap-2">
           {speechSupported ? (
             <button
