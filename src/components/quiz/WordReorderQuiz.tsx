@@ -22,6 +22,7 @@ function shuffleArray<T>(arr: T[]): T[] {
 }
 
 type WordItem = { word: string; origIdx: number };
+type WordSlot = WordItem & { selected: boolean };
 
 export function WordReorderQuiz({ sentence, japaneseSentence, onCorrect }: WordReorderQuizProps) {
   const correctWords = sentence.match(/[\w'']+[.,!?;:]*|[.,!?;:]+/g) || sentence.split(/\s+/);
@@ -35,7 +36,7 @@ export function WordReorderQuiz({ sentence, japaneseSentence, onCorrect }: WordR
   });
 
   const [placed, setPlaced] = useState<WordItem[]>([]);
-  const [available, setAvailable] = useState<WordItem[]>(shuffled);
+  const [slots, setSlots] = useState<WordSlot[]>(() => shuffled.map((item) => ({ ...item, selected: false })));
   const [isCorrect, setIsCorrect] = useState(false);
   const [isWrong, setIsWrong] = useState(false);
   const [hintIndex, setHintIndex] = useState<number | null>(null);
@@ -79,13 +80,13 @@ export function WordReorderQuiz({ sentence, japaneseSentence, onCorrect }: WordR
   const placedRefs = useRef<(HTMLElement | null)[]>([]);
 
   const handleTapAvailable = useCallback((item: WordItem) => {
-    if (isCorrect) return;
+    if (isCorrect || slots.find((slot) => slot.origIdx === item.origIdx)?.selected) return;
     setIsWrong(false);
     setHintIndex(null);
     speak(item.word);
     setPlaced((prev) => [...prev, item]);
-    setAvailable((prev) => prev.filter((x) => x !== item));
-  }, [isCorrect, speak]);
+    setSlots((prev) => prev.map((slot) => slot.origIdx === item.origIdx ? { ...slot, selected: true } : slot));
+  }, [isCorrect, slots, speak]);
 
   const handleTapPlaced = useCallback((item: WordItem, idx: number) => {
     if (isCorrect) return;
@@ -93,7 +94,7 @@ export function WordReorderQuiz({ sentence, japaneseSentence, onCorrect }: WordR
     setHintIndex(null);
     speak(item.word);
     setPlaced((prev) => prev.filter((_, i) => i !== idx));
-    setAvailable((prev) => [...prev, item]);
+    setSlots((prev) => prev.map((slot) => slot.origIdx === item.origIdx ? { ...slot, selected: false } : slot));
   }, [isCorrect, speak]);
 
   // Check answer when all words are placed
