@@ -22,6 +22,7 @@ import { useUISound } from '@/hooks/useUISound';
 import { useSuccessSound } from '@/hooks/useSuccessSound';
 import { normalizeForExpression } from '@/lib/textComparison';
 import { persistDiarySentences } from '@/lib/practiceBuilder';
+import { releaseSpeechRecognition } from '@/lib/speechRecognition';
 import { format, parseISO, isToday as isTodayFn } from 'date-fns';
 
 function stopAssistantSpeech(): void {
@@ -149,7 +150,6 @@ export default function Chat() {
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef<any>(null);
   const isStartingMicRef = useRef(false);
-  const shouldKeepMicOpenRef = useRef(false);
   const finalTranscriptRef = useRef('');
   const transcriptBaseRef = useRef<string>('');
   const speechSupported =
@@ -288,15 +288,8 @@ export default function Chat() {
     const rec = recognitionRef.current;
     recognitionRef.current = null;
     isStartingMicRef.current = false;
-    shouldKeepMicOpenRef.current = false;
     setIsListening(false);
-    if (!rec) return;
-    try {
-      if (mode === 'abort') rec.abort();
-      else rec.stop();
-    } catch {
-      /* ignore stale recognition sessions */
-    }
+    releaseSpeechRecognition(rec, mode);
   };
 
   const sendMessage = async (content: string, preparedUtterance?: SpeechSynthesisUtterance | null) => {
