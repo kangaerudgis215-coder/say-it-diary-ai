@@ -149,6 +149,8 @@ export default function Chat() {
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef<any>(null);
   const isStartingMicRef = useRef(false);
+  const micSilenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const micHardStopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const finalTranscriptRef = useRef('');
   const transcriptBaseRef = useRef<string>('');
   const speechSupported =
@@ -229,12 +231,20 @@ export default function Chat() {
         const tb = new Date(b.created_at ?? 0).getTime();
         return ta - tb;
       });
-      setMessages(ordered.map((m: any) => ({
+      const restoredMessages = ordered.map((m: any) => ({
         id: m.id,
         role: m.role,
         content: m.content,
         japanese: m.japanese ?? undefined,
-      })));
+      }));
+      setMessages(restoredMessages);
+      // When reopening an unfinished chat, replay the original AI welcome so
+      // the flow still starts as a spoken conversation. Completed diaries stay
+      // locked/review-only and do not autoplay old chat audio.
+      if (!existingDiary?.id) {
+        const welcome = restoredMessages.find((m) => m.role === 'assistant');
+        if (welcome) window.setTimeout(() => speakAssistant(welcome.content), 250);
+      }
     } else {
       // Create new conversation for this diary date
       const { data: newConv, error } = await supabase
@@ -276,6 +286,14 @@ export default function Chat() {
   };
 
   const stopMic = (mode: 'stop' | 'abort' = 'stop') => {
+    if (micSilenceTimerRef.current) {
+      clearTimeout(micSilenceTimerRef.current);
+      micSilenceTimerRef.current = null;
+    }
+    if (micHardStopTimerRef.current) {
+      clearTimeout(micHardStopTimerRef.current);
+      micHardStopTimerRef.current = null;
+    }
     const rec = recognitionRef.current;
     recognitionRef.current = null;
     isStartingMicRef.current = false;
