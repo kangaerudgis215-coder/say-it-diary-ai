@@ -710,8 +710,6 @@ export default function Chat() {
   // Stop the mic if the user navigates away mid-recording.
   useEffect(() => {
     return () => {
-      if (micSilenceTimerRef.current) clearTimeout(micSilenceTimerRef.current);
-      if (micHardStopTimerRef.current) clearTimeout(micHardStopTimerRef.current);
       const rec = recognitionRef.current;
       if (rec) {
         try {
