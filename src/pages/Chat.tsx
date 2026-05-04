@@ -655,6 +655,14 @@ export default function Chat() {
     rec.onerror = (e: any) => {
       if (recognitionRef.current !== rec) return;
       const err = e?.error;
+      if (micSilenceTimerRef.current) {
+        clearTimeout(micSilenceTimerRef.current);
+        micSilenceTimerRef.current = null;
+      }
+      if (micHardStopTimerRef.current) {
+        clearTimeout(micHardStopTimerRef.current);
+        micHardStopTimerRef.current = null;
+      }
       recognitionRef.current = null;
       isStartingMicRef.current = false;
       setIsListening(false);
@@ -682,6 +690,14 @@ export default function Chat() {
     };
     rec.onend = () => {
       if (recognitionRef.current !== rec) return;
+      if (micSilenceTimerRef.current) {
+        clearTimeout(micSilenceTimerRef.current);
+        micSilenceTimerRef.current = null;
+      }
+      if (micHardStopTimerRef.current) {
+        clearTimeout(micHardStopTimerRef.current);
+        micHardStopTimerRef.current = null;
+      }
       recognitionRef.current = null;
       isStartingMicRef.current = false;
       setIsListening(false);
