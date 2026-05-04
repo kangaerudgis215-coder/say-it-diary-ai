@@ -4,36 +4,17 @@ export interface SpeechRecognitionLike {
   abort(): void;
 }
 
-function isAppleWebKitBrowser(): boolean {
-  if (typeof navigator === 'undefined') return false;
-  const ua = navigator.userAgent || '';
-  return /Apple/i.test(navigator.vendor || '') || /iPad|iPhone|iPod/.test(ua);
-}
-
 /**
- * WebKit can leave the system microphone session active after a plain stop/abort.
- * Starting once immediately before stop is the safest known release path on iOS Safari.
+ * Simple, browser-native release. Earlier versions tried a WebKit-specific
+ * "start then stop" trick to flush the audio route, but that itself triggered
+ * spurious `audio-capture` ("マイクが見つかりません") errors on iOS Safari and
+ * left the session in a worse state. Plain stop/abort is the most reliable.
  */
 export function releaseSpeechRecognition(
   recognition: SpeechRecognitionLike | null | undefined,
   mode: 'stop' | 'abort' = 'stop',
 ): void {
   if (!recognition) return;
-
-  if (isAppleWebKitBrowser()) {
-    try {
-      recognition.start();
-    } catch {
-      /* already started or already ending */
-    }
-    try {
-      recognition.stop();
-    } catch {
-      /* stale recognition session */
-    }
-    return;
-  }
-
   try {
     if (mode === 'abort') recognition.abort();
     else recognition.stop();
