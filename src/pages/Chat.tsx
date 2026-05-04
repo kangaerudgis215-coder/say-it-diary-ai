@@ -294,6 +294,12 @@ export default function Chat() {
     releaseSpeechRecognition(rec, mode);
   };
 
+  const navigateAfterClosingMic = (to: string) => {
+    stopMic('abort');
+    stopAssistantSpeech();
+    navigate(to);
+  };
+
   const sendMessage = async (content: string, preparedUtterance?: SpeechSynthesisUtterance | null) => {
     if (!content.trim() || !conversationId || !user) return;
     // Hard guard: never accept new messages once the diary is finalised.
@@ -717,9 +723,17 @@ export default function Chat() {
     }
   };
 
-  // Stop the mic if the user navigates away mid-recording.
+  // Stop the mic if the user navigates away mid-recording. Safari can keep
+  // the system mic route alive until we explicitly abort before/while leaving.
   useEffect(() => {
+    const closeMicForPageExit = () => stopMic('abort');
+    window.addEventListener('pagehide', closeMicForPageExit);
+    window.addEventListener('beforeunload', closeMicForPageExit);
+    document.addEventListener('visibilitychange', closeMicForPageExit);
     return () => {
+      window.removeEventListener('pagehide', closeMicForPageExit);
+      window.removeEventListener('beforeunload', closeMicForPageExit);
+      document.removeEventListener('visibilitychange', closeMicForPageExit);
       const rec = recognitionRef.current;
       recognitionRef.current = null;
       isStartingMicRef.current = false;
