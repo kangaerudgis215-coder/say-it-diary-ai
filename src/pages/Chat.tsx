@@ -19,7 +19,6 @@ import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
 import { useVocabularyLog } from '@/hooks/useVocabularyLog';
 import { useUISound } from '@/hooks/useUISound';
-import { useSuccessSound } from '@/hooks/useSuccessSound';
 import { normalizeForExpression } from '@/lib/textComparison';
 import { persistDiarySentences } from '@/lib/practiceBuilder';
 import {
@@ -135,7 +134,6 @@ export default function Chat() {
   const { toast } = useToast();
   const { logSpokenWords } = useVocabularyLog();
   const { playTap } = useUISound();
-  const { playBigSuccess } = useSuccessSound();
   
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
