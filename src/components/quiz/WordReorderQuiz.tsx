@@ -84,7 +84,7 @@ export function WordReorderQuiz({ sentence, japaneseSentence, onCorrect }: WordR
     setIsWrong(false);
     setHintIndex(null);
     speak(item.word);
-    setPlaced((prev) => [...prev, item]);
+    setPlaced((prev) => prev.some((p) => p.origIdx === item.origIdx) ? prev : [...prev, item]);
     setSlots((prev) => prev.map((slot) => slot.origIdx === item.origIdx ? { ...slot, selected: true } : slot));
   }, [isCorrect, slots, speak]);
 
