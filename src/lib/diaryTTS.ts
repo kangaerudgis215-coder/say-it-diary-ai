@@ -23,9 +23,21 @@ import { registerUnlockable } from './audioUnlock';
 const SILENT_WAV =
   'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAESsAAABAAgAZGF0YQAAAAA=';
 
+function isIOS(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent || '';
+  // iPad on iOS 13+ reports as Mac; detect via touch points too.
+  return /iPad|iPhone|iPod/.test(ua) || (ua.includes('Mac') && (navigator as any).maxTouchPoints > 1);
+}
+
 let silentAudio: HTMLAudioElement | null = null;
 function ensureSilent() {
   if (typeof window === 'undefined') return null;
+  // The silent-audio trick is only needed on iOS to route TTS to the media
+  // channel. On desktop (and Android), keeping a parallel <audio> element
+  // playing causes the speech synth to sound raspy/garbled and adds latency
+  // because the two audio streams fight over the output device.
+  if (!isIOS()) return null;
   if (silentAudio) return silentAudio;
   try {
     const a = new Audio(SILENT_WAV);
