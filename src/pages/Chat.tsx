@@ -112,33 +112,59 @@ function speakAssistant(text: string, preparedUtterance?: SpeechSynthesisUtteran
   if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
   const clean = sanitizeForSpeech(text);
   if (!clean) return;
-  const utterance = preparedUtterance ?? createAssistantUtterance();
-  if (!utterance) return;
-  stopAssistantSpeech();
-  utterance.text = clean;
-  // Re-pick voice in case voices weren't loaded when the utterance was prepared.
-  if (!utterance.voice) {
-    const v = pickNaturalEnglishVoice();
-    if (v) utterance.voice = v;
-  }
-  try {
-    // Some browsers pause the engine after long async waits — resume first.
-    try { window.speechSynthesis.resume(); } catch { /* ignore */ }
-    window.speechSynthesis.speak(utterance);
-    // Safari sometimes silently no-ops the first speak() after a long await.
-    // If nothing has started after a beat, kick the engine and retry once.
-    window.setTimeout(() => {
-      try {
-        const ss = window.speechSynthesis;
+
+  const ss = window.speechSynthesis;
+
+  const doSpeak = () => {
+    const utterance = preparedUtterance ?? createAssistantUtterance();
+    if (!utterance) return;
+    try { ss.cancel(); } catch { /* ignore */ }
+    utterance.text = clean;
+    if (!utterance.voice) {
+      const v = pickNaturalEnglishVoice();
+      if (v) utterance.voice = v;
+    }
+    try {
+      try { ss.resume(); } catch { /* ignore */ }
+      ss.speak(utterance);
+      // Safari/Chrome can silently drop the first speak() after async work.
+      // Retry up to 3 times with backoff if the engine never starts.
+      let attempts = 0;
+      const tick = () => {
+        if (attempts >= 3) return;
+        attempts += 1;
         if (!ss.speaking && !ss.pending) {
-          ss.resume();
-          ss.speak(utterance);
+          try {
+            ss.resume();
+            ss.speak(utterance);
+          } catch { /* ignore */ }
+          window.setTimeout(tick, 300);
         }
-      } catch { /* ignore */ }
-    }, 220);
-  } catch {
-    /* Browser may block speech before the first user gesture. */
+      };
+      window.setTimeout(tick, 250);
+    } catch {
+      /* Browser may block speech before first user gesture. */
+    }
+  };
+
+  // Voices may not be loaded yet on first call (Chrome/Edge load async).
+  // Wait for them so the chosen natural voice is actually applied and the
+  // engine doesn't no-op the very first speak().
+  const voices = ss.getVoices();
+  if (voices && voices.length > 0) {
+    doSpeak();
+    return;
   }
+  let fired = false;
+  const onVoices = () => {
+    if (fired) return;
+    fired = true;
+    try { ss.removeEventListener?.('voiceschanged', onVoices); } catch { /* ignore */ }
+    doSpeak();
+  };
+  try { ss.addEventListener?.('voiceschanged', onVoices); } catch { /* ignore */ }
+  // Safety net: if voiceschanged never fires, speak anyway after 400ms.
+  window.setTimeout(onVoices, 400);
 }
 
 interface Message {
@@ -348,12 +374,22 @@ export default function Chat() {
 
       // Delete every message in this conversation, then drop the conversation
       // row so initConversation() recreates a clean one + fresh welcome.
-      await supabase.from('messages').delete().eq('conversation_id', conversationId);
-      await supabase.from('conversations').delete().eq('id', conversationId);
+      const { error: msgErr } = await supabase
+        .from('messages')
+        .delete()
+        .eq('conversation_id', conversationId);
+      if (msgErr) throw msgErr;
+      const { error: convErr } = await supabase
+        .from('conversations')
+        .delete()
+        .eq('id', conversationId);
+      if (convErr) throw convErr;
 
+      // Clear local state BEFORE re-initialising so the UI visibly resets.
       setMessages([]);
       setInput('');
       setConversationId(null);
+      setExistingDiaryId(null);
       toast({
         title: 'チャットをリセットしました',
         description: '一からやり直せます ✨',
