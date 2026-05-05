@@ -29,6 +29,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
 import { useVocabularyLog } from '@/hooks/useVocabularyLog';
+import { useSuccessSound } from '@/hooks/useSuccessSound';
 import { normalizeForExpression } from '@/lib/textComparison';
 import { persistDiarySentences } from '@/lib/practiceBuilder';
 import {
