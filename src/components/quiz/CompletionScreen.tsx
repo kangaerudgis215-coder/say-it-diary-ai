@@ -235,15 +235,15 @@ export function CompletionScreen({ streak, expressions, expressionDetails, isPas
         {(expressionDetails && expressionDetails.length > 0) || expressions.length > 0 ? (
           <div className="w-full max-w-sm mt-8">
             <div className="flex items-center justify-center gap-2 mb-3">
-              <Sparkles className="w-4 h-4 text-amber-300 drop-shadow-[0_0_8px_hsl(38_92%_55%/0.6)]" />
-              <p className="text-[11px] tracking-[0.22em] uppercase font-bold text-amber-200/90">
+              <Sparkles className="w-4 h-4 text-amber-500 dark:text-amber-300 drop-shadow-[0_0_8px_hsl(38_92%_55%/0.6)]" />
+              <p className="text-[11px] tracking-[0.22em] uppercase font-bold text-amber-700 dark:text-amber-200/90">
                 今日獲得した表現
               </p>
-              <Sparkles className="w-4 h-4 text-amber-300 drop-shadow-[0_0_8px_hsl(38_92%_55%/0.6)]" />
+              <Sparkles className="w-4 h-4 text-amber-500 dark:text-amber-300 drop-shadow-[0_0_8px_hsl(38_92%_55%/0.6)]" />
             </div>
 
             <div
-              className="relative rounded-2xl p-4 border border-amber-300/30 bg-gradient-to-b from-amber-500/10 to-orange-600/5 shadow-[0_8px_30px_-8px_hsl(38_92%_55%/0.45)] backdrop-blur-sm"
+              className="relative rounded-2xl p-4 border border-amber-400/50 dark:border-amber-300/30 bg-gradient-to-b from-amber-100/80 to-orange-100/60 dark:from-amber-500/10 dark:to-orange-600/5 shadow-[0_8px_30px_-8px_hsl(38_92%_55%/0.45)] backdrop-blur-sm"
             >
               <div className="absolute -top-2 left-1/2 -translate-x-1/2 px-2.5 py-0.5 rounded-full text-[10px] font-black tracking-widest uppercase bg-gradient-to-r from-amber-400 to-orange-500 text-black shadow-md">
                 +{(expressionDetails?.length || expressions.length)} new
@@ -256,7 +256,7 @@ export function CompletionScreen({ streak, expressions, expressionDetails, isPas
                 ).map((exp, i) => (
                   <li
                     key={i}
-                    className="flex flex-col gap-0.5 rounded-xl px-3 py-2 bg-card/40 border border-amber-200/20"
+                    className="flex flex-col gap-0.5 rounded-xl px-3 py-2 bg-white/70 dark:bg-card/40 border border-amber-300/40 dark:border-amber-200/20"
                     style={{
                       transform: show ? 'translateY(0)' : 'translateY(8px)',
                       opacity: show ? 1 : 0,
@@ -264,17 +264,17 @@ export function CompletionScreen({ streak, expressions, expressionDetails, isPas
                     }}
                   >
                     <div className="flex items-baseline justify-between gap-2">
-                      <span className="font-bold text-sm text-amber-100">
+                      <span className="font-bold text-sm text-amber-900 dark:text-amber-100">
                         {exp.expression}
                       </span>
                       {exp.pos_or_type && (
-                        <span className="text-[9px] uppercase tracking-wider text-amber-300/70">
+                        <span className="text-[9px] uppercase tracking-wider text-amber-700/80 dark:text-amber-300/70">
                           {exp.pos_or_type}
                         </span>
                       )}
                     </div>
                     {exp.meaning && (
-                      <p className="text-[11px] leading-snug text-foreground/70">
+                      <p className="text-[11px] leading-snug text-foreground/80">
                         {exp.meaning}
                       </p>
                     )}
