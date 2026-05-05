@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { MessageCircleHeart, Loader2 } from 'lucide-react';
+import { Loader2, PawPrint } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
@@ -72,11 +72,17 @@ export function DailyEncouragement() {
     <Card className="mb-6 border-primary/20 bg-gradient-to-r from-primary/10 to-accent/10 overflow-hidden transition-all duration-300 hover:shadow-lg hover:from-primary/15 hover:to-accent/15">
       <CardContent className="py-5">
         <div className="flex gap-3">
-          <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0">
-            <MessageCircleHeart className="w-5 h-5 text-primary" />
+          <div className="relative w-11 h-11 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0 shadow-inner">
+            <span className="text-xl leading-none" aria-hidden>🐱</span>
+            <span
+              aria-hidden
+              className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-card border border-primary/30 flex items-center justify-center text-primary"
+            >
+              <PawPrint className="w-3 h-3" />
+            </span>
           </div>
           <div>
-            <p className="text-xs text-muted-foreground mb-1 font-medium">Today's Encouragement ✨</p>
+            <p className="text-xs text-muted-foreground mb-1 font-medium">SO-KIから一言 🐾</p>
             <p className="text-sm leading-relaxed text-foreground/90">{message}</p>
           </div>
         </div>
