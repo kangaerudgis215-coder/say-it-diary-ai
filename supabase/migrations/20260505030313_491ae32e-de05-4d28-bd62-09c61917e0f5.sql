@@ -1,0 +1,1 @@
+REVOKE EXECUTE ON FUNCTION public.protect_profile_billing_fields() FROM PUBLIC, anon, authenticated;
