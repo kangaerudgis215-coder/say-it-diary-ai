@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
-import { ChevronDown, ChevronUp, Volume2 } from 'lucide-react';
+import { ChevronDown, ChevronUp, Volume2, PawPrint } from 'lucide-react';
 
 interface ChatBubbleProps {
   content: string;
@@ -22,7 +22,16 @@ export function ChatBubble({ content, role, isNew = false, japaneseTranslation, 
         isNew && "message-appear"
       )}
     >
-      <div className="max-w-[85%]">
+      <div className={cn("max-w-[85%] flex gap-2", isUser ? "" : "items-start")}>
+        {!isUser && (
+          <div
+            className="shrink-0 mt-0.5 w-7 h-7 rounded-full bg-primary/15 border border-primary/30 flex items-center justify-center text-primary"
+            aria-label="SO-KI"
+          >
+            <PawPrint className="w-3.5 h-3.5" />
+          </div>
+        )}
+        <div className="flex-1 min-w-0">
         <div
           className={cn(
             "px-4 py-3 rounded-2xl",
@@ -62,6 +71,7 @@ export function ChatBubble({ content, role, isNew = false, japaneseTranslation, 
             {japaneseTranslation}
           </p>
         )}
+        </div>
       </div>
     </div>
   );

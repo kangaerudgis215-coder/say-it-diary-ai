@@ -148,7 +148,7 @@ export default function Home() {
                 <StreakHeroCompact streak={streak} />
               </div>
               <div className="relative">
-                <CatBuddy recentDiary={entries[0]?.content} entries={entries} streak={streak} />
+                <CatBuddy recentDiary={entries[0]?.content} entries={entries} streak={streak} sizeScale={1.5} />
               </div>
             </div>
             <StampCalendar
