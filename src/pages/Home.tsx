@@ -226,7 +226,11 @@ export default function Home() {
         )}
       </main>
 
-      <ComposeFAB />
+      <ComposeFAB
+        skipWelcomeVoice={entries.some(
+          (e) => e.date === format(new Date(), 'yyyy-MM-dd'),
+        )}
+      />
       <BottomTabBar homeTab={tab} onHomeTabChange={setTab} />
     </div>
   );
