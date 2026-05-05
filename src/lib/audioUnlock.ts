@@ -39,11 +39,19 @@ function unlockSpeech() {
   if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
   try {
     window.speechSynthesis.resume();
-    // Speaking a near-silent space inside the gesture flips the engine into
-    // the "user-activated" state so subsequent post-async speak() calls work.
-    const u = new SpeechSynthesisUtterance(' ');
-    u.volume = 0;
-    u.rate = 1;
+    // iOS Safari unlock requirements (known quirks):
+    //   - utterance text must be non-empty (a single space is dropped)
+    //   - volume must be > 0 (volume:0 is treated as "did not actually speak"
+    //     and the engine stays in the locked state)
+    //   - the speak() call must run synchronously inside the user gesture
+    // We use a very short, very quiet, very fast utterance so the user
+    // effectively can't hear it but the engine flips into the
+    // "user-activated" state and post-async speak() calls are allowed.
+    const u = new SpeechSynthesisUtterance('.');
+    u.volume = 0.01;
+    u.rate = 10; // max rate — finishes almost instantly
+    u.pitch = 1;
+    u.lang = 'en-US';
     window.speechSynthesis.speak(u);
   } catch {
     /* ignore */
