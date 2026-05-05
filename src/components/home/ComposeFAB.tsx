@@ -9,20 +9,24 @@ import { getChatWelcomeMessage } from '@/lib/chatWelcome';
 interface ComposeFABProps {
   /** Optional date (yyyy-MM-dd) to start a diary for. */
   date?: string;
+  /** When true, skip playing the welcome voice (e.g. an entry already exists). */
+  skipWelcomeVoice?: boolean;
 }
 
 /**
  * Floating circular pencil button — primary diary-compose entry point.
  * Sits above the bottom tab bar in the lower-right corner.
  */
-export function ComposeFAB({ date }: ComposeFABProps) {
+export function ComposeFAB({ date, skipWelcomeVoice = false }: ComposeFABProps) {
   const navigate = useNavigate();
   const { playNavigate } = useUISound();
 
   const handleClick = () => {
     const diaryDate = date ?? format(new Date(), 'yyyy-MM-dd');
     playNavigate();
-    speakAssistantImmediately(getChatWelcomeMessage(diaryDate).content);
+    if (!skipWelcomeVoice) {
+      speakAssistantImmediately(getChatWelcomeMessage(diaryDate).content);
+    }
     navigate(`/chat?date=${diaryDate}&welcomeSpoken=1`);
   };
 
