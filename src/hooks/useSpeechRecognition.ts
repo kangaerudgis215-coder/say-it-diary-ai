@@ -110,7 +110,11 @@ export function useSpeechRecognition(
       silenceTimerRef.current = setTimeout(() => {
         listeningRef.current = false;
         setIsListening(false);
-        releaseSpeechRecognition(recognition, 'stop');
+        // abort() frees the underlying audio session faster than stop(),
+        // which is critical on mobile to prevent the OS from keeping the
+        // device in "communication mode" (Bluetooth re-routing, broken
+        // volume rocker, etc.).
+        releaseSpeechRecognition(recognition, 'abort');
       }, autoStopSilenceMs);
     };
 
@@ -122,8 +126,8 @@ export function useSpeechRecognition(
       hardStopTimerRef.current = setTimeout(() => {
         listeningRef.current = false;
         setIsListening(false);
-        releaseSpeechRecognition(recognition, 'stop');
-      }, 15000);
+        releaseSpeechRecognition(recognition, 'abort');
+      }, 8000);
     };
 
     recognition.onend = () => {
@@ -208,7 +212,11 @@ export function useSpeechRecognition(
     if (recognition && listeningRef.current) {
       listeningRef.current = false;
       setIsListening(false);
-      releaseSpeechRecognition(recognition, 'stop');
+      // Use abort() so the OS releases the mic / audio session immediately.
+      // stop() lets the engine finalise results which can keep the device in
+      // "communication mode" for several seconds, breaking volume control
+      // and triggering Bluetooth re-routing on mobile.
+      releaseSpeechRecognition(recognition, 'abort');
     }
   }, []);
 
