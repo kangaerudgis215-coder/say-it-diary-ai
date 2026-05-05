@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, X, Brain, Plus, BookOpen, Star } from 'lucide-react';
+import { ArrowLeft, X, Brain, Plus, BookOpen, Star, CalendarDays } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DiaryCalendar } from '@/components/DiaryCalendar';
 import { RecallHistory } from '@/components/RecallHistory';
@@ -210,7 +210,13 @@ export default function Calendar() {
             </p>
           ) : (
             <>
-              <div className="mb-2 text-2xl">{isToday(selectedDate) ? '✨' : '📅'}</div>
+              <div className="mb-2 flex justify-center">
+                {isToday(selectedDate) ? (
+                  <span className="text-2xl">✨</span>
+                ) : (
+                  <CalendarDays className="w-7 h-7 text-primary" />
+                )}
+              </div>
               <p className="font-bold text-base mb-1">
                 {format(selectedDate, 'yyyy年M月d日')}
               </p>

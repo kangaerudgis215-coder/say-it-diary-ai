@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { LogOut, Search } from 'lucide-react';
+import { LogOut, Search, CalendarDays } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
 import { ThemeToggleLottie } from '@/components/ThemeToggleLottie';
@@ -171,7 +171,13 @@ export default function Home() {
                   <p className="text-sm text-muted-foreground">未来の日付には日記を書けません。</p>
                 ) : (
                   <>
-                    <div className="text-2xl mb-1">{isToday(selectedDate) ? '✨' : '📅'}</div>
+                    <div className="mb-1 flex justify-center">
+                      {isToday(selectedDate) ? (
+                        <span className="text-2xl">✨</span>
+                      ) : (
+                        <CalendarDays className="w-7 h-7 text-primary" />
+                      )}
+                    </div>
                     <p className="font-bold text-base mb-1">
                       {format(selectedDate, 'yyyy年M月d日')}
                     </p>
