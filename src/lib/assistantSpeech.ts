@@ -57,6 +57,20 @@ export function createAssistantUtterance(text = ''): SpeechSynthesisUtterance | 
   return utterance;
 }
 
+export function speakAssistantImmediately(text: string): void {
+  if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+  const clean = sanitizeForSpeech(text);
+  const utterance = createAssistantUtterance(clean);
+  if (!utterance) return;
+  try {
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.resume();
+    window.speechSynthesis.speak(utterance);
+  } catch {
+    /* Browser may still block if this is not called from a user gesture. */
+  }
+}
+
 export function speakAssistant(text: string, preparedUtterance?: SpeechSynthesisUtterance | null): void {
   if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
   const clean = sanitizeForSpeech(text);
@@ -93,6 +107,11 @@ export function speakAssistant(text: string, preparedUtterance?: SpeechSynthesis
       /* Browser may block speech before first user gesture. */
     }
   };
+
+  if (preparedUtterance) {
+    doSpeak();
+    return;
+  }
 
   const voices = ss.getVoices();
   if (voices && voices.length > 0) {
