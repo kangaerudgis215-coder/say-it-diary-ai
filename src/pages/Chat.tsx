@@ -181,6 +181,7 @@ export default function Chat() {
   const [searchParams] = useSearchParams();
   const { toast } = useToast();
   const { logSpokenWords } = useVocabularyLog();
+  const { playBigSuccess } = useSuccessSound();
   
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
