@@ -165,16 +165,15 @@ export default function DiaryReview() {
   const handlePlayAudio = useCallback(() => {
     if (!diaryEntry?.content || isPlayingAudio) return;
     setIsPlayingAudio(true);
-    const u = new SpeechSynthesisUtterance(diaryEntry.content);
-    u.lang = 'en-US';
-    u.rate = 0.9;
-    u.onend = () => setIsPlayingAudio(false);
-    u.onerror = () => setIsPlayingAudio(false);
-    speechSynthesis.speak(u);
+    speakDiary(diaryEntry.content, {
+      rate: 0.9,
+      onEnd: () => setIsPlayingAudio(false),
+      onError: () => setIsPlayingAudio(false),
+    });
   }, [diaryEntry, isPlayingAudio]);
 
   const handleStopAudio = useCallback(() => {
-    speechSynthesis.cancel();
+    cancelDiaryTTS();
     setIsPlayingAudio(false);
   }, []);
 

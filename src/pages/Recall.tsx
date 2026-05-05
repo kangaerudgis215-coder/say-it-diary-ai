@@ -108,16 +108,15 @@ export default function Recall() {
   const handlePlayAudio = useCallback(() => {
     if (!diaryEntry?.content || isPlayingAudio) return;
     setIsPlayingAudio(true);
-    const utterance = new SpeechSynthesisUtterance(diaryEntry.content);
-    utterance.lang = 'en-US';
-    utterance.rate = 0.9;
-    utterance.onend = () => setIsPlayingAudio(false);
-    utterance.onerror = () => setIsPlayingAudio(false);
-    speechSynthesis.speak(utterance);
+    speakDiary(diaryEntry.content, {
+      rate: 0.9,
+      onEnd: () => setIsPlayingAudio(false),
+      onError: () => setIsPlayingAudio(false),
+    });
   }, [diaryEntry, isPlayingAudio]);
 
   const handleStopAudio = useCallback(() => {
-    speechSynthesis.cancel();
+    cancelDiaryTTS();
     setIsPlayingAudio(false);
   }, []);
 
