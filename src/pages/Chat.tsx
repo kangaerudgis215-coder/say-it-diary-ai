@@ -374,12 +374,22 @@ export default function Chat() {
 
       // Delete every message in this conversation, then drop the conversation
       // row so initConversation() recreates a clean one + fresh welcome.
-      await supabase.from('messages').delete().eq('conversation_id', conversationId);
-      await supabase.from('conversations').delete().eq('id', conversationId);
+      const { error: msgErr } = await supabase
+        .from('messages')
+        .delete()
+        .eq('conversation_id', conversationId);
+      if (msgErr) throw msgErr;
+      const { error: convErr } = await supabase
+        .from('conversations')
+        .delete()
+        .eq('id', conversationId);
+      if (convErr) throw convErr;
 
+      // Clear local state BEFORE re-initialising so the UI visibly resets.
       setMessages([]);
       setInput('');
       setConversationId(null);
+      setExistingDiaryId(null);
       toast({
         title: 'チャットをリセットしました',
         description: '一からやり直せます ✨',
