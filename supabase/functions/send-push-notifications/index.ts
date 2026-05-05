@@ -98,20 +98,33 @@ Deno.serve(async (req) => {
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-  // Trim defensively — saved secrets sometimes pick up trailing newlines/quotes.
-  const vapidPublic = (Deno.env.get('VAPID_PUBLIC_KEY') ?? '')
-    .trim()
-    .replace(/^["']|["']$/g, '')
-    .replace(/=+$/, '');
-  const vapidPrivate = (Deno.env.get('VAPID_PRIVATE_KEY') ?? '')
-    .trim()
-    .replace(/^["']|["']$/g, '')
-    .replace(/=+$/, '');
+  // Normalize defensively — saved secrets sometimes pick up whitespace,
+  // quotes, padding, or standard-base64 chars (+/) that need URL-safe form.
+  const normalizeB64 = (raw: string) =>
+    raw
+      .replace(/\s+/g, '') // strip ALL whitespace (including newlines)
+      .replace(/^["']|["']$/g, '')
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/, '');
+  const vapidPublic = normalizeB64(Deno.env.get('VAPID_PUBLIC_KEY') ?? '');
+  const vapidPrivate = normalizeB64(Deno.env.get('VAPID_PRIVATE_KEY') ?? '');
   const vapidSubject =
     (Deno.env.get('VAPID_SUBJECT') ?? '').trim().replace(/^["']|["']$/g, '') ||
     'mailto:noreply@so-ki.app';
 
-  console.log('VAPID public length:', vapidPublic.length, 'private length:', vapidPrivate.length, 'subject:', vapidSubject);
+  console.log(
+    'VAPID public length:',
+    vapidPublic.length,
+    'first8:',
+    vapidPublic.slice(0, 8),
+    'last8:',
+    vapidPublic.slice(-8),
+    'private length:',
+    vapidPrivate.length,
+    'subject:',
+    vapidSubject,
+  );
 
   if (!vapidPublic || !vapidPrivate) {
     return new Response(
