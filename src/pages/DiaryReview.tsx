@@ -19,6 +19,7 @@ import {
   partitionExpressionsForText,
 } from '@/lib/expressionValidation';
 import { cn } from '@/lib/utils';
+import { speakDiary, cancelDiaryTTS } from '@/lib/diaryTTS';
 
 export default function DiaryReview() {
   const { user } = useAuth();
