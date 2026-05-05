@@ -75,6 +75,7 @@ export default function Chat() {
   // to run twice, double-inserting the welcome message and triggering the
   // welcome chime / TTS multiple times when opening a past diary.
   const diaryDate = searchParams.get('date') ?? format(new Date(), 'yyyy-MM-dd');
+  const welcomeSpoken = searchParams.get('welcomeSpoken') === '1';
   const [showHelp, setShowHelp] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef<any>(null);
@@ -171,7 +172,7 @@ export default function Chat() {
       // first welcome line on every reopen — even mid-conversation.
       const onlyWelcome =
         restoredMessages.length === 1 && restoredMessages[0].role === 'assistant';
-      if (!existingDiary?.id && onlyWelcome) {
+      if (!existingDiary?.id && onlyWelcome && !welcomeSpoken) {
         window.setTimeout(() => speakAssistant(restoredMessages[0].content), 250);
       }
     } else {
@@ -193,7 +194,7 @@ export default function Chat() {
           japanese: welcome.japanese,
         };
         setMessages([welcomeMessage]);
-        speakAssistant(welcomeMessage.content);
+        if (!welcomeSpoken) speakAssistant(welcomeMessage.content);
         
         // Save welcome message
         await supabase.from('messages').insert({
