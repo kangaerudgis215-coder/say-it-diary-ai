@@ -868,6 +868,43 @@ export default function Chat() {
                 </div>
               </DialogContent>
             </Dialog>
+
+            {/* Emergency reset — only available before the diary is locked */}
+            {!isLocked && (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label="チャットをリセット"
+                    title="チャットをリセット"
+                  >
+                    <RotateCcw className="w-5 h-5" />
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle className="font-japanese">
+                      この日のチャットをリセットしますか？
+                    </AlertDialogTitle>
+                    <AlertDialogDescription className="font-japanese">
+                      これまでのやりとりがすべて消えて、最初のウェルカムメッセージから
+                      やり直します。日記がうまく作れない／別の日のチャットが混ざって
+                      しまった時の緊急用です。日記生成後はリセットできません。
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel className="font-japanese">キャンセル</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={() => void handleResetConversation()}
+                      className="font-japanese"
+                    >
+                      リセットする
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
           </div>
           
           <div className="text-center">
