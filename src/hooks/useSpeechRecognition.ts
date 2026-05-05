@@ -11,6 +11,10 @@ interface UseSpeechRecognitionOptions {
    * so the user doesn't have to tap the mic again to stop recording.
    */
   autoStopSilenceMs?: number;
+  /** Optional safety limit. Leave unset for long read-aloud flows. */
+  hardStopMs?: number;
+  /** Restart if the browser ends recognition unexpectedly during an active read. */
+  autoRestart?: boolean;
 }
 
 interface UseSpeechRecognitionReturn {
@@ -75,7 +79,7 @@ declare global {
 export function useSpeechRecognition(
   options: UseSpeechRecognitionOptions = {}
 ): UseSpeechRecognitionReturn {
-  const { continuous = true, interimResults = true, lang = 'en-US', autoStopSilenceMs } = options;
+  const { continuous = true, interimResults = true, lang = 'en-US', autoStopSilenceMs, hardStopMs, autoRestart = false } = options;
   
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState('');
@@ -85,6 +89,7 @@ export function useSpeechRecognition(
   const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hardStopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const listeningRef = useRef(false);
+  const shouldRestartRef = useRef(false);
   const hasSpeechRef = useRef(false);
   
   // Check for browser support
@@ -123,11 +128,14 @@ export function useSpeechRecognition(
       hasSpeechRef.current = false;
       setIsListening(true);
       if (hardStopTimerRef.current) clearTimeout(hardStopTimerRef.current);
-      hardStopTimerRef.current = setTimeout(() => {
-        listeningRef.current = false;
-        setIsListening(false);
-        releaseSpeechRecognition(recognition, 'abort');
-      }, 8000);
+      if (hardStopMs) {
+        hardStopTimerRef.current = setTimeout(() => {
+          shouldRestartRef.current = false;
+          listeningRef.current = false;
+          setIsListening(false);
+          releaseSpeechRecognition(recognition, 'abort');
+        }, hardStopMs);
+      }
     };
 
     recognition.onend = () => {
@@ -142,10 +150,25 @@ export function useSpeechRecognition(
         clearTimeout(hardStopTimerRef.current);
         hardStopTimerRef.current = null;
       }
+      if (autoRestart && shouldRestartRef.current && document.visibilityState === 'visible') {
+        window.setTimeout(() => {
+          if (!shouldRestartRef.current || listeningRef.current) return;
+          try {
+            setActiveRecognition(recognition);
+            recognition.start();
+          } catch (error) {
+            shouldRestartRef.current = false;
+            console.error('Failed to restart speech recognition:', error);
+          }
+        }, 180);
+      }
     };
 
     recognition.onerror = (event) => {
       console.error('Speech recognition error:', event.error);
+      if (event.error === 'not-allowed' || event.error === 'service-not-allowed' || event.error === 'audio-capture') {
+        shouldRestartRef.current = false;
+      }
       listeningRef.current = false;
       clearActiveRecognition(recognition);
       setIsListening(false);
@@ -187,29 +210,33 @@ export function useSpeechRecognition(
     recognitionRef.current = recognition;
 
     return () => {
+      shouldRestartRef.current = false;
       if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
       if (hardStopTimerRef.current) clearTimeout(hardStopTimerRef.current);
       releaseSpeechRecognition(recognition, 'abort');
     };
-  }, [continuous, interimResults, lang, isSupported, autoStopSilenceMs]);
+  }, [continuous, interimResults, lang, isSupported, autoStopSilenceMs, hardStopMs, autoRestart]);
 
   const startListening = useCallback(() => {
     if (recognitionRef.current && !isListening) {
       setTranscript('');
       setInterimTranscript('');
       try {
+        shouldRestartRef.current = autoRestart;
         setActiveRecognition(recognitionRef.current);
         recognitionRef.current.start();
       } catch (error) {
+        shouldRestartRef.current = false;
         setActiveRecognition(null);
         console.error('Failed to start speech recognition:', error);
       }
     }
-  }, [isListening]);
+  }, [isListening, autoRestart]);
 
   const stopListening = useCallback(() => {
     const recognition = recognitionRef.current;
     if (recognition && listeningRef.current) {
+      shouldRestartRef.current = false;
       listeningRef.current = false;
       setIsListening(false);
       // Use abort() so the OS releases the mic / audio session immediately.

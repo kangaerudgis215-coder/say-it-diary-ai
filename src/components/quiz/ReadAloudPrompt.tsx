@@ -9,6 +9,8 @@ import { useSpeechRecognition } from '@/hooks/useSpeechRecognition';
 import { normalizeText } from '@/lib/textComparison';
 import { useSuccessSound } from '@/hooks/useSuccessSound';
 import { cn } from '@/lib/utils';
+import { cancelDiaryTTS } from '@/lib/diaryTTS';
+import { stopAssistantSpeech } from '@/lib/assistantSpeech';
 
 interface ReadAloudPromptProps {
   englishText: string;
@@ -23,10 +25,11 @@ export function ReadAloudPrompt({ englishText, japaneseText, onComplete, onSkip 
   const [showNice, setShowNice] = useState(false);
   const [showSuccessAnim, setShowSuccessAnim] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const completionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { playSuccess } = useSuccessSound();
 
-  const { isListening, transcript, isSupported, startListening, stopListening, resetTranscript } =
-    useSpeechRecognition({ lang: 'en-US', continuous: false, autoStopSilenceMs: 1800 });
+  const { isListening, transcript, interimTranscript, isSupported, startListening, stopListening, resetTranscript } =
+    useSpeechRecognition({ lang: 'en-US', continuous: true, autoRestart: true });
 
   // Check transcript accuracy against the full diary. We watch the *interim*
   // transcript too so we can pass the user the moment they hit the threshold,
@@ -39,39 +42,65 @@ export function ReadAloudPrompt({ englishText, japaneseText, onComplete, onSkip 
       const targetWords = normalizeText(englishText).split(' ').filter((w) => w.length > 0);
       if (targetWords.length === 0) return;
 
-      const targetSet = new Set(targetWords);
-      const matched = userWords.filter((w) => targetSet.has(w)).length;
-      const accuracy = matched / targetWords.length;
+      let cursor = 0;
+      let orderedMatches = 0;
+      for (const word of userWords) {
+        const nextIdx = targetWords.indexOf(word, cursor);
+        if (nextIdx >= 0) {
+          orderedMatches += 1;
+          cursor = nextIdx + 1;
+        }
+      }
+      const coverage = orderedMatches / targetWords.length;
+      const enoughWords = userWords.length >= Math.max(4, Math.floor(targetWords.length * 0.65));
+      const tail = targetWords.slice(-3);
+      const tailMatched = tail.length === 0 || tail.some((word) => userWords.slice(-8).includes(word));
 
-      // Lower threshold + early exit for a much snappier feel.
-      if (accuracy >= 0.35) {
-        setPassed(true);
-        setShowNice(true);
-        setShowSuccessAnim(true);
-        setGaugeValue(100);
-        playSuccess();
-        if (navigator.vibrate) navigator.vibrate(100);
-        // Stop listening immediately — no need to keep the mic open.
-        if (isListening) stopListening();
-        setTimeout(() => {
-          setShowNice(false);
-          setShowSuccessAnim(false);
-          onComplete();
-        }, 1200);
+      setGaugeValue(Math.min(98, Math.round(coverage * 100)));
+
+      // Wait until the learner has read most of the diary and reached the end
+      // area before completing. This avoids the previous "cut off mid-reading"
+      // feeling while still tolerating imperfect mobile speech recognition.
+      if (coverage >= 0.7 && enoughWords && tailMatched) {
+        if (completionTimerRef.current) return;
+        completionTimerRef.current = setTimeout(() => {
+          completionTimerRef.current = null;
+          if (passed) return;
+          setPassed(true);
+          setShowNice(true);
+          setShowSuccessAnim(true);
+          setGaugeValue(100);
+          stopListening();
+          window.setTimeout(() => playSuccess(), 180);
+          if (navigator.vibrate) navigator.vibrate(100);
+          setTimeout(() => {
+            setShowNice(false);
+            setShowSuccessAnim(false);
+            onComplete();
+          }, 1200);
+        }, 900);
       } else {
-        setGaugeValue(Math.min(95, Math.round(accuracy * 100)));
+        if (completionTimerRef.current) {
+          clearTimeout(completionTimerRef.current);
+          completionTimerRef.current = null;
+        }
       }
     },
-    [englishText, passed, playSuccess, onComplete, isListening, stopListening],
+    [englishText, passed, playSuccess, onComplete, stopListening],
   );
 
   // Re-check on every transcript / interim update for fast judgement.
   useEffect(() => {
     if (passed) return;
-    if (transcript || (isListening && (window as any))) {
-      checkAccuracy(transcript);
-    }
-  }, [transcript, isListening, passed, checkAccuracy]);
+    const combinedTranscript = `${transcript} ${interimTranscript}`.trim();
+    if (combinedTranscript) checkAccuracy(combinedTranscript);
+  }, [transcript, interimTranscript, passed, checkAccuracy]);
+
+  useEffect(() => {
+    return () => {
+      if (completionTimerRef.current) clearTimeout(completionTimerRef.current);
+    };
+  }, []);
 
   // Gauge animation while listening
   useEffect(() => {
@@ -91,8 +120,14 @@ export function ReadAloudPrompt({ englishText, japaneseText, onComplete, onSkip 
   const handleMicPress = useCallback(() => {
     if (passed) return;
     if (isListening) {
+      if (completionTimerRef.current) {
+        clearTimeout(completionTimerRef.current);
+        completionTimerRef.current = null;
+      }
       stopListening();
     } else {
+      cancelDiaryTTS();
+      stopAssistantSpeech();
       resetTranscript();
       setGaugeValue(0);
       startListening();

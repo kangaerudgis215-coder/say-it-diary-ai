@@ -51,7 +51,10 @@ export function createAssistantUtterance(text = ''): SpeechSynthesisUtterance | 
   utterance.lang = 'en-US';
   utterance.rate = 1.0;
   utterance.pitch = 1.0;
-  utterance.volume = 1.0;
+  // Keep TTS intentionally below max volume. Mobile Bluetooth devices can
+  // switch output routes abruptly when speech synthesis grabs the audio
+  // session, so max-volume utterances are the most likely to feel like blasts.
+  utterance.volume = 0.72;
   const voice = pickNaturalEnglishVoice();
   if (voice) utterance.voice = voice;
   return utterance;
@@ -90,19 +93,6 @@ export function speakAssistant(text: string, preparedUtterance?: SpeechSynthesis
     try {
       try { ss.resume(); } catch { /* ignore */ }
       ss.speak(utterance);
-      let attempts = 0;
-      const tick = () => {
-        if (attempts >= 3) return;
-        attempts += 1;
-        if (!ss.speaking && !ss.pending) {
-          try {
-            ss.resume();
-            ss.speak(utterance);
-          } catch { /* ignore */ }
-          window.setTimeout(tick, 300);
-        }
-      };
-      window.setTimeout(tick, 250);
     } catch {
       /* Browser may block speech before first user gesture. */
     }
