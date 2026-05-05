@@ -11,37 +11,55 @@ function extractJson(response: string): unknown {
     .replace(/```\s*/g, "")
     .trim();
 
-  const startIdx = cleaned.search(/[\{\[]/);
-  if (startIdx === -1) throw new Error("No JSON found in response");
-  const startChar = cleaned[startIdx];
-  const endChar = startChar === "[" ? "]" : "}";
+  // Try every "{" or "[" as a candidate start. Models occasionally emit a
+  // truncated JSON fragment followed by the complete object (e.g. when they
+  // self-correct mid-stream). The first `{` then yields an unbalanced parse;
+  // by trying each subsequent candidate we recover the well-formed payload.
+  const tryParse = (s: string): unknown => {
+    try { return JSON.parse(s); } catch {
+      const repaired = s
+        .replace(/,\s*}/g, "}")
+        .replace(/,\s*]/g, "]")
+        .replace(/[\x00-\x1F\x7F]/g, "");
+      return JSON.parse(repaired);
+    }
+  };
 
-  // Walk forward tracking string/escape state and brace depth to find true end
-  let depth = 0;
-  let inStr = false;
-  let escape = false;
-  let endIdx = -1;
-  for (let i = startIdx; i < cleaned.length; i++) {
-    const ch = cleaned[i];
-    if (escape) { escape = false; continue; }
-    if (ch === "\\") { escape = true; continue; }
-    if (ch === '"') { inStr = !inStr; continue; }
-    if (inStr) continue;
-    if (ch === "{" || ch === "[") depth++;
-    else if (ch === "}" || ch === "]") {
-      depth--;
-      if (depth === 0 && ch === endChar) { endIdx = i; break; }
+  let lastErr: unknown = null;
+  for (let i = 0; i < cleaned.length; i++) {
+    const startChar = cleaned[i];
+    if (startChar !== "{" && startChar !== "[") continue;
+    const endChar = startChar === "[" ? "]" : "}";
+
+    let depth = 0;
+    let inStr = false;
+    let escape = false;
+    let endIdx = -1;
+    for (let j = i; j < cleaned.length; j++) {
+      const ch = cleaned[j];
+      if (escape) { escape = false; continue; }
+      if (ch === "\\") { escape = true; continue; }
+      if (ch === '"') { inStr = !inStr; continue; }
+      if (inStr) continue;
+      if (ch === "{" || ch === "[") depth++;
+      else if (ch === "}" || ch === "]") {
+        depth--;
+        if (depth === 0 && ch === endChar) { endIdx = j; break; }
+      }
+    }
+    if (endIdx === -1) continue; // unbalanced — try next candidate
+
+    try {
+      return tryParse(cleaned.substring(i, endIdx + 1));
+    } catch (e) {
+      lastErr = e;
+      // try next candidate "{" / "["
     }
   }
-  if (endIdx === -1) throw new Error("Unbalanced JSON in response");
-
-  let json = cleaned.substring(startIdx, endIdx + 1);
-  try {
-    return JSON.parse(json);
-  } catch {
-    json = json.replace(/,\s*}/g, "}").replace(/,\s*]/g, "]").replace(/[\x00-\x1F\x7F]/g, "");
-    return JSON.parse(json);
-  }
+  throw new Error(
+    "No parseable JSON found in response" +
+      (lastErr instanceof Error ? `: ${lastErr.message}` : ""),
+  );
 }
 
 /**
