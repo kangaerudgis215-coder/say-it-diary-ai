@@ -437,12 +437,14 @@ export default function Chat() {
     // Log spoken vocabulary — attribute to the diary's date (supports past diaries)
     logSpokenWords(userMessage.content, diaryDate);
 
-    // Soft cap: once user + AI messages combined reach 10 (excluding the
-    // initial welcome bubble), ask the AI to wrap the conversation up
-    // naturally on this turn, then auto-trigger diary generation after it
-    // replies. This avoids the previous abrupt cut-off.
-    const realCount = nextMessages.filter((m) => m.id !== 'welcome').length;
-    const shouldWrapUp = realCount >= 10;
+    // Soft cap: once the user has sent 10 turns (10 やりとり), ask the AI to
+    // wrap the conversation up naturally on this turn, then auto-trigger
+    // diary generation after it replies. We count *user* messages only so the
+    // spec ("合計で10のやりとり") matches reality.
+    const userTurnCount = nextMessages.filter(
+      (m) => m.role === 'user' && m.id !== 'welcome',
+    ).length;
+    const shouldWrapUp = userTurnCount >= 10;
 
     try {
       // Call AI for response. If we're wrapping up, append a system nudge so
