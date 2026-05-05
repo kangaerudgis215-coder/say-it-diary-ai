@@ -262,12 +262,13 @@ export default function Chat() {
         japanese: m.japanese ?? undefined,
       }));
       setMessages(restoredMessages);
-      // When reopening an unfinished chat, replay the original AI welcome so
-      // the flow still starts as a spoken conversation. Completed diaries stay
-      // locked/review-only and do not autoplay old chat audio.
-      if (!existingDiary?.id) {
-        const welcome = restoredMessages.find((m) => m.role === 'assistant');
-        if (welcome) window.setTimeout(() => speakAssistant(welcome.content), 250);
+      // Replay TTS only when the conversation is brand new (just the welcome
+      // bubble, user hasn't replied yet). Otherwise we'd jarringly replay the
+      // first welcome line on every reopen — even mid-conversation.
+      const onlyWelcome =
+        restoredMessages.length === 1 && restoredMessages[0].role === 'assistant';
+      if (!existingDiary?.id && onlyWelcome) {
+        window.setTimeout(() => speakAssistant(restoredMessages[0].content), 250);
       }
     } else {
       // Create new conversation for this diary date
