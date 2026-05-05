@@ -75,7 +75,12 @@ export default function Home() {
 
   const startDiaryChat = (date: Date) => {
     const diaryDate = format(date, 'yyyy-MM-dd');
-    speakAssistantImmediately(getChatWelcomeMessage(diaryDate).content);
+    // Skip the welcome voice when a diary already exists for this date —
+    // reopening a finished day shouldn't replay the greeting.
+    const hasEntry = entries.some((e) => e.date === diaryDate);
+    if (!hasEntry) {
+      speakAssistantImmediately(getChatWelcomeMessage(diaryDate).content);
+    }
     navigate(`/chat?date=${diaryDate}&welcomeSpoken=1`);
   };
 
@@ -221,7 +226,11 @@ export default function Home() {
         )}
       </main>
 
-      <ComposeFAB />
+      <ComposeFAB
+        skipWelcomeVoice={entries.some(
+          (e) => e.date === format(new Date(), 'yyyy-MM-dd'),
+        )}
+      />
       <BottomTabBar homeTab={tab} onHomeTabChange={setTab} />
     </div>
   );
