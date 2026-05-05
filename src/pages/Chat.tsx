@@ -33,6 +33,7 @@ import { useSuccessSound } from '@/hooks/useSuccessSound';
 import { normalizeForExpression } from '@/lib/textComparison';
 import { persistDiarySentences } from '@/lib/practiceBuilder';
 import { createAssistantUtterance, speakAssistant, stopAssistantSpeech } from '@/lib/assistantSpeech';
+import { getChatWelcomeMessage } from '@/lib/chatWelcome';
 import {
   releaseSpeechRecognition,
   releaseSpeechRecognitionBeforeNavigation,
@@ -183,20 +184,13 @@ export default function Chat() {
 
       if (newConv) {
         setConversationId(newConv.id);
-        const isToday = isTodayFn(parseISO(diaryDate));
-        const dateLabel = isToday ? 'today' : format(parseISO(diaryDate), 'MMMM d, yyyy');
-        
         // Add welcome message
-        const welcomeJapanese = isToday
-          ? 'こんばんは！🌙 今日はどんな一日でしたか？大きなことでも小さなことでも、何があったか教えてください。英語で表現するお手伝いをします！'
-          : `こんばんは！🌙 ${dateLabel} のことを書きましょう。その日は何がありましたか？覚えていることを何でも教えてください！`;
+        const welcome = getChatWelcomeMessage(diaryDate);
         const welcomeMessage = {
           id: 'welcome',
           role: 'assistant' as const,
-          content: isToday 
-            ? "Hi there! 🌙 How was your day today? Tell me about anything that happened - big or small. I'm here to listen and help you express it in English!"
-            : `Hi there! 🌙 Let's write about ${dateLabel}. What happened that day? Tell me anything you remember!`,
-          japanese: welcomeJapanese,
+          content: welcome.content,
+          japanese: welcome.japanese,
         };
         setMessages([welcomeMessage]);
         speakAssistant(welcomeMessage.content);
