@@ -85,6 +85,7 @@ export function useSpeechRecognition(
   const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hardStopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const listeningRef = useRef(false);
+  const hasSpeechRef = useRef(false);
   
   // Check for browser support
   const isSupported = typeof window !== 'undefined' && 
@@ -102,6 +103,9 @@ export function useSpeechRecognition(
 
     const armSilenceTimer = () => {
       if (!autoStopSilenceMs) return;
+      // Don't auto-stop until the user has actually spoken at least once.
+      // Otherwise the mic gets killed before they get a chance to start.
+      if (!hasSpeechRef.current) return;
       if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
       silenceTimerRef.current = setTimeout(() => {
         listeningRef.current = false;
@@ -112,8 +116,8 @@ export function useSpeechRecognition(
 
     recognition.onstart = () => {
       listeningRef.current = true;
+      hasSpeechRef.current = false;
       setIsListening(true);
-      armSilenceTimer();
       if (hardStopTimerRef.current) clearTimeout(hardStopTimerRef.current);
       hardStopTimerRef.current = setTimeout(() => {
         listeningRef.current = false;
@@ -165,9 +169,11 @@ export function useSpeechRecognition(
       }
 
       if (finalTranscript) {
+        hasSpeechRef.current = true;
         setTranscript(prev => prev + (prev ? ' ' : '') + finalTranscript.trim());
         setInterimTranscript('');
       } else {
+        if (currentInterim.trim().length > 0) hasSpeechRef.current = true;
         setInterimTranscript(currentInterim);
       }
       // Any speech activity resets the silence timer.
