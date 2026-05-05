@@ -423,26 +423,57 @@ serve(async (req) => {
 
     const isJsonType = ["generate_diary", "select_sentences", "generate_quiz", "conversation", "regenerate_diary", "cat_comments"].includes(type);
 
-    const callGateway = () =>
-      fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${LOVABLE_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "google/gemini-3-flash-preview",
-          messages: aiMessages,
-          ...(isJsonType && { response_format: { type: "json_object" } }),
-        }),
-      });
+    // Per-call timeout so we never hang until the platform's 150s idle limit.
+    // Gateway typically responds in a few seconds; 45s leaves room for one retry.
+    const callGateway = async (timeoutMs = 45_000) => {
+      const ac = new AbortController();
+      const t = setTimeout(() => ac.abort(), timeoutMs);
+      try {
+        return await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${LOVABLE_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: "google/gemini-3-flash-preview",
+            messages: aiMessages,
+            ...(isJsonType && { response_format: { type: "json_object" } }),
+          }),
+          signal: ac.signal,
+        });
+      } finally {
+        clearTimeout(t);
+      }
+    };
 
-    let response = await callGateway();
+    let response: Response;
+    try {
+      response = await callGateway();
+    } catch (e) {
+      console.warn("AI gateway timeout/abort, retrying once:", (e as Error)?.message);
+      try {
+        response = await callGateway();
+      } catch (e2) {
+        console.error("AI gateway failed after retry:", (e2 as Error)?.message);
+        return new Response(
+          JSON.stringify({
+            error: "AIサービスが応答しませんでした。少し時間をおいて再度お試しください。",
+            fallback: true,
+          }),
+          { status: 504, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
     // Retry once on transient upstream errors (e.g., Cloudflare 502/503/504)
     if (!response.ok && response.status >= 500) {
       console.warn("AI gateway transient error, retrying:", response.status);
       await new Promise((r) => setTimeout(r, 800));
-      response = await callGateway();
+      try {
+        response = await callGateway();
+      } catch (e) {
+        console.error("AI gateway retry aborted:", (e as Error)?.message);
+      }
     }
 
     if (!response.ok) {
