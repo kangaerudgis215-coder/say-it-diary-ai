@@ -98,10 +98,10 @@ export default function Chat() {
     setExistingDiaryId(null);
     setConversationId(null);
     stopMic('abort');
-    stopAssistantSpeech();
+    if (!welcomeSpoken) stopAssistantSpeech();
     if (user) void initConversation();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, diaryDate]);
+  }, [user, diaryDate, welcomeSpoken]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
