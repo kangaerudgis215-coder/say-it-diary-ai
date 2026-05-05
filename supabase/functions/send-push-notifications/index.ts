@@ -98,9 +98,20 @@ Deno.serve(async (req) => {
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-  const vapidPublic = Deno.env.get('VAPID_PUBLIC_KEY');
-  const vapidPrivate = Deno.env.get('VAPID_PRIVATE_KEY');
-  const vapidSubject = Deno.env.get('VAPID_SUBJECT') || 'mailto:noreply@so-ki.app';
+  // Trim defensively — saved secrets sometimes pick up trailing newlines/quotes.
+  const vapidPublic = (Deno.env.get('VAPID_PUBLIC_KEY') ?? '')
+    .trim()
+    .replace(/^["']|["']$/g, '')
+    .replace(/=+$/, '');
+  const vapidPrivate = (Deno.env.get('VAPID_PRIVATE_KEY') ?? '')
+    .trim()
+    .replace(/^["']|["']$/g, '')
+    .replace(/=+$/, '');
+  const vapidSubject =
+    (Deno.env.get('VAPID_SUBJECT') ?? '').trim().replace(/^["']|["']$/g, '') ||
+    'mailto:noreply@so-ki.app';
+
+  console.log('VAPID public length:', vapidPublic.length, 'private length:', vapidPrivate.length, 'subject:', vapidSubject);
 
   if (!vapidPublic || !vapidPrivate) {
     return new Response(
