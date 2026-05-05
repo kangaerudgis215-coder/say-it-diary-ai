@@ -32,7 +32,7 @@ import { useVocabularyLog } from '@/hooks/useVocabularyLog';
 import { useSuccessSound } from '@/hooks/useSuccessSound';
 import { normalizeForExpression } from '@/lib/textComparison';
 import { persistDiarySentences } from '@/lib/practiceBuilder';
-import { speakAssistant, stopAssistantSpeech } from '@/lib/assistantSpeech';
+import { createAssistantUtterance, speakAssistant, stopAssistantSpeech } from '@/lib/assistantSpeech';
 import {
   releaseSpeechRecognition,
   releaseSpeechRecognitionBeforeNavigation,
