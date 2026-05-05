@@ -14,6 +14,7 @@ import {
   cleanupInvalidDiaryLinkedExpressions,
   partitionExpressionsForText,
 } from '@/lib/expressionValidation';
+import { speakDiary, cancelDiaryTTS } from '@/lib/diaryTTS';
 
 export default function Recall() {
   const { user } = useAuth();
