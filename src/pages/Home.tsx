@@ -13,6 +13,7 @@ import { BottomTabBar } from '@/components/home/BottomTabBar';
 import { ComposeFAB } from '@/components/home/ComposeFAB';
 import { StreakHeroCompact } from '@/components/home/StreakHeroCompact';
 import { CatBuddy } from '@/components/home/CatBuddy';
+import { SelectedDayChatPreview } from '@/components/home/SelectedDayChatPreview';
 
 interface DiaryRow {
   id: string;
@@ -98,11 +99,11 @@ export default function Home() {
     return count;
   }, [entries]);
 
-  // Entries visible underneath the calendar (selected day + earlier)
-  const calendarListEntries = useMemo(() => {
-    if (tab !== 'calendar') return [];
-    return entries.filter((e) => parseISO(e.date) <= selectedDate);
-  }, [entries, selectedDate, tab]);
+  // Diary entry (if any) for the currently-selected calendar day.
+  const selectedDayEntry = useMemo(
+    () => entries.find((e) => isSameDay(parseISO(e.date), selectedDate)),
+    [entries, selectedDate],
+  );
 
   return (
     <div className="min-h-screen flex flex-col bg-background pb-24">
@@ -165,7 +166,7 @@ export default function Home() {
             </div>
 
             {/* CTA when the selected day has no diary yet */}
-            {!entries.some((e) => isSameDay(parseISO(e.date), selectedDate)) && (
+            {!selectedDayEntry ? (
               <div className="rounded-2xl bg-card/60 border border-border/50 p-5 text-center fade-in">
                 {isFuture(selectedDate) ? (
                   <p className="text-sm text-muted-foreground">未来の日付には日記を書けません。</p>
@@ -199,9 +200,15 @@ export default function Home() {
                   </>
                 )}
               </div>
+            ) : (
+              user && (
+                <SelectedDayChatPreview
+                  userId={user.id}
+                  diaryId={selectedDayEntry.id}
+                  diaryDate={selectedDayEntry.date}
+                />
+              )
             )}
-
-            <DiaryListView entries={calendarListEntries} recallCompletedIds={recallCompletedIds} />
           </>
         ) : (
           <DiaryListView entries={entries} showSearch recallCompletedIds={recallCompletedIds} />
