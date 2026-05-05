@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils';
 import { StarParticles } from './StarParticles';
 import { ConfettiBurst } from '@/components/lottie/ConfettiBurst';
 import { useSuccessSound } from '@/hooks/useSuccessSound';
+import { speakDiary, cancelDiaryTTS } from '@/lib/diaryTTS';
 import { Button } from '@/components/ui/button';
 
 interface WordReorderQuizProps {
@@ -42,29 +43,18 @@ export function WordReorderQuiz({ sentence, japaneseSentence, onCorrect }: WordR
   const [hintIndex, setHintIndex] = useState<number | null>(null);
   const [showNice, setShowNice] = useState(false);
   const { playSuccess } = useSuccessSound();
+  // Speak per-word using the diary TTS helper so the iOS volume rocker works
+  // and so we can fully cancel speech before playing the success chime
+  // (otherwise the speech engine briefly hogs the audio channel and the
+  // chime is dropped on mobile).
 
   // Speak a single word using the browser's built-in TTS so learners can hear
   // every card they tap. Cancels the previous utterance so rapid taps don't
   // queue up and lag behind.
   const speak = useCallback((text: string) => {
-    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
-    try {
-      window.speechSynthesis.cancel();
-      // Strip trailing punctuation, then normalise single-letter words so TTS
-      // doesn't spell them out as "capital I" / "capital A". We lowercase
-      // standalone single letters and surround them with spaces so the engine
-      // reads them as a natural word rather than an initialism.
-      const cleaned = text.replace(/[.,!?;:]+$/, '');
-      const spoken = /^[A-Za-z]$/.test(cleaned)
-        ? cleaned.toLowerCase()
-        : cleaned;
-      const u = new SpeechSynthesisUtterance(spoken);
-      u.lang = 'en-US';
-      u.rate = 0.95;
-      window.speechSynthesis.speak(u);
-    } catch {
-      /* ignore TTS errors */
-    }
+    const cleaned = text.replace(/[.,!?;:]+$/, '');
+    const spoken = /^[A-Za-z]$/.test(cleaned) ? cleaned.toLowerCase() : cleaned;
+    speakDiary(spoken, { rate: 0.95 });
   }, []);
 
   // Touch drag state for reordering placed words
@@ -105,7 +95,11 @@ export function WordReorderQuiz({ sentence, japaneseSentence, onCorrect }: WordR
       if (userSentence === target) {
         setIsCorrect(true);
         setShowNice(true);
-        playSuccess();
+        // Free the speech channel so the chime is not swallowed by an in-flight
+        // per-word TTS playback (common cause of "no success sound" on mobile).
+        cancelDiaryTTS();
+        // Tiny delay lets iOS release the audio session before the chime.
+        window.setTimeout(() => playSuccess(), 80);
         if (navigator.vibrate) navigator.vibrate(100);
         setTimeout(() => {
           setShowNice(false);

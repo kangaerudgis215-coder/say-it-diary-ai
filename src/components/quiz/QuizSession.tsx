@@ -29,6 +29,9 @@ export function QuizSession() {
   const [currentIdx, setCurrentIdx] = useState(0);
   const [streak, setStreak] = useState(0);
   const [expressions, setExpressions] = useState<string[]>([]);
+  const [expressionDetails, setExpressionDetails] = useState<
+    { expression: string; meaning?: string | null; pos_or_type?: string | null }[]
+  >([]);
   const [fullEnglish, setFullEnglish] = useState('');
   const [fullJapanese, setFullJapanese] = useState('');
   const [diaryDate, setDiaryDate] = useState<string>('');
@@ -68,10 +71,17 @@ export function QuizSession() {
     // Get expressions
     const { data: exprs } = await supabase
       .from('expressions')
-      .select('expression')
+      .select('expression, meaning, pos_or_type')
       .eq('diary_entry_id', entry.id);
     const exprStrings = (exprs || []).map((e: any) => e.expression);
     setExpressions(exprStrings);
+    setExpressionDetails(
+      (exprs || []).map((e: any) => ({
+        expression: e.expression,
+        meaning: e.meaning,
+        pos_or_type: e.pos_or_type,
+      })),
+    );
 
     // Load sentences from diary_sentences table first, fallback to building from content
     let allSentences = await loadDiarySentences(supabase, user.id, entry.id);
@@ -190,6 +200,7 @@ export function QuizSession() {
         <CompletionScreen
           streak={streak}
           expressions={expressions}
+          expressionDetails={expressionDetails}
           isPastDiary={isPastDiary}
           diaryDate={diaryDate}
         />
