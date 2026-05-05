@@ -86,7 +86,12 @@ export function speakDiary(text: string, opts: DiarySpeakOptions = {}) {
 
   startSilent();
 
-  const utterance = new SpeechSynthesisUtterance(text);
+  // Very short utterances (e.g. a single letter like "I" or "a") often play
+  // back garbled/raspy on desktop Chrome because the synth engine has too
+  // little signal to warm up. Padding with trailing punctuation+space gives
+  // it enough audio to render cleanly without changing perceived speech.
+  const safeText = text.trim().length <= 2 ? `${text.trim()}.  ` : text;
+  const utterance = new SpeechSynthesisUtterance(safeText);
   utterance.lang = 'en-US';
   utterance.rate = opts.rate ?? 0.9;
   utterance.pitch = 1.0;

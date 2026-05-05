@@ -14,13 +14,15 @@ interface CatBuddyProps {
   recentDiary?: string | null;
   entries?: CatDiaryEntry[];
   streak?: number;
+  /** Visual scale for the cat animation. Defaults to 1. */
+  sizeScale?: number;
 }
 
 /**
  * Tiny laid-back cat companion that comments on the user's recent diary
  * with a short reaction + encouragement, nyaa~.
  */
-export function CatBuddy({ recentDiary, entries = [], streak = 0 }: CatBuddyProps) {
+export function CatBuddy({ recentDiary, entries = [], streak = 0, sizeScale = 1 }: CatBuddyProps) {
   const { user } = useAuth();
   const [displayName, setDisplayName] = useState<string | null>(null);
   const [comments, setComments] = useState<string[]>(() => pickFallbackBubbles(recentDiary ?? '', streak, null));
@@ -110,7 +112,10 @@ export function CatBuddy({ recentDiary, entries = [], streak = 0 }: CatBuddyProp
           className="absolute -bottom-1.5 left-6 w-3 h-3 rotate-45 bg-card/90 border-r border-b border-border/70"
         />
       </div>
-      <div className="w-24 h-24 -mt-1">
+      <div
+        className="-mt-1"
+        style={{ width: `${6 * sizeScale}rem`, height: `${6 * sizeScale}rem` }}
+      >
         <DotLottieReact
           src="/anim/cat-playing.lottie"
           autoplay
