@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Send, Loader2, Check, BookOpen, Lock, Mic } from 'lucide-react';
+import { ArrowLeft, Send, Loader2, Check, BookOpen, Lock, Mic, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ChatBubble } from '@/components/ChatBubble';
@@ -14,6 +14,17 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
@@ -114,6 +125,17 @@ function speakAssistant(text: string, preparedUtterance?: SpeechSynthesisUtteran
     // Some browsers pause the engine after long async waits — resume first.
     try { window.speechSynthesis.resume(); } catch { /* ignore */ }
     window.speechSynthesis.speak(utterance);
+    // Safari sometimes silently no-ops the first speak() after a long await.
+    // If nothing has started after a beat, kick the engine and retry once.
+    window.setTimeout(() => {
+      try {
+        const ss = window.speechSynthesis;
+        if (!ss.speaking && !ss.pending) {
+          ss.resume();
+          ss.speak(utterance);
+        }
+      } catch { /* ignore */ }
+    }, 220);
   } catch {
     /* Browser may block speech before the first user gesture. */
   }
@@ -240,12 +262,13 @@ export default function Chat() {
         japanese: m.japanese ?? undefined,
       }));
       setMessages(restoredMessages);
-      // When reopening an unfinished chat, replay the original AI welcome so
-      // the flow still starts as a spoken conversation. Completed diaries stay
-      // locked/review-only and do not autoplay old chat audio.
-      if (!existingDiary?.id) {
-        const welcome = restoredMessages.find((m) => m.role === 'assistant');
-        if (welcome) window.setTimeout(() => speakAssistant(welcome.content), 250);
+      // Replay TTS only when the conversation is brand new (just the welcome
+      // bubble, user hasn't replied yet). Otherwise we'd jarringly replay the
+      // first welcome line on every reopen — even mid-conversation.
+      const onlyWelcome =
+        restoredMessages.length === 1 && restoredMessages[0].role === 'assistant';
+      if (!existingDiary?.id && onlyWelcome) {
+        window.setTimeout(() => speakAssistant(restoredMessages[0].content), 250);
       }
     } else {
       // Create new conversation for this diary date
@@ -305,6 +328,44 @@ export default function Chat() {
     stopAssistantSpeech();
     await releaseSpeechRecognitionBeforeNavigation(rec);
     navigate(to);
+  };
+
+  /**
+   * Emergency reset: wipes ALL messages for this date's conversation
+   * (both server-side and locally) and starts a brand-new welcome.
+   * Used when the chat got into a stuck/duplicated state from a bug.
+   * Disabled once a diary has been generated.
+   */
+  const handleResetConversation = async () => {
+    if (!user || !conversationId || existingDiaryId) return;
+    try {
+      stopAssistantSpeech();
+      const rec = recognitionRef.current;
+      recognitionRef.current = null;
+      isStartingMicRef.current = false;
+      setIsListening(false);
+      if (rec) releaseSpeechRecognition(rec, 'abort');
+
+      // Delete every message in this conversation, then drop the conversation
+      // row so initConversation() recreates a clean one + fresh welcome.
+      await supabase.from('messages').delete().eq('conversation_id', conversationId);
+      await supabase.from('conversations').delete().eq('id', conversationId);
+
+      setMessages([]);
+      setInput('');
+      setConversationId(null);
+      toast({
+        title: 'チャットをリセットしました',
+        description: '一からやり直せます ✨',
+      });
+      await initConversation();
+    } catch (e: any) {
+      toast({
+        variant: 'destructive',
+        title: 'リセットに失敗しました',
+        description: e?.message ?? 'もう一度お試しください',
+      });
+    }
   };
 
   const sendMessage = async (content: string, preparedUtterance?: SpeechSynthesisUtterance | null) => {
@@ -807,6 +868,43 @@ export default function Chat() {
                 </div>
               </DialogContent>
             </Dialog>
+
+            {/* Emergency reset — only available before the diary is locked */}
+            {!isLocked && (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label="チャットをリセット"
+                    title="チャットをリセット"
+                  >
+                    <RotateCcw className="w-5 h-5" />
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle className="font-japanese">
+                      この日のチャットをリセットしますか？
+                    </AlertDialogTitle>
+                    <AlertDialogDescription className="font-japanese">
+                      これまでのやりとりがすべて消えて、最初のウェルカムメッセージから
+                      やり直します。日記がうまく作れない／別の日のチャットが混ざって
+                      しまった時の緊急用です。日記生成後はリセットできません。
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel className="font-japanese">キャンセル</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={() => void handleResetConversation()}
+                      className="font-japanese"
+                    >
+                      リセットする
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
           </div>
           
           <div className="text-center">
