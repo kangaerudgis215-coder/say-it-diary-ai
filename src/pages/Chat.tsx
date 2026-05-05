@@ -330,6 +330,44 @@ export default function Chat() {
     navigate(to);
   };
 
+  /**
+   * Emergency reset: wipes ALL messages for this date's conversation
+   * (both server-side and locally) and starts a brand-new welcome.
+   * Used when the chat got into a stuck/duplicated state from a bug.
+   * Disabled once a diary has been generated.
+   */
+  const handleResetConversation = async () => {
+    if (!user || !conversationId || existingDiaryId) return;
+    try {
+      stopAssistantSpeech();
+      const rec = recognitionRef.current;
+      recognitionRef.current = null;
+      isStartingMicRef.current = false;
+      setIsListening(false);
+      if (rec) releaseSpeechRecognition(rec, 'abort');
+
+      // Delete every message in this conversation, then drop the conversation
+      // row so initConversation() recreates a clean one + fresh welcome.
+      await supabase.from('messages').delete().eq('conversation_id', conversationId);
+      await supabase.from('conversations').delete().eq('id', conversationId);
+
+      setMessages([]);
+      setInput('');
+      setConversationId(null);
+      toast({
+        title: 'チャットをリセットしました',
+        description: '一からやり直せます ✨',
+      });
+      await initConversation();
+    } catch (e: any) {
+      toast({
+        variant: 'destructive',
+        title: 'リセットに失敗しました',
+        description: e?.message ?? 'もう一度お試しください',
+      });
+    }
+  };
+
   const sendMessage = async (content: string, preparedUtterance?: SpeechSynthesisUtterance | null) => {
     if (!content.trim() || !conversationId || !user) return;
     // Hard guard: never accept new messages once the diary is finalised.
