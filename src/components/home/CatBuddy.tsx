@@ -79,7 +79,14 @@ export function CatBuddy({ recentDiary, entries = [], streak = 0 }: CatBuddyProp
     return () => {
       cancelled = true;
     };
-  }, [diarySignature, entries, recentDiary, streak, displayName]);
+    // Intentionally exclude `entries` and `recentDiary` from deps:
+    // `diarySignature` is derived from `entries` and is the stable identity
+    // we want to react to. Including the raw arrays caused the AI
+    // `cat_comments` Edge Function to be re-invoked on every Home focus /
+    // visibility change (parent rebuilds the array), which was the main
+    // cause of the laggy Home screen on desktop.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [diarySignature, streak, displayName]);
 
   const bubble = comments[index % comments.length] || pickFallbackBubbles('', streak, displayName)[0];
   const cycleComment = () => setIndex((prev) => (prev + 1) % Math.max(1, comments.length));

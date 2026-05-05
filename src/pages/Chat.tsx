@@ -29,6 +29,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
 import { useVocabularyLog } from '@/hooks/useVocabularyLog';
+import { useSuccessSound } from '@/hooks/useSuccessSound';
 import { normalizeForExpression } from '@/lib/textComparison';
 import { persistDiarySentences } from '@/lib/practiceBuilder';
 import {
@@ -180,6 +181,7 @@ export default function Chat() {
   const [searchParams] = useSearchParams();
   const { toast } = useToast();
   const { logSpokenWords } = useVocabularyLog();
+  const { playBigSuccess } = useSuccessSound();
   
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
@@ -694,6 +696,11 @@ export default function Chat() {
         title: "Diary saved! ✨",
         description: "Now let's review and memorize it!",
       });
+
+      // Celebratory chime — the big "diary complete" sound was previously
+      // only triggered inside CompletionScreen (post-quiz). Play it here so
+      // the user hears confirmation the moment generation succeeds.
+      try { playBigSuccess(); } catch { /* no-op */ }
 
       // Get the diary entry ID and navigate to review page
       const { data: savedEntry } = await supabase
