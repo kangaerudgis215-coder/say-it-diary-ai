@@ -9,6 +9,8 @@ import { DotLottieReact } from '@lottiefiles/dotlottie-react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
 import { format, isToday, isFuture, parseISO } from 'date-fns';
+import { speakAssistantImmediately } from '@/lib/assistantSpeech';
+import { getChatWelcomeMessage } from '@/lib/chatWelcome';
 
 export default function Calendar() {
   const { user } = useAuth();
@@ -82,6 +84,12 @@ export default function Calendar() {
     } else {
       setRecallHistory([]);
     }
+  };
+
+  const startDiaryChat = (date: Date) => {
+    const diaryDate = format(date, 'yyyy-MM-dd');
+    speakAssistantImmediately(getChatWelcomeMessage(diaryDate).content);
+    navigate(`/chat?date=${diaryDate}&welcomeSpoken=1`);
   };
 
   return (
@@ -228,7 +236,7 @@ export default function Calendar() {
               <Button
                 variant="glow"
                 className="gap-2"
-                onClick={() => navigate(`/chat?date=${format(selectedDate, 'yyyy-MM-dd')}`)}
+                onClick={() => startDiaryChat(selectedDate)}
               >
                 <Plus className="w-4 h-4" />
                 {isToday(selectedDate) ? '今日の日記を書く' : 'この日の日記を書く'}

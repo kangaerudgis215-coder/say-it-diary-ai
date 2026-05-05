@@ -14,6 +14,8 @@ import { ComposeFAB } from '@/components/home/ComposeFAB';
 import { StreakHeroCompact } from '@/components/home/StreakHeroCompact';
 import { CatBuddy } from '@/components/home/CatBuddy';
 import { SelectedDayChatPreview } from '@/components/home/SelectedDayChatPreview';
+import { speakAssistantImmediately } from '@/lib/assistantSpeech';
+import { getChatWelcomeMessage } from '@/lib/chatWelcome';
 
 interface DiaryRow {
   id: string;
@@ -69,6 +71,12 @@ export default function Home() {
       .eq('user_id', user.id)
       .eq('completed', true);
     setRecallCompletedIds(new Set((recalls || []).map((r: any) => r.diary_entry_id)));
+  };
+
+  const startDiaryChat = (date: Date) => {
+    const diaryDate = format(date, 'yyyy-MM-dd');
+    speakAssistantImmediately(getChatWelcomeMessage(diaryDate).content);
+    navigate(`/chat?date=${diaryDate}&welcomeSpoken=1`);
   };
 
   const stamps = useMemo(
@@ -190,9 +198,7 @@ export default function Home() {
                     <Button
                       variant="glow"
                       className="gap-2"
-                      onClick={() =>
-                        navigate(`/chat?date=${format(selectedDate, 'yyyy-MM-dd')}`)
-                      }
+                      onClick={() => startDiaryChat(selectedDate)}
                     >
                       <Plus className="w-4 h-4" />
                       {isToday(selectedDate) ? '今日の日記を書く' : 'この日の日記を書く'}

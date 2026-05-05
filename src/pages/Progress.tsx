@@ -10,6 +10,8 @@
   import { useToast } from '@/hooks/use-toast';
   import { ExpressionMasteryStats } from '@/components/progress/ExpressionMasteryStats';
   import { DailyEncouragement } from '@/components/progress/DailyEncouragement';
+  import { speakAssistantImmediately } from '@/lib/assistantSpeech';
+  import { getChatWelcomeMessage } from '@/lib/chatWelcome';
  
  interface VocabLog {
    date: string;
@@ -24,6 +26,12 @@
    const [isLoading, setIsLoading] = useState(true);
    const [animationStarted, setAnimationStarted] = useState(false);
    const [isBackfilling, setIsBackfilling] = useState(false);
+
+    const startTodayDiary = () => {
+      const diaryDate = format(new Date(), 'yyyy-MM-dd');
+      speakAssistantImmediately(getChatWelcomeMessage(diaryDate).content);
+      navigate(`/chat?date=${diaryDate}&welcomeSpoken=1`);
+    };
  
    useEffect(() => {
      if (user) {
@@ -336,7 +344,7 @@
                   )}
                 </Button>
                 <p className="text-xs text-muted-foreground">or</p>
-                <Button variant="outline" onClick={() => navigate('/chat')}>
+                <Button variant="outline" onClick={startTodayDiary}>
                   Start today's diary
                 </Button>
               </div>

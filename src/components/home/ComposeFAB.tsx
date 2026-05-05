@@ -1,7 +1,10 @@
 import { Pencil } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { format } from 'date-fns';
 import { useUISound } from '@/hooks/useUISound';
 import { cn } from '@/lib/utils';
+import { speakAssistantImmediately } from '@/lib/assistantSpeech';
+import { getChatWelcomeMessage } from '@/lib/chatWelcome';
 
 interface ComposeFABProps {
   /** Optional date (yyyy-MM-dd) to start a diary for. */
@@ -17,8 +20,10 @@ export function ComposeFAB({ date }: ComposeFABProps) {
   const { playNavigate } = useUISound();
 
   const handleClick = () => {
+    const diaryDate = date ?? format(new Date(), 'yyyy-MM-dd');
     playNavigate();
-    navigate(date ? `/chat?date=${date}` : '/chat');
+    speakAssistantImmediately(getChatWelcomeMessage(diaryDate).content);
+    navigate(`/chat?date=${diaryDate}&welcomeSpoken=1`);
   };
 
   return (

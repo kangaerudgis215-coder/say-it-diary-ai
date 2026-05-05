@@ -15,12 +15,20 @@ import {
   partitionExpressionsForText,
 } from '@/lib/expressionValidation';
 import { speakDiary, cancelDiaryTTS } from '@/lib/diaryTTS';
+import { speakAssistantImmediately } from '@/lib/assistantSpeech';
+import { getChatWelcomeMessage } from '@/lib/chatWelcome';
 
 export default function Recall() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { toast } = useToast();
+
+  const startTodayDiary = () => {
+    const diaryDate = format(new Date(), 'yyyy-MM-dd');
+    speakAssistantImmediately(getChatWelcomeMessage(diaryDate).content);
+    navigate(`/chat?date=${diaryDate}&welcomeSpoken=1`);
+  };
 
   const diaryIdFromUrl = searchParams.get('diaryId');
   const modeFromUrl = searchParams.get('mode');
@@ -155,7 +163,7 @@ export default function Recall() {
             : "You don't have any past diaries yet. Please complete today's diary first! 💪"}
         </p>
         {sourceMode === 'latest' && (
-          <Button variant="glow" onClick={() => navigate('/chat')}>
+          <Button variant="glow" onClick={startTodayDiary}>
             Start today's diary
           </Button>
         )}
