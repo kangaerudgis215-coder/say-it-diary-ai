@@ -10,6 +10,7 @@ import { normalizeText } from '@/lib/textComparison';
 import { useSuccessSound } from '@/hooks/useSuccessSound';
 import { cn } from '@/lib/utils';
 import { cancelDiaryTTS } from '@/lib/diaryTTS';
+import { stopAssistantSpeech } from '@/lib/assistantSpeech';
 
 interface ReadAloudPromptProps {
   englishText: string;
@@ -119,9 +120,14 @@ export function ReadAloudPrompt({ englishText, japaneseText, onComplete, onSkip 
   const handleMicPress = useCallback(() => {
     if (passed) return;
     if (isListening) {
+      if (completionTimerRef.current) {
+        clearTimeout(completionTimerRef.current);
+        completionTimerRef.current = null;
+      }
       stopListening();
     } else {
       cancelDiaryTTS();
+      stopAssistantSpeech();
       resetTranscript();
       setGaugeValue(0);
       startListening();
