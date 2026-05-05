@@ -95,7 +95,9 @@ export function speakDiary(text: string, opts: DiarySpeakOptions = {}) {
   utterance.lang = 'en-US';
   utterance.rate = opts.rate ?? 0.9;
   utterance.pitch = 1.0;
-  utterance.volume = 1.0;
+  // Avoid full-scale TTS because mobile Bluetooth routes can jump between
+  // earphones / speaker while speech synthesis is active.
+  utterance.volume = 0.72;
 
   const cleanup = () => {
     stopSilent();
