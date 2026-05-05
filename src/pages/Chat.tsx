@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Send, Loader2, Check, BookOpen, Lock, Mic } from 'lucide-react';
+import { ArrowLeft, Send, Loader2, Check, BookOpen, Lock, Mic, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ChatBubble } from '@/components/ChatBubble';
@@ -14,6 +14,17 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
@@ -114,6 +125,17 @@ function speakAssistant(text: string, preparedUtterance?: SpeechSynthesisUtteran
     // Some browsers pause the engine after long async waits — resume first.
     try { window.speechSynthesis.resume(); } catch { /* ignore */ }
     window.speechSynthesis.speak(utterance);
+    // Safari sometimes silently no-ops the first speak() after a long await.
+    // If nothing has started after a beat, kick the engine and retry once.
+    window.setTimeout(() => {
+      try {
+        const ss = window.speechSynthesis;
+        if (!ss.speaking && !ss.pending) {
+          ss.resume();
+          ss.speak(utterance);
+        }
+      } catch { /* ignore */ }
+    }, 220);
   } catch {
     /* Browser may block speech before the first user gesture. */
   }
