@@ -11,6 +11,7 @@ import { useSuccessSound } from '@/hooks/useSuccessSound';
 import { cn } from '@/lib/utils';
 import { cancelDiaryTTS } from '@/lib/diaryTTS';
 import { stopAssistantSpeech } from '@/lib/assistantSpeech';
+import { forceReleaseActiveRecognition } from '@/lib/speechRecognition';
 
 interface ReadAloudPromptProps {
   englishText: string;
@@ -138,17 +139,24 @@ export function ReadAloudPrompt({
   const handleDonePress = useCallback(() => {
     if (passed) return;
     if (isListening) stopListening();
+    // Make absolutely sure the mic / audio session is released BEFORE we
+    // play the success chime. Otherwise iOS keeps the device in
+    // "communication mode" and the chime is routed to the phone speaker
+    // even when Bluetooth earphones are connected.
+    forceReleaseActiveRecognition();
     setPassed(true);
     setShowNice(true);
     setShowSuccessAnim(true);
     setGaugeValue(100);
-    window.setTimeout(() => playSuccess(), 180);
+    // Wait a bit longer so the OS has time to tear down the recognition
+    // audio session and re-route audio back to the Bluetooth output.
+    window.setTimeout(() => playSuccess(), 450);
     if (navigator.vibrate) navigator.vibrate(100);
     setTimeout(() => {
       setShowNice(false);
       setShowSuccessAnim(false);
       onComplete();
-    }, 1200);
+    }, 1500);
   }, [isListening, passed, playSuccess, onComplete, stopListening]);
 
   const showEnglish = mode !== 'hidden';
