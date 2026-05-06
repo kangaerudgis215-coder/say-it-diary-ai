@@ -113,7 +113,7 @@ export async function enablePushNotifications(): Promise<boolean> {
   // public key" even when the bytes are correct.
   const sub = await reg.pushManager.subscribe({
     userVisibleOnly: true,
-    applicationServerKey: keyBytes,
+    applicationServerKey: keyBytes as BufferSource,
   });
 
   const json = sub.toJSON() as {
