@@ -222,6 +222,7 @@ export function QuizSession() {
           <ReadAloudPrompt
             englishText={fullEnglish}
             japaneseText={fullJapanese}
+            expressions={expressions}
             onComplete={handleReadAloudComplete}
             onSkip={handleReadAloudSkip}
           />
