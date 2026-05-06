@@ -80,6 +80,23 @@ async function ensureRegistration(): Promise<ServiceWorkerRegistration> {
   return navigator.serviceWorker.register('/sw.js', { scope: '/' });
 }
 
+async function recreateNotificationServiceWorker(): Promise<ServiceWorkerRegistration> {
+  const registrations = await navigator.serviceWorker.getRegistrations();
+  await Promise.all(
+    registrations.map(async (registration) => {
+      try {
+        const sub = await registration.pushManager.getSubscription();
+        await sub?.unsubscribe();
+      } catch (e) {
+        console.warn('Failed to clear old push subscription', e);
+      }
+      await registration.unregister();
+    }),
+  );
+  const registration = await navigator.serviceWorker.register(`/sw.js?v=${Date.now()}`, { scope: '/' });
+  return registration;
+}
+
 /**
  * Ask permission, register SW, subscribe and persist to Supabase.
  * Returns true on success.
@@ -94,7 +111,7 @@ export async function enablePushNotifications(): Promise<boolean> {
     throw new Error('通知の許可が得られませんでした。');
   }
 
-  const reg = await ensureRegistration();
+  const reg = await recreateNotificationServiceWorker();
   await navigator.serviceWorker.ready;
 
   const VAPID_PUBLIC_KEY = normalizeVapidPublicKey(await fetchVapidPublicKey());
