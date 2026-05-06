@@ -127,7 +127,7 @@ export async function enablePushNotifications(): Promise<boolean> {
     );
   }
 
-  let sub: PushSubscription;
+  let sub: PushSubscription | null = null;
   const subscribeOptions = [
     // Spec-compatible and best for most Safari versions.
     { label: 'base64url-string', key: VAPID_PUBLIC_KEY },
@@ -152,7 +152,7 @@ export async function enablePushNotifications(): Promise<boolean> {
     }
   }
 
-  if (!sub!) {
+  if (!sub) {
     throw lastSubscribeError instanceof Error
       ? lastSubscribeError
       : new Error('プッシュ通知の購読に失敗しました。');
