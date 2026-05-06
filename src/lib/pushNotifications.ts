@@ -1,20 +1,18 @@
 import { supabase } from '@/integrations/supabase/client';
 
-// VAPID public key is fetched from the server at runtime so a key rotation
-// never desyncs client and server (which would silently break notifications
-// with Apple's "BadVapidPublicKey" error).
-let cachedPublicKey: string | null = null;
 async function fetchVapidPublicKey(): Promise<string> {
-  if (cachedPublicKey) return cachedPublicKey;
-  const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-push-notifications?action=public-key`;
+  // Do not cache this in memory. During VAPID rotation, iOS installed PWAs can
+  // keep the app process alive and would otherwise reuse the previously-fetched
+  // bad key even after secrets are corrected server-side.
+  const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-push-notifications?action=public-key&t=${Date.now()}`;
   const res = await fetch(url, {
+    cache: 'no-store',
     headers: { apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string },
   });
   if (!res.ok) throw new Error('VAPID 公開鍵の取得に失敗しました。');
   const data = (await res.json()) as { publicKey?: string };
   if (!data.publicKey) throw new Error('VAPID 公開鍵が空です。');
-  cachedPublicKey = data.publicKey;
-  return cachedPublicKey;
+  return data.publicKey;
 }
 
 function isInIframe(): boolean {
@@ -47,12 +45,33 @@ export function pushPermission(): NotificationPermission | 'unsupported' {
 }
 
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
-  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
-  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const normalized = base64String
+    .replace(/\s+/g, '')
+    .replace(/^['"]|['"]$/g, '')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/g, '');
+  const padding = '='.repeat((4 - (normalized.length % 4)) % 4);
+  const base64 = (normalized + padding).replace(/-/g, '+').replace(/_/g, '/');
   const raw = atob(base64);
   const out = new Uint8Array(raw.length);
   for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
   return out;
+}
+
+function normalizeVapidPublicKey(base64String: string): string {
+  return base64String
+    .replace(/\s+/g, '')
+    .replace(/^['"]|['"]$/g, '')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/g, '');
+}
+
+function toExactArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  const copy = new Uint8Array(bytes.length);
+  copy.set(bytes);
+  return copy.buffer;
 }
 
 async function ensureRegistration(): Promise<ServiceWorkerRegistration> {
