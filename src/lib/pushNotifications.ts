@@ -1,20 +1,18 @@
 import { supabase } from '@/integrations/supabase/client';
 
-// VAPID public key is fetched from the server at runtime so a key rotation
-// never desyncs client and server (which would silently break notifications
-// with Apple's "BadVapidPublicKey" error).
-let cachedPublicKey: string | null = null;
 async function fetchVapidPublicKey(): Promise<string> {
-  if (cachedPublicKey) return cachedPublicKey;
-  const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-push-notifications?action=public-key`;
+  // Do not cache this in memory. During VAPID rotation, iOS installed PWAs can
+  // keep the app process alive and would otherwise reuse the previously-fetched
+  // bad key even after secrets are corrected server-side.
+  const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-push-notifications?action=public-key&t=${Date.now()}`;
   const res = await fetch(url, {
+    cache: 'no-store',
     headers: { apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string },
   });
   if (!res.ok) throw new Error('VAPID 公開鍵の取得に失敗しました。');
   const data = (await res.json()) as { publicKey?: string };
   if (!data.publicKey) throw new Error('VAPID 公開鍵が空です。');
-  cachedPublicKey = data.publicKey;
-  return cachedPublicKey;
+  return data.publicKey;
 }
 
 function isInIframe(): boolean {
@@ -47,18 +45,56 @@ export function pushPermission(): NotificationPermission | 'unsupported' {
 }
 
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
-  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
-  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const normalized = base64String
+    .replace(/\s+/g, '')
+    .replace(/^['"]|['"]$/g, '')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/g, '');
+  const padding = '='.repeat((4 - (normalized.length % 4)) % 4);
+  const base64 = (normalized + padding).replace(/-/g, '+').replace(/_/g, '/');
   const raw = atob(base64);
   const out = new Uint8Array(raw.length);
   for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
   return out;
 }
 
+function normalizeVapidPublicKey(base64String: string): string {
+  return base64String
+    .replace(/\s+/g, '')
+    .replace(/^['"]|['"]$/g, '')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/g, '');
+}
+
+function toExactArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  const copy = new Uint8Array(bytes.length);
+  copy.set(bytes);
+  return copy.buffer;
+}
+
 async function ensureRegistration(): Promise<ServiceWorkerRegistration> {
   const existing = await navigator.serviceWorker.getRegistration('/');
   if (existing) return existing;
   return navigator.serviceWorker.register('/sw.js', { scope: '/' });
+}
+
+async function recreateNotificationServiceWorker(): Promise<ServiceWorkerRegistration> {
+  const registrations = await navigator.serviceWorker.getRegistrations();
+  await Promise.all(
+    registrations.map(async (registration) => {
+      try {
+        const sub = await registration.pushManager.getSubscription();
+        await sub?.unsubscribe();
+      } catch (e) {
+        console.warn('Failed to clear old push subscription', e);
+      }
+      await registration.unregister();
+    }),
+  );
+  const registration = await navigator.serviceWorker.register(`/sw.js?v=${Date.now()}`, { scope: '/' });
+  return registration;
 }
 
 /**
@@ -75,10 +111,10 @@ export async function enablePushNotifications(): Promise<boolean> {
     throw new Error('通知の許可が得られませんでした。');
   }
 
-  const reg = await ensureRegistration();
+  const reg = await recreateNotificationServiceWorker();
   await navigator.serviceWorker.ready;
 
-  const VAPID_PUBLIC_KEY = await fetchVapidPublicKey();
+  const VAPID_PUBLIC_KEY = normalizeVapidPublicKey(await fetchVapidPublicKey());
 
   // Always drop any pre-existing subscription before resubscribing. iOS
   // Safari refuses to reuse a subscription created with a different VAPID
@@ -108,13 +144,36 @@ export async function enablePushNotifications(): Promise<boolean> {
     );
   }
 
-  // Pass the Uint8Array directly. Some iOS Safari versions reject a bare
-  // ArrayBuffer with "applicationServerKey must contain a valid P-256
-  // public key" even when the bytes are correct.
-  const sub = await reg.pushManager.subscribe({
-    userVisibleOnly: true,
-    applicationServerKey: keyBytes as BufferSource,
-  });
+  let sub: PushSubscription | null = null;
+  const subscribeOptions = [
+    // Spec-compatible and best for most Safari versions.
+    { label: 'base64url-string', key: VAPID_PUBLIC_KEY },
+    // Some WebKit versions are pickier and accept the byte array instead.
+    { label: 'uint8array', key: keyBytes as BufferSource },
+    // Final fallback for engines that require a tightly-sized ArrayBuffer.
+    { label: 'arraybuffer', key: toExactArrayBuffer(keyBytes) as BufferSource },
+  ];
+
+  let lastSubscribeError: unknown = null;
+  for (const option of subscribeOptions) {
+    try {
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: option.key,
+      });
+      lastSubscribeError = null;
+      break;
+    } catch (err) {
+      lastSubscribeError = err;
+      console.warn(`Push subscribe failed with ${option.label}`, err);
+    }
+  }
+
+  if (!sub) {
+    throw lastSubscribeError instanceof Error
+      ? lastSubscribeError
+      : new Error('プッシュ通知の購読に失敗しました。');
+  }
 
   const json = sub.toJSON() as {
     endpoint?: string;
@@ -153,7 +212,9 @@ export async function disablePushNotifications(): Promise<void> {
     const endpoint = sub.endpoint;
     try {
       await sub.unsubscribe();
-    } catch {}
+    } catch (e) {
+      console.warn('Failed to unsubscribe push sub', e);
+    }
     await supabase.from('push_subscriptions').delete().eq('endpoint', endpoint);
   }
 }
