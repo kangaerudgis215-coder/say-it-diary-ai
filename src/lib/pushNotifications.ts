@@ -1,8 +1,21 @@
 import { supabase } from '@/integrations/supabase/client';
 
-// Generated VAPID public key (safe to expose to clients).
-const VAPID_PUBLIC_KEY =
-  'BMIWARif-kGKUEUuiWVqQbnOwSG2T7BV4QvSTySCpzlOVKMP_LL_qycOvokrLhOM9O1MNlJCLGJe980k8L1dXEQ';
+// VAPID public key is fetched from the server at runtime so a key rotation
+// never desyncs client and server (which would silently break notifications
+// with Apple's "BadVapidPublicKey" error).
+let cachedPublicKey: string | null = null;
+async function fetchVapidPublicKey(): Promise<string> {
+  if (cachedPublicKey) return cachedPublicKey;
+  const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-push-notifications?action=public-key`;
+  const res = await fetch(url, {
+    headers: { apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string },
+  });
+  if (!res.ok) throw new Error('VAPID 公開鍵の取得に失敗しました。');
+  const data = (await res.json()) as { publicKey?: string };
+  if (!data.publicKey) throw new Error('VAPID 公開鍵が空です。');
+  cachedPublicKey = data.publicKey;
+  return cachedPublicKey;
+}
 
 function isInIframe(): boolean {
   try {
@@ -65,7 +78,28 @@ export async function enablePushNotifications(): Promise<boolean> {
   const reg = await ensureRegistration();
   await navigator.serviceWorker.ready;
 
+  const VAPID_PUBLIC_KEY = await fetchVapidPublicKey();
+
   let sub = await reg.pushManager.getSubscription();
+  // If a stored subscription was created with a *different* VAPID key
+  // (e.g. from before this rotation fix), Apple will reject every push with
+  // "BadVapidPublicKey". Detect that and resubscribe with the current key.
+  if (sub) {
+    try {
+      const currentKey = sub.options?.applicationServerKey
+        ? btoa(String.fromCharCode(...new Uint8Array(sub.options.applicationServerKey)))
+            .replace(/\+/g, '-')
+            .replace(/\//g, '_')
+            .replace(/=+$/, '')
+        : '';
+      if (currentKey && currentKey !== VAPID_PUBLIC_KEY) {
+        await sub.unsubscribe();
+        sub = null;
+      }
+    } catch {
+      // Ignore comparison failures — we'll just keep the existing sub.
+    }
+  }
   if (!sub) {
     sub = await reg.pushManager.subscribe({
       userVisibleOnly: true,
