@@ -195,7 +195,9 @@ export async function disablePushNotifications(): Promise<void> {
     const endpoint = sub.endpoint;
     try {
       await sub.unsubscribe();
-    } catch {}
+    } catch (e) {
+      console.warn('Failed to unsubscribe push sub', e);
+    }
     await supabase.from('push_subscriptions').delete().eq('endpoint', endpoint);
   }
 }
