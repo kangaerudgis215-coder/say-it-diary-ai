@@ -97,7 +97,7 @@ export async function enablePushNotifications(): Promise<boolean> {
   const reg = await ensureRegistration();
   await navigator.serviceWorker.ready;
 
-  const VAPID_PUBLIC_KEY = await fetchVapidPublicKey();
+  const VAPID_PUBLIC_KEY = normalizeVapidPublicKey(await fetchVapidPublicKey());
 
   // Always drop any pre-existing subscription before resubscribing. iOS
   // Safari refuses to reuse a subscription created with a different VAPID
@@ -127,13 +127,36 @@ export async function enablePushNotifications(): Promise<boolean> {
     );
   }
 
-  // Pass the Uint8Array directly. Some iOS Safari versions reject a bare
-  // ArrayBuffer with "applicationServerKey must contain a valid P-256
-  // public key" even when the bytes are correct.
-  const sub = await reg.pushManager.subscribe({
-    userVisibleOnly: true,
-    applicationServerKey: keyBytes as BufferSource,
-  });
+  let sub: PushSubscription;
+  const subscribeOptions = [
+    // Spec-compatible and best for most Safari versions.
+    { label: 'base64url-string', key: VAPID_PUBLIC_KEY },
+    // Some WebKit versions are pickier and accept the byte array instead.
+    { label: 'uint8array', key: keyBytes as BufferSource },
+    // Final fallback for engines that require a tightly-sized ArrayBuffer.
+    { label: 'arraybuffer', key: toExactArrayBuffer(keyBytes) as BufferSource },
+  ];
+
+  let lastSubscribeError: unknown = null;
+  for (const option of subscribeOptions) {
+    try {
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: option.key,
+      });
+      lastSubscribeError = null;
+      break;
+    } catch (err) {
+      lastSubscribeError = err;
+      console.warn(`Push subscribe failed with ${option.label}`, err);
+    }
+  }
+
+  if (!sub!) {
+    throw lastSubscribeError instanceof Error
+      ? lastSubscribeError
+      : new Error('プッシュ通知の購読に失敗しました。');
+  }
 
   const json = sub.toJSON() as {
     endpoint?: string;
