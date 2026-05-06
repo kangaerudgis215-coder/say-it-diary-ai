@@ -80,32 +80,41 @@ export async function enablePushNotifications(): Promise<boolean> {
 
   const VAPID_PUBLIC_KEY = await fetchVapidPublicKey();
 
-  let sub = await reg.pushManager.getSubscription();
-  // If a stored subscription was created with a *different* VAPID key
-  // (e.g. from before this rotation fix), Apple will reject every push with
-  // "BadVapidPublicKey". Detect that and resubscribe with the current key.
-  if (sub) {
+  // Always drop any pre-existing subscription before resubscribing. iOS
+  // Safari refuses to reuse a subscription created with a different VAPID
+  // key, and even silently keeps a "ghost" subscription whose
+  // applicationServerKey isn't introspectable. Unsubscribing first
+  // guarantees a clean slate.
+  const existing = await reg.pushManager.getSubscription();
+  if (existing) {
     try {
-      const currentKey = sub.options?.applicationServerKey
-        ? btoa(String.fromCharCode(...new Uint8Array(sub.options.applicationServerKey)))
-            .replace(/\+/g, '-')
-            .replace(/\//g, '_')
-            .replace(/=+$/, '')
-        : '';
-      if (currentKey && currentKey !== VAPID_PUBLIC_KEY) {
-        await sub.unsubscribe();
-        sub = null;
-      }
-    } catch {
-      // Ignore comparison failures — we'll just keep the existing sub.
+      await existing.unsubscribe();
+      await supabase
+        .from('push_subscriptions')
+        .delete()
+        .eq('endpoint', existing.endpoint);
+    } catch (e) {
+      console.warn('Failed to unsubscribe old push sub', e);
     }
   }
-  if (!sub) {
-    sub = await reg.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY).buffer as ArrayBuffer,
-    });
+
+  const keyBytes = urlBase64ToUint8Array(VAPID_PUBLIC_KEY);
+  // Defensive validation — a valid P-256 uncompressed public key is exactly
+  // 65 bytes and starts with 0x04. iOS Safari throws the cryptic
+  // "applicationServerKey must contain a valid P-256 public key" otherwise.
+  if (keyBytes.length !== 65 || keyBytes[0] !== 0x04) {
+    throw new Error(
+      `VAPID 公開鍵の形式が不正です (length=${keyBytes.length}, first=0x${keyBytes[0]?.toString(16)})。鍵を再設定してください。`,
+    );
   }
+
+  // Pass the Uint8Array directly. Some iOS Safari versions reject a bare
+  // ArrayBuffer with "applicationServerKey must contain a valid P-256
+  // public key" even when the bytes are correct.
+  const sub = await reg.pushManager.subscribe({
+    userVisibleOnly: true,
+    applicationServerKey: keyBytes as BufferSource,
+  });
 
   const json = sub.toJSON() as {
     endpoint?: string;
