@@ -113,6 +113,17 @@ Deno.serve(async (req) => {
     (Deno.env.get('VAPID_SUBJECT') ?? '').trim().replace(/^["']|["']$/g, '') ||
     'mailto:noreply@so-ki.app';
 
+  // Lightweight GET endpoint so the web client always fetches the *current*
+  // VAPID public key from the server. Hardcoding the key in client code
+  // caused a fatal mismatch when the secret was rotated — Apple rejected
+  // every push with "BadVapidPublicKey".
+  const url = new URL(req.url);
+  if (req.method === 'GET' || url.searchParams.get('action') === 'public-key') {
+    return new Response(JSON.stringify({ publicKey: vapidPublic }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+
   console.log(
     'VAPID public length:',
     vapidPublic.length,

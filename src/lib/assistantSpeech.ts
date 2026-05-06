@@ -1,4 +1,5 @@
 /** Shared browser TTS helpers for SO-KI assistant messages. */
+import { forceReleaseActiveRecognition } from '@/lib/speechRecognition';
 
 export function stopAssistantSpeech(): void {
   if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
@@ -66,6 +67,10 @@ export function speakAssistantImmediately(text: string): void {
   const utterance = createAssistantUtterance(clean);
   if (!utterance) return;
   try {
+    // CRITICAL: any active SpeechRecognition session holds the system audio
+    // route open and can clobber TTS playback (especially over Bluetooth on
+    // mobile). Always release the mic before the assistant speaks.
+    forceReleaseActiveRecognition();
     window.speechSynthesis.cancel();
     window.speechSynthesis.resume();
     window.speechSynthesis.speak(utterance);
@@ -84,6 +89,9 @@ export function speakAssistant(text: string, preparedUtterance?: SpeechSynthesis
   const doSpeak = () => {
     const utterance = preparedUtterance ?? createAssistantUtterance();
     if (!utterance) return;
+    // Make sure the mic is fully released before the assistant speaks so
+    // TTS audio (and the chime that follows) actually play out loud.
+    forceReleaseActiveRecognition();
     try { ss.cancel(); } catch { /* ignore */ }
     utterance.text = clean;
     if (!utterance.voice) {
