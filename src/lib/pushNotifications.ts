@@ -1,19 +1,38 @@
 import { supabase } from '@/integrations/supabase/client';
 
-async function fetchVapidPublicKey(): Promise<string> {
-  // Do not cache this in memory. During VAPID rotation, iOS installed PWAs can
-  // keep the app process alive and would otherwise reuse the previously-fetched
-  // bad key even after secrets are corrected server-side.
-  const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-push-notifications?action=public-key&t=${Date.now()}`;
-  const res = await fetch(url, {
-    cache: 'no-store',
-    headers: { apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string },
-  });
-  if (!res.ok) throw new Error('VAPID 公開鍵の取得に失敗しました。');
-  const data = (await res.json()) as { publicKey?: string };
-  if (!data.publicKey) throw new Error('VAPID 公開鍵が空です。');
-  return data.publicKey;
+interface OneSignalConfig {
+  appId: string;
+  safariWebId?: string;
 }
+
+type OneSignalSDK = {
+  init: (options: Record<string, unknown>) => Promise<void> | void;
+  login?: (externalId: string) => Promise<void> | void;
+  logout?: () => Promise<void> | void;
+  Notifications?: {
+    requestPermission?: () => Promise<boolean | void> | boolean | void;
+  };
+  User?: {
+    addTag?: (key: string, value: string) => Promise<void> | void;
+    PushSubscription?: {
+      id?: string | null;
+      optedIn?: boolean;
+      optIn?: () => Promise<void> | void;
+      optOut?: () => Promise<void> | void;
+    };
+  };
+};
+
+declare global {
+  interface Window {
+    OneSignalDeferred?: Array<(OneSignal: OneSignalSDK) => void | Promise<void>>;
+    OneSignal?: OneSignalSDK;
+  }
+}
+
+let oneSignalConfigPromise: Promise<OneSignalConfig> | null = null;
+let oneSignalInitPromise: Promise<OneSignalSDK> | null = null;
+let legacyCleanupPromise: Promise<void> | null = null;
 
 function isInIframe(): boolean {
   try {
@@ -28,15 +47,11 @@ function isPreviewHost(): boolean {
   return host.includes('id-preview--') || host.includes('lovableproject.com');
 }
 
-/** Push is unavailable in iframes and Lovable preview hosts. */
+/** OneSignal Web Push is unavailable in iframes and Lovable preview hosts. */
 export function isPushSupported(): boolean {
   if (typeof window === 'undefined') return false;
   if (isInIframe() || isPreviewHost()) return false;
-  return (
-    'serviceWorker' in navigator &&
-    'PushManager' in window &&
-    'Notification' in window
-  );
+  return 'serviceWorker' in navigator && 'Notification' in window && window.isSecureContext;
 }
 
 export function pushPermission(): NotificationPermission | 'unsupported' {
@@ -44,186 +59,152 @@ export function pushPermission(): NotificationPermission | 'unsupported' {
   return Notification.permission;
 }
 
-function urlBase64ToUint8Array(base64String: string): Uint8Array {
-  const normalized = base64String
-    .replace(/\s+/g, '')
-    .replace(/^['"]|['"]$/g, '')
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/g, '');
-  const padding = '='.repeat((4 - (normalized.length % 4)) % 4);
-  const base64 = (normalized + padding).replace(/-/g, '+').replace(/_/g, '/');
-  const raw = atob(base64);
-  const out = new Uint8Array(raw.length);
-  for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
-  return out;
-}
-
-function normalizeVapidPublicKey(base64String: string): string {
-  return base64String
-    .replace(/\s+/g, '')
-    .replace(/^['"]|['"]$/g, '')
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/g, '');
-}
-
-function toExactArrayBuffer(bytes: Uint8Array): ArrayBuffer {
-  const copy = new Uint8Array(bytes.length);
-  copy.set(bytes);
-  return copy.buffer;
-}
-
-async function ensureRegistration(): Promise<ServiceWorkerRegistration> {
-  const existing = await navigator.serviceWorker.getRegistration('/');
-  if (existing) return existing;
-  return navigator.serviceWorker.register('/sw.js', { scope: '/' });
-}
-
-async function recreateNotificationServiceWorker(): Promise<ServiceWorkerRegistration> {
-  const registrations = await navigator.serviceWorker.getRegistrations();
-  await Promise.all(
-    registrations.map(async (registration) => {
-      try {
-        const sub = await registration.pushManager.getSubscription();
-        await sub?.unsubscribe();
-      } catch (e) {
-        console.warn('Failed to clear old push subscription', e);
-      }
-      await registration.unregister();
-    }),
-  );
-  const registration = await navigator.serviceWorker.register(`/sw.js?v=${Date.now()}`, { scope: '/' });
-  return registration;
-}
-
-/**
- * Ask permission, register SW, subscribe and persist to Supabase.
- * Returns true on success.
- */
-export async function enablePushNotifications(): Promise<boolean> {
-  if (!isPushSupported()) {
-    throw new Error('この端末ではプッシュ通知が利用できません。');
-  }
-
-  const permission = await Notification.requestPermission();
-  if (permission !== 'granted') {
-    throw new Error('通知の許可が得られませんでした。');
-  }
-
-  const reg = await recreateNotificationServiceWorker();
-  await navigator.serviceWorker.ready;
-
-  const VAPID_PUBLIC_KEY = normalizeVapidPublicKey(await fetchVapidPublicKey());
-
-  // Always drop any pre-existing subscription before resubscribing. iOS
-  // Safari refuses to reuse a subscription created with a different VAPID
-  // key, and even silently keeps a "ghost" subscription whose
-  // applicationServerKey isn't introspectable. Unsubscribing first
-  // guarantees a clean slate.
-  const existing = await reg.pushManager.getSubscription();
-  if (existing) {
-    try {
-      await existing.unsubscribe();
-      await supabase
-        .from('push_subscriptions')
-        .delete()
-        .eq('endpoint', existing.endpoint);
-    } catch (e) {
-      console.warn('Failed to unsubscribe old push sub', e);
-    }
-  }
-
-  const keyBytes = urlBase64ToUint8Array(VAPID_PUBLIC_KEY);
-  // Defensive validation — a valid P-256 uncompressed public key is exactly
-  // 65 bytes and starts with 0x04. iOS Safari throws the cryptic
-  // "applicationServerKey must contain a valid P-256 public key" otherwise.
-  if (keyBytes.length !== 65 || keyBytes[0] !== 0x04) {
-    throw new Error(
-      `VAPID 公開鍵の形式が不正です (length=${keyBytes.length}, first=0x${keyBytes[0]?.toString(16)})。鍵を再設定してください。`,
-    );
-  }
-
-  let sub: PushSubscription | null = null;
-  const subscribeOptions = [
-    // Spec-compatible and best for most Safari versions.
-    { label: 'base64url-string', key: VAPID_PUBLIC_KEY },
-    // Some WebKit versions are pickier and accept the byte array instead.
-    { label: 'uint8array', key: keyBytes as BufferSource },
-    // Final fallback for engines that require a tightly-sized ArrayBuffer.
-    { label: 'arraybuffer', key: toExactArrayBuffer(keyBytes) as BufferSource },
-  ];
-
-  let lastSubscribeError: unknown = null;
-  for (const option of subscribeOptions) {
-    try {
-      sub = await reg.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: option.key,
+async function fetchOneSignalConfig(): Promise<OneSignalConfig> {
+  if (!oneSignalConfigPromise) {
+    oneSignalConfigPromise = (async () => {
+      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/onesignal-config?t=${Date.now()}`;
+      const res = await fetch(url, {
+        cache: 'no-store',
+        headers: { apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string },
       });
-      lastSubscribeError = null;
-      break;
-    } catch (err) {
-      lastSubscribeError = err;
-      console.warn(`Push subscribe failed with ${option.label}`, err);
+      if (!res.ok) throw new Error('OneSignal設定の取得に失敗しました。');
+      const data = (await res.json()) as { appId?: string; safariWebId?: string };
+      if (!data.appId) {
+        throw new Error('OneSignal App ID が未設定です。App IDを入力後、もう一度試してください。');
+      }
+      return { appId: data.appId, safariWebId: data.safariWebId };
+    })();
+  }
+  return oneSignalConfigPromise;
+}
+
+function loadOneSignalScript(): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const existing = document.querySelector<HTMLScriptElement>('script[data-onesignal-sdk="true"]');
+    if (existing) {
+      if (window.OneSignal || window.OneSignalDeferred) resolve();
+      existing.addEventListener('load', () => resolve(), { once: true });
+      existing.addEventListener('error', () => reject(new Error('OneSignal SDKの読み込みに失敗しました。')), { once: true });
+      return;
     }
-  }
 
-  if (!sub) {
-    throw lastSubscribeError instanceof Error
-      ? lastSubscribeError
-      : new Error('プッシュ通知の購読に失敗しました。');
-  }
+    window.OneSignalDeferred = window.OneSignalDeferred || [];
+    const script = document.createElement('script');
+    script.src = 'https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js';
+    script.async = true;
+    script.dataset.onesignalSdk = 'true';
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error('OneSignal SDKの読み込みに失敗しました。'));
+    document.head.appendChild(script);
+  });
+}
 
-  const json = sub.toJSON() as {
-    endpoint?: string;
-    keys?: { p256dh?: string; auth?: string };
-  };
-  if (!json.endpoint || !json.keys?.p256dh || !json.keys?.auth) {
-    throw new Error('プッシュ購読情報の取得に失敗しました。');
+async function cleanupLegacyWebPush(): Promise<void> {
+  if (!legacyCleanupPromise) {
+    legacyCleanupPromise = (async () => {
+      if (!('serviceWorker' in navigator)) return;
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(
+        registrations.map(async (registration) => {
+          const scriptUrl =
+            registration.active?.scriptURL ||
+            registration.waiting?.scriptURL ||
+            registration.installing?.scriptURL ||
+            '';
+          const isLegacySokiWorker = scriptUrl.includes('/sw.js');
+          if (!isLegacySokiWorker) return;
+          try {
+            const sub = await registration.pushManager.getSubscription();
+            await sub?.unsubscribe();
+          } catch (e) {
+            console.warn('Failed to unsubscribe legacy push subscription', e);
+          }
+          await registration.unregister();
+        }),
+      );
+      if ('caches' in window) {
+        const names = await caches.keys();
+        await Promise.all(names.map((name) => caches.delete(name)));
+      }
+      localStorage.removeItem('soki:push-optin-dismissed');
+    })();
   }
+  return legacyCleanupPromise;
+}
 
+async function initOneSignal(): Promise<OneSignalSDK> {
+  if (!isPushSupported()) {
+    throw new Error('この環境ではプッシュ通知が利用できません。公開アプリをブラウザで開いて試してください。');
+  }
+  if (!oneSignalInitPromise) {
+    oneSignalInitPromise = (async () => {
+      await cleanupLegacyWebPush();
+      const config = await fetchOneSignalConfig();
+      window.OneSignalDeferred = window.OneSignalDeferred || [];
+      await loadOneSignalScript();
+
+      return await new Promise<OneSignalSDK>((resolve, reject) => {
+        window.OneSignalDeferred!.push(async (OneSignal) => {
+          try {
+            await OneSignal.init({
+              appId: config.appId,
+              ...(config.safariWebId ? { safari_web_id: config.safariWebId } : {}),
+              notifyButton: { enable: false },
+              serviceWorkerParam: { scope: '/' },
+              serviceWorkerPath: 'OneSignalSDKWorker.js',
+              serviceWorkerUpdaterPath: 'OneSignalSDKUpdaterWorker.js',
+            });
+            resolve(OneSignal);
+          } catch (e) {
+            reject(e);
+          }
+        });
+      });
+    })();
+  }
+  return oneSignalInitPromise;
+}
+
+/** Ask permission, initialize OneSignal, and associate this device with the logged-in user. */
+export async function enablePushNotifications(): Promise<boolean> {
   const { data: userData } = await supabase.auth.getUser();
   const user = userData.user;
   if (!user) throw new Error('ログインが必要です。');
 
-  const { error } = await supabase
-    .from('push_subscriptions')
-    .upsert(
-      {
-        user_id: user.id,
-        endpoint: json.endpoint,
-        p256dh: json.keys.p256dh,
-        auth: json.keys.auth,
-        user_agent: navigator.userAgent.slice(0, 255),
-        enabled: true,
-      },
-      { onConflict: 'endpoint' },
-    );
-  if (error) throw error;
+  const OneSignal = await initOneSignal();
+  await OneSignal.login?.(user.id);
+  await OneSignal.Notifications?.requestPermission?.();
+
+  if (Notification.permission !== 'granted') {
+    throw new Error('通知の許可が得られませんでした。');
+  }
+
+  await OneSignal.User?.PushSubscription?.optIn?.();
+  await OneSignal.User?.addTag?.('app', 'soki');
+  await OneSignal.User?.addTag?.('reminder_hour_jst', '21');
+  await OneSignal.User?.addTag?.('platform', /iphone|ipad|android/i.test(navigator.userAgent) ? 'mobile' : 'desktop');
   return true;
 }
 
 export async function disablePushNotifications(): Promise<void> {
   if (!isPushSupported()) return;
-  const reg = await navigator.serviceWorker.getRegistration('/');
-  const sub = await reg?.pushManager.getSubscription();
-  if (sub) {
-    const endpoint = sub.endpoint;
-    try {
-      await sub.unsubscribe();
-    } catch (e) {
-      console.warn('Failed to unsubscribe push sub', e);
-    }
-    await supabase.from('push_subscriptions').delete().eq('endpoint', endpoint);
+  try {
+    const OneSignal = await initOneSignal();
+    await OneSignal.User?.PushSubscription?.optOut?.();
+    await OneSignal.logout?.();
+  } catch (e) {
+    console.warn('Failed to disable OneSignal push notifications', e);
   }
 }
 
-/** Whether the current device already has an active push subscription saved. */
+/** Whether the current device already has an active OneSignal push subscription. */
 export async function isPushEnabledHere(): Promise<boolean> {
   if (!isPushSupported()) return false;
   if (Notification.permission !== 'granted') return false;
-  const reg = await navigator.serviceWorker.getRegistration('/');
-  const sub = await reg?.pushManager.getSubscription();
-  return !!sub;
+  try {
+    const OneSignal = await initOneSignal();
+    return Boolean(OneSignal.User?.PushSubscription?.optedIn || OneSignal.User?.PushSubscription?.id);
+  } catch {
+    return false;
+  }
 }
