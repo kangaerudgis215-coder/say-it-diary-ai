@@ -274,7 +274,7 @@ export function CompletionScreen({ streak, expressions, expressionDetails, isPas
                       )}
                     </div>
                     {exp.meaning && (
-                      <p className="text-[11px] leading-snug text-foreground/80">
+                      <p className="text-[11px] leading-snug text-amber-950/90 dark:text-amber-100/90">
                         {exp.meaning}
                       </p>
                     )}
