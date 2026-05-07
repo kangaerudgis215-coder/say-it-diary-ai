@@ -8,6 +8,3 @@ verify_jwt = false
 
 [functions.tag-expressions]
 verify_jwt = false
-
-[functions.onesignal-config]
-verify_jwt = false

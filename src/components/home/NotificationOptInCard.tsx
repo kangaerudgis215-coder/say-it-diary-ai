@@ -1,56 +1,58 @@
 import { useEffect, useState } from 'react';
-import { Bell, BellOff, X } from 'lucide-react';
+import { Mail, MailX, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/hooks/use-toast';
-import {
-  enablePushNotifications,
-  disablePushNotifications,
-  isPushEnabledHere,
-  isPushSupported,
-  pushPermission,
-} from '@/lib/pushNotifications';
+import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
 
-const DISMISS_KEY = 'soki:push-optin-dismissed';
+const DISMISS_KEY = 'soki:email-optin-dismissed';
 
 /**
- * Small SO-KI styled card asking the user to enable nightly reminders.
- * Hidden when push isn't supported (e.g. Lovable preview iframe), already
- * enabled, permission denied, or user dismissed it.
+ * SO-KI styled card asking the user to enable nightly reminder emails (21:00 JST).
+ * Hidden once the user opts in or dismisses it.
  */
 export function NotificationOptInCard() {
+  const { user } = useAuth();
   const [visible, setVisible] = useState(false);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
+    if (!user) return;
+    if (localStorage.getItem(DISMISS_KEY) === '1') return;
     let mounted = true;
     (async () => {
-      if (!isPushSupported()) return;
-      const perm = pushPermission();
-      if (perm === 'denied') return;
-      if (localStorage.getItem(DISMISS_KEY) === '1') return;
-      const enabled = await isPushEnabledHere();
+      const { data } = await supabase
+        .from('profiles')
+        .select('email_notifications_enabled')
+        .eq('user_id', user.id)
+        .maybeSingle();
       if (!mounted) return;
-      if (!enabled) setVisible(true);
+      if (!data?.email_notifications_enabled) setVisible(true);
     })();
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [user]);
 
   if (!visible) return null;
 
   const handleEnable = async () => {
+    if (!user) return;
     setBusy(true);
     try {
-      await enablePushNotifications();
+      const { error } = await supabase
+        .from('profiles')
+        .update({ email_notifications_enabled: true })
+        .eq('user_id', user.id);
+      if (error) throw error;
       toast({
-        title: '通知をオンにしたにゃ！',
-        description: '毎晩21時にそっと声をかけるにゃ〜',
+        title: 'メール通知をオンにしたにゃ！',
+        description: '毎晩21時(JST)に、登録メールへそっと声をかけるにゃ〜',
       });
       setVisible(false);
     } catch (e: any) {
       toast({
-        title: '通知をオンにできなかったにゃ',
+        title: '設定できなかったにゃ',
         description: e?.message ?? '時間をおいてもう一度試してにゃ',
         variant: 'destructive',
       });
@@ -76,22 +78,22 @@ export function NotificationOptInCard() {
       </button>
       <div className="flex items-start gap-3">
         <div className="rounded-full bg-primary/15 p-2">
-          <Bell className="w-5 h-5 text-primary" />
+          <Mail className="w-5 h-5 text-primary" />
         </div>
         <div className="flex-1">
           <p className="font-japanese text-sm font-semibold text-foreground/90">
-            毎晩21時、SO-KIから声かけしていい？
+            毎晩21時、メールで声かけしていい？
           </p>
           <p className="font-japanese text-xs text-muted-foreground mt-1 leading-relaxed">
-            「コンコンにゃ。今日はどんな一日だったにゃ？」って、優しくリマインドするにゃ〜
+            その日まだ日記を書いてないときだけ、登録メールにそっとリマインドするにゃ〜
           </p>
           <div className="mt-3 flex gap-2">
             <Button size="sm" onClick={handleEnable} disabled={busy} className="gap-1">
-              <Bell className="w-3.5 h-3.5" />
-              通知をオンにする
+              <Mail className="w-3.5 h-3.5" />
+              メール通知をオンにする
             </Button>
             <Button size="sm" variant="ghost" onClick={handleDismiss} className="gap-1">
-              <BellOff className="w-3.5 h-3.5" />
+              <MailX className="w-3.5 h-3.5" />
               あとで
             </Button>
           </div>
