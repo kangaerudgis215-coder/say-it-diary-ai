@@ -264,12 +264,12 @@
                      
                      <div
                        className={cn(
-                         "w-full rounded-xl transition-all ease-out",
+                        "w-full rounded-xl transition-all ease-out cursor-pointer hover:brightness-125 hover:scale-[1.06] active:scale-95 hover:shadow-lg hover:shadow-primary/30",
                          isToday 
                            ? "bg-gradient-to-t from-primary to-primary/70 shadow-lg shadow-primary/30" 
                            : isBest 
                              ? "bg-gradient-to-t from-yellow-500/80 to-yellow-400/60"
-                             : "bg-gradient-to-t from-muted-foreground/30 to-muted-foreground/20"
+                            : "bg-gradient-to-t from-muted-foreground/60 to-muted-foreground/40"
                        )}
                        style={{
                          height: animationStarted ? `${Math.max(heightPercent, 8)}%` : '4%',
