@@ -326,6 +326,7 @@ export type Database = {
           created_at: string
           current_streak: number | null
           display_name: string | null
+          email_notifications_enabled: boolean
           id: string
           last_diary_date: string | null
           longest_streak: number | null
@@ -339,6 +340,7 @@ export type Database = {
           created_at?: string
           current_streak?: number | null
           display_name?: string | null
+          email_notifications_enabled?: boolean
           id?: string
           last_diary_date?: string | null
           longest_streak?: number | null
@@ -352,6 +354,7 @@ export type Database = {
           created_at?: string
           current_streak?: number | null
           display_name?: string | null
+          email_notifications_enabled?: boolean
           id?: string
           last_diary_date?: string | null
           longest_streak?: number | null
