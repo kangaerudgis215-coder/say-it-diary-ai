@@ -52,16 +52,19 @@
      const endDate = new Date();
      const startDate = subDays(endDate, 30);
  
-     const { data } = await supabase
-       .from('spoken_vocabulary_logs')
-       .select('date, word_count')
-       .eq('user_id', user.id)
-       .gte('date', format(startDate, 'yyyy-MM-dd'))
-       .order('date', { ascending: true });
- 
-     if (data) {
-       setLogs(data);
-     }
+    // Source of truth: the diary entry's own word_count for that date.
+    // (Previously aggregated all spoken words across the chat session,
+    // which was confusing and didn't match the user's mental model.)
+    const { data } = await supabase
+      .from('diary_entries')
+      .select('date, word_count')
+      .eq('user_id', user.id)
+      .gte('date', format(startDate, 'yyyy-MM-dd'))
+      .order('date', { ascending: true });
+
+    if (data) {
+      setLogs(data.map((d: any) => ({ date: d.date, word_count: d.word_count || 0 })));
+    }
      setIsLoading(false);
    };
  
