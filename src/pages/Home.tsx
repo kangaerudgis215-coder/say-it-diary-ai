@@ -14,7 +14,6 @@ import { ComposeFAB } from '@/components/home/ComposeFAB';
 import { StreakHeroCompact } from '@/components/home/StreakHeroCompact';
 import { CatBuddy } from '@/components/home/CatBuddy';
 import { SelectedDayChatPreview } from '@/components/home/SelectedDayChatPreview';
-import { NotificationOptInCard } from '@/components/home/NotificationOptInCard';
 import { speakAssistantImmediately } from '@/lib/assistantSpeech';
 import { getChatWelcomeMessage } from '@/lib/chatWelcome';
 
@@ -170,8 +169,6 @@ export default function Home() {
               onDateSelect={setSelectedDate}
               selectedDate={selectedDate}
             />
-
-            <NotificationOptInCard />
 
             {/* Selected day header */}
             <div className="px-1 pt-2 text-sm text-muted-foreground">
