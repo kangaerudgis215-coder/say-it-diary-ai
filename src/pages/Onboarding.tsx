@@ -1,17 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Loader2 } from 'lucide-react';
+import { Loader2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { lovable } from '@/integrations/lovable';
 import { useAuth } from '@/hooks/useAuth';
-import slide1 from '@/assets/onboarding/03-quiz.webp';
-import slide2 from '@/assets/onboarding/05-entries.webp';
-import slide3 from '@/assets/onboarding/02-paperless.webp';
-import slide4 from '@/assets/onboarding/07-habit.webp';
-import slide5 from '@/assets/onboarding/04-phrases.webp';
-import slide6 from '@/assets/onboarding/06-streak.webp';
-import slide7 from '@/assets/onboarding/01-today.webp';
+import slideChat from '@/assets/onboarding/v2-01-chat.webp';
+import slideDiary from '@/assets/onboarding/v2-02-diary.webp';
+import slideQuiz from '@/assets/onboarding/v2-03-quiz.webp';
+import slideStreak from '@/assets/onboarding/v2-04-streak.webp';
 
 interface Slide {
   image: string;
@@ -20,49 +17,31 @@ interface Slide {
   accent?: string;
 }
 
-// Order: 3 → 5 → 2 → 7 → 4 → 6 → 1
+// Flow: Chat → Diary → Quiz → Streak
 const slides: Slide[] = [
   {
-    image: slide1,
-    title: '今日はどんな一日？',
-    body: 'マイクに向かって話すだけ。\n不完全な英語でOK。\nAIが正しい表現を教えてくれます。',
-    accent: 'まずは話してみる',
+    image: slideChat,
+    accent: '① 話す',
+    title: 'まずは話そう、SO-KIと。',
+    body: 'マイクをタップして、今日あったことを英語で話すだけ。\n不完全でもOK。SO-KIがやさしく聞き返してくれます。',
   },
   {
-    image: slide2,
-    title: '紙もペンも、必要なし。',
-    body: 'AIが会話から日記を自動生成。\n使える表現も自動で抽出。\n言いたかったことが英語になる感覚を体感。',
-    accent: 'AIが英語日記に',
+    image: slideDiary,
+    accent: '② 日記になる',
+    title: '会話が、英語日記に変わる。',
+    body: 'タップ1回で、AIが会話から自然な英語日記を生成。\n使える表現も自動で抽出され、日本語訳もすぐに確認できます。',
   },
   {
-    image: slide3,
-    title: '過去の自分が、教材に。',
-    body: '日記を元にした問題演習で\n汎用表現が学べます。\n自分の行動がフックになり、\n記憶の定着が段違い。',
-    accent: '自分仕様の英語ドリル',
+    image: slideQuiz,
+    accent: '③ 身につける',
+    title: '自分の日記が、教材になる。',
+    body: '並び替えクイズで、今日使った表現を定着。\n自分の体験がフックになり、記憶への残り方が違います。',
   },
   {
-    image: slide4,
-    title: '話す。貯まる。',
-    body: '過去の表現はカテゴリ別で\n見やすく管理。\n習慣化するほど話せる表現が貯まる仕組み。',
-    accent: '使える表現が増える',
-  },
-  {
-    image: slide5,
-    title: '昨日よりも、話せる。',
-    body: '生成した日記はリストで一覧表示、\nいつでも復習可能。\n目に見える達成感で、\n話せる量も徐々に増えていきます。',
-    accent: '続けるほど成長を実感',
-  },
-  {
-    image: slide6,
-    title: '無理なく緩く、だから続く。',
-    body: 'サボっちゃった翌日も、\n過去の日記を書けばストリークを達成できる優しい仕様。',
-    accent: '完璧じゃなくていい',
-  },
-  {
-    image: slide7,
-    title: '#1日1分、新たな習慣。',
-    body: 'ダークモードで夜のリラックスタイムにも対応。\nあなたの日記に反応する猫のSO-KIが、今日も帰りを待っています。',
-    accent: 'さあ、はじめよう',
+    image: slideStreak,
+    accent: '④ 続く',
+    title: '毎日ちょっとずつ、ストリーク。',
+    body: '続けるほど炎が育ち、表現が貯まっていく。\nサボった日も、過去の日記でリカバーできるやさしい仕様。',
   },
 ];
 
@@ -117,7 +96,7 @@ export default function Onboarding() {
 
   return (
     <div className="fixed inset-0 flex flex-col bg-background">
-      {/* Skip / progress dots */}
+      {/* Top bar: progress dots + clear close (skip) button */}
       <header className="flex items-center justify-between px-5 pt-5 pb-2 z-10">
         <div className="flex gap-1.5">
           {slides.map((_, i) => (
@@ -131,14 +110,14 @@ export default function Onboarding() {
             />
           ))}
         </div>
-        {!isLast && (
-          <button
-            onClick={() => goTo(slides.length - 1)}
-            className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-          >
-            スキップ
-          </button>
-        )}
+        <button
+          onClick={() => goTo(slides.length - 1)}
+          aria-label="スキップ"
+          className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-muted/60 hover:bg-muted text-muted-foreground hover:text-foreground text-xs font-medium transition-colors"
+        >
+          スキップ
+          <X className="w-3.5 h-3.5" />
+        </button>
       </header>
 
       {/* Horizontally scrollable slides */}
