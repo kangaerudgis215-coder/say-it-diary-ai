@@ -21,27 +21,27 @@ interface Slide {
 const slides: Slide[] = [
   {
     image: slideChat,
-    accent: '① まずはお話',
-    title: 'ぼくとおしゃべりしよ〜にゃ',
-    body: 'マイクをタップして、今日あったことを英語で話してみてにゃ。\nつまっても大丈夫。ぼくがやさしく聞き返すからにゃ🐾',
+    accent: '① 話す',
+    title: 'まずは話そう、SO-KIと。',
+    body: 'マイクをタップして、今日あったことを英語で話すだけ。\n不完全でもOK。SO-KIがやさしく聞き返してくれます。',
   },
   {
     image: slideDiary,
-    accent: '② 日記にしちゃう',
-    title: 'おしゃべりが、英語日記になるにゃ',
-    body: 'タップひとつで、ぼくが今日の会話を英語日記にまとめるにゃ。\n使える表現や日本語訳もちゃんと用意しておくにゃ✨',
+    accent: '② 日記になる',
+    title: '会話が、英語日記に変わる。',
+    body: 'タップ1回で、AIが会話から自然な英語日記を生成。\n使える表現も自動で抽出され、日本語訳もすぐに確認できます。',
   },
   {
     image: slideQuiz,
-    accent: '③ 遊んで覚える',
-    title: '自分の日記が、ぼくのクイズになるにゃ',
-    body: '今日話したことが、そのまま並び替えクイズに変身にゃ。\n自分の出来事だから、ふしぎとスルッと覚えられるにゃ〜',
+    accent: '③ 身につける',
+    title: '自分の日記が、教材になる。',
+    body: '並び替えクイズで、今日使った表現を定着。\n自分の体験がフックになり、記憶への残り方が違います。',
   },
   {
     image: slideStreak,
-    accent: '④ 一緒に続けよ',
-    title: '毎日ちょこっとで、炎が育つにゃ🔥',
-    body: '続けるほどストリークが伸びて、表現もどんどん貯まるにゃ。\nサボった日も、あとから書けばリカバーOKにゃ。ゆるく続けよ〜',
+    accent: '④ 続く',
+    title: '毎日ちょっとずつ、ストリーク。',
+    body: '続けるほど炎が育ち、表現が貯まっていく。\nサボった日も、過去の日記でリカバーできるやさしい仕様。',
   },
 ];
 
@@ -184,7 +184,7 @@ export default function Onboarding() {
           )}
         </Button>
         <p className="text-[11px] text-muted-foreground">
-          登録は<span className="text-primary font-medium">無料</span>にゃ・タップ1回ではじめられるにゃ ✨
+          登録は<span className="text-primary font-medium">無料</span>・タップ1回で始められます ✨
         </p>
       </footer>
     </div>
