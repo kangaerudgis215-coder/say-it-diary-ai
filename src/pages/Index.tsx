@@ -10,7 +10,8 @@ export default function Index() {
 
   useEffect(() => {
     if (!loading && !user) {
-      navigate('/auth');
+      const onboarded = localStorage.getItem('soki_onboarded') === '1';
+      navigate(onboarded ? '/auth' : '/onboarding', { replace: true });
     }
   }, [user, loading, navigate]);
 

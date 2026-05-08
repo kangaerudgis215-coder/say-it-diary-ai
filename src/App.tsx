@@ -9,6 +9,7 @@ import { useEffect } from "react";
 import { installAudioUnlock } from "@/lib/audioUnlock";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
+import Onboarding from "./pages/Onboarding";
 import Chat from "./pages/Chat";
 import Recall from "./pages/Recall";
 import Calendar from "./pages/Calendar";
@@ -36,6 +37,7 @@ const App = () => {
             <Routes>
               <Route path="/" element={<Index />} />
               <Route path="/auth" element={<Auth />} />
+              <Route path="/onboarding" element={<Onboarding />} />
               <Route path="/chat" element={<Chat />} />
               <Route path="/recall" element={<Recall />} />
               <Route path="/calendar" element={<Calendar />} />
