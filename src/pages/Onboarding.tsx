@@ -92,8 +92,6 @@ export default function Onboarding() {
     }
   };
 
-  const isLast = index === slides.length - 1;
-
   return (
     <div className="fixed inset-0 flex flex-col bg-background">
       {/* Top bar: progress dots + clear close (skip) button */}
@@ -110,14 +108,16 @@ export default function Onboarding() {
             />
           ))}
         </div>
-        <button
-          onClick={() => goTo(slides.length - 1)}
-          aria-label="スキップ"
-          className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-muted/60 hover:bg-muted text-muted-foreground hover:text-foreground text-xs font-medium transition-colors"
-        >
-          スキップ
-          <X className="w-3.5 h-3.5" />
-        </button>
+        {index < slides.length - 1 && (
+          <button
+            onClick={() => goTo(slides.length - 1)}
+            aria-label="スキップ"
+            className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-muted/60 hover:bg-muted text-muted-foreground hover:text-foreground text-xs font-medium transition-colors"
+          >
+            スキップ
+            <X className="w-3.5 h-3.5" />
+          </button>
+        )}
       </header>
 
       {/* Horizontally scrollable slides */}
@@ -165,45 +165,27 @@ export default function Onboarding() {
         ))}
       </div>
 
-      {/* Footer CTA */}
-      <footer className="px-6 pb-8 pt-3 flex flex-col items-center gap-3">
-        {isLast ? (
-          <>
-            <Button
-              onClick={handleGoogle}
-              disabled={signingIn}
-              size="lg"
-              variant="glow"
-              className="w-full max-w-sm h-12 rounded-full bg-white text-slate-900 hover:bg-white/90 shadow-lg"
-            >
-              {signingIn ? (
-                <Loader2 className="w-5 h-5 animate-spin" />
-              ) : (
-                <span className="flex items-center gap-3 font-semibold">
-                  <GoogleIcon />
-                  Googleではじめる
-                </span>
-              )}
-            </Button>
-            <p className="text-xs text-muted-foreground">
-              登録は<span className="text-primary font-medium">無料</span>・タップ1回で始められます ✨
-            </p>
-          </>
-        ) : (
-          <>
-            <Button
-              onClick={() => goTo(index + 1)}
-              size="lg"
-              variant="glow"
-              className="w-full max-w-sm h-12 rounded-full"
-            >
-              次へ
-            </Button>
-            <p className="text-xs text-muted-foreground">
-              スワイプでも進めます →
-            </p>
-          </>
-        )}
+      {/* Footer: Google sign-in always available */}
+      <footer className="px-6 pb-8 pt-3 flex flex-col items-center gap-2 border-t border-border/40 bg-background/80 backdrop-blur">
+        <Button
+          onClick={handleGoogle}
+          disabled={signingIn}
+          size="lg"
+          variant="glow"
+          className="w-full max-w-sm h-12 rounded-full bg-white text-slate-900 hover:bg-white/90 shadow-lg"
+        >
+          {signingIn ? (
+            <Loader2 className="w-5 h-5 animate-spin" />
+          ) : (
+            <span className="flex items-center gap-3 font-semibold">
+              <GoogleIcon />
+              Googleではじめる
+            </span>
+          )}
+        </Button>
+        <p className="text-[11px] text-muted-foreground">
+          登録は<span className="text-primary font-medium">無料</span>・タップ1回で始められます ✨
+        </p>
       </footer>
     </div>
   );
