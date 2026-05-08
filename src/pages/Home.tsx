@@ -11,6 +11,7 @@ import { StampCalendar } from '@/components/home/StampCalendar';
 import { DiaryListView } from '@/components/home/DiaryListView';
 import { BottomTabBar } from '@/components/home/BottomTabBar';
 import { ComposeFAB } from '@/components/home/ComposeFAB';
+import { FirstTimeCoachMark } from '@/components/home/FirstTimeCoachMark';
 import { StreakHeroCompact } from '@/components/home/StreakHeroCompact';
 import { CatBuddy } from '@/components/home/CatBuddy';
 import { SelectedDayChatPreview } from '@/components/home/SelectedDayChatPreview';
@@ -34,6 +35,8 @@ export default function Home() {
   const [entries, setEntries] = useState<DiaryRow[]>([]);
   const [recallCompletedIds, setRecallCompletedIds] = useState<Set<string>>(new Set());
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [entriesLoaded, setEntriesLoaded] = useState(false);
+  const [showCoachMark, setShowCoachMark] = useState(false);
 
   useEffect(() => {
     if (user) fetchEntries();
@@ -71,7 +74,17 @@ export default function Home() {
       .eq('user_id', user.id)
       .eq('completed', true);
     setRecallCompletedIds(new Set((recalls || []).map((r: any) => r.diary_entry_id)));
+    setEntriesLoaded(true);
   };
+
+  // Show the first-time coach mark once when the user has zero entries.
+  useEffect(() => {
+    if (!entriesLoaded || !user) return;
+    const seenKey = `soki_coach_mark_seen_${user.id}`;
+    if (entries.length === 0 && !localStorage.getItem(seenKey)) {
+      setShowCoachMark(true);
+    }
+  }, [entriesLoaded, entries.length, user]);
 
   const startDiaryChat = (date: Date) => {
     const diaryDate = format(date, 'yyyy-MM-dd');
@@ -232,6 +245,14 @@ export default function Home() {
         )}
       />
       <BottomTabBar homeTab={tab} onHomeTabChange={setTab} />
+      {showCoachMark && user && (
+        <FirstTimeCoachMark
+          onDismiss={() => {
+            localStorage.setItem(`soki_coach_mark_seen_${user.id}`, '1');
+            setShowCoachMark(false);
+          }}
+        />
+      )}
     </div>
   );
 }
