@@ -3,7 +3,7 @@
  */
 import { useState, useEffect, useCallback, useRef, type TouchEvent } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Volume2, Loader2, BookOpen, PenLine, ChevronLeft, ChevronRight, CalendarDays, Sparkles } from 'lucide-react';
+import { ArrowLeft, Volume2, Loader2, BookOpen, PenLine, ChevronLeft, ChevronRight, CalendarDays, Sparkles, Shuffle } from 'lucide-react';
 import { SandyLoader } from '@/components/lottie/SandyLoader';
 import { DotLottieReact } from '@lottiefiles/dotlottie-react';
 import { Button } from '@/components/ui/button';
@@ -44,6 +44,13 @@ export function ReviewHub() {
   const [showCorrection, setShowCorrection] = useState(false);
   const [correctionText, setCorrectionText] = useState('');
   const [isRegenerating, setIsRegenerating] = useState(false);
+
+  // Expression alternatives state
+  const [altDialogOpen, setAltDialogOpen] = useState(false);
+  const [altTargetExpr, setAltTargetExpr] = useState<any>(null);
+  const [altLoading, setAltLoading] = useState(false);
+  const [altOptions, setAltOptions] = useState<Array<{ expression: string; meaning?: string; tone?: string }>>([]);
+  const [altApplying, setAltApplying] = useState(false);
 
   useEffect(() => {
     if (user && diaryId) {
@@ -121,6 +128,124 @@ export function ReviewHub() {
     setTimeout(() => {
       document.getElementById('highlight-target')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }, 50);
+  };
+
+  const openAlternatives = async (exp: any) => {
+    setAltTargetExpr(exp);
+    setAltOptions([]);
+    setAltDialogOpen(true);
+    setAltLoading(true);
+    try {
+      const res = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          },
+          body: JSON.stringify({
+            type: 'expression_alternatives',
+            diary: diaryEntry?.content,
+            expression: exp.expression,
+          }),
+        }
+      );
+      if (!res.ok) throw new Error('Failed to fetch alternatives');
+      const data = await res.json();
+      const alts = Array.isArray(data?.alternatives) ? data.alternatives : [];
+      setAltOptions(
+        alts
+          .map((a: any) => ({
+            expression: String(a?.expression ?? '').trim(),
+            meaning: a?.meaning ?? '',
+            tone: a?.tone ?? '',
+          }))
+          .filter((a: any) => a.expression.length > 0)
+      );
+    } catch (e: any) {
+      toast({ variant: 'destructive', title: 'エラー', description: '言い換え候補の取得に失敗しました' });
+      setAltDialogOpen(false);
+    } finally {
+      setAltLoading(false);
+    }
+  };
+
+  const applyAlternative = async (replacement: string) => {
+    if (!user || !diaryEntry || !altTargetExpr) return;
+    const original = String(altTargetExpr.expression ?? '').trim();
+    const repl = replacement.trim();
+    if (!original || !repl || original === repl) {
+      setAltDialogOpen(false);
+      return;
+    }
+    setAltApplying(true);
+    try {
+      // Case-insensitive substring replacement (first occurrence) preserving surrounding text
+      const escaped = original.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const re = new RegExp(escaped, 'i');
+      const newContent: string = String(diaryEntry.content ?? '').replace(re, repl);
+      if (newContent === diaryEntry.content) {
+        toast({ variant: 'destructive', title: '差し替えできません', description: '元の表現が本文に見つかりませんでした' });
+        setAltApplying(false);
+        return;
+      }
+
+      // Update important_sentences too
+      const oldImportant = Array.isArray(diaryEntry.important_sentences) ? diaryEntry.important_sentences : [];
+      const newImportant = oldImportant.map((s: any) => {
+        const eng = String(s?.english ?? '');
+        const newEng = eng.replace(re, repl);
+        const exprs = Array.isArray(s?.expressions)
+          ? s.expressions.map((x: string) => (String(x).toLowerCase() === original.toLowerCase() ? repl : x))
+          : [];
+        return { ...s, english: newEng, expressions: exprs };
+      });
+
+      await supabase
+        .from('diary_entries')
+        .update({
+          content: newContent,
+          important_sentences: newImportant,
+          word_count: newContent.split(/\s+/).length,
+        })
+        .eq('id', diaryEntry.id);
+
+      // Update expressions table: replace the targeted expression row in place
+      await supabase
+        .from('expressions')
+        .update({
+          expression: repl,
+          meaning: altOptions.find((o) => o.expression === repl)?.meaning || altTargetExpr.meaning || null,
+        })
+        .eq('id', altTargetExpr.id)
+        .eq('user_id', user.id);
+
+      // Rebuild practice sentences so STEP4 quiz uses the new wording
+      const { data: refreshedExprs } = await supabase
+        .from('expressions')
+        .select('expression')
+        .eq('user_id', user.id)
+        .eq('diary_entry_id', diaryEntry.id);
+      const exprList = (refreshedExprs || []).map((e: any) => e.expression);
+      const practice = buildPracticeSentences(
+        newContent,
+        diaryEntry.japanese_summary,
+        exprList,
+        newImportant
+      );
+      await persistDiarySentences(supabase, user.id, diaryEntry.id, practice);
+
+      toast({ title: '表現を差し替えました ✨', description: `${original} → ${repl}` });
+      setAltDialogOpen(false);
+      setAltTargetExpr(null);
+      setAltOptions([]);
+      await loadDiary();
+    } catch (e: any) {
+      toast({ variant: 'destructive', title: 'エラー', description: e?.message || '差し替えに失敗しました' });
+    } finally {
+      setAltApplying(false);
+    }
   };
 
   const currentIdx = allEntries.findIndex((e) => e.id === diaryId);
@@ -434,22 +559,37 @@ export function ReviewHub() {
               <p className="text-xs text-muted-foreground mb-2">タップで本文中の該当箇所をハイライト</p>
               <div className="space-y-3">
                 {expressions.map((exp: any) => (
-                  <button
+                  <div
                     key={exp.id}
                     className={cn(
-                      "w-full text-left bg-muted rounded-lg p-3 transition-all duration-200",
+                      "w-full bg-muted rounded-lg p-3 transition-all duration-200",
                       highlightedExpression === exp.expression
                         ? "ring-2 ring-primary bg-primary/10"
-                        : "hover:bg-muted/80"
+                        : ""
                     )}
-                    onClick={() => handleExpressionTap(exp.expression)}
                   >
-                    <p className="font-medium text-sm text-primary">{exp.expression}</p>
-                    {exp.meaning && <p className="text-xs text-muted-foreground mt-1">{exp.meaning}</p>}
-                    {exp.example_sentence && (
-                      <p className="text-xs text-muted-foreground/70 mt-1 italic">e.g. {exp.example_sentence}</p>
-                    )}
-                  </button>
+                    <button
+                      className="w-full text-left"
+                      onClick={() => handleExpressionTap(exp.expression)}
+                    >
+                      <p className="font-medium text-sm text-primary">{exp.expression}</p>
+                      {exp.meaning && <p className="text-xs text-muted-foreground mt-1">{exp.meaning}</p>}
+                      {exp.example_sentence && (
+                        <p className="text-xs text-muted-foreground/70 mt-1 italic">e.g. {exp.example_sentence}</p>
+                      )}
+                    </button>
+                    <div className="mt-2 flex justify-end">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2 text-xs gap-1"
+                        onClick={() => openAlternatives(exp)}
+                      >
+                        <Shuffle className="w-3.5 h-3.5" />
+                        他の言い方
+                      </Button>
+                    </div>
+                  </div>
                 ))}
               </div>
             </CardContent>
@@ -479,6 +619,63 @@ export function ReviewHub() {
           🏋️ {needsRecallCompletion ? '並び替え問題を解いて復習を完了する' : '並び替え問題に挑戦'}
         </Button>
       </div>
+
+      <Dialog open={altDialogOpen} onOpenChange={(open) => { if (!altApplying) setAltDialogOpen(open); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-primary" />
+              他の言い方
+            </DialogTitle>
+          </DialogHeader>
+          {altTargetExpr && (
+            <div className="space-y-3">
+              <div className="rounded-lg border border-border/60 bg-muted/40 p-3">
+                <p className="text-[11px] uppercase tracking-wider text-muted-foreground">元の表現</p>
+                <p className="text-sm font-semibold text-primary mt-0.5">{altTargetExpr.expression}</p>
+              </div>
+              {altLoading ? (
+                <div className="flex items-center justify-center py-8 text-muted-foreground">
+                  <Loader2 className="w-5 h-5 animate-spin mr-2" />
+                  候補を生成中...
+                </div>
+              ) : altOptions.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-4 text-center">候補が見つかりませんでした</p>
+              ) : (
+                <div className="space-y-2">
+                  <p className="text-xs text-muted-foreground">タップで本文の表現を差し替え</p>
+                  {altOptions.map((opt, i) => (
+                    <button
+                      key={`${opt.expression}-${i}`}
+                      disabled={altApplying}
+                      onClick={() => applyAlternative(opt.expression)}
+                      className="w-full text-left rounded-lg border border-border/60 bg-card hover:bg-primary/5 hover:border-primary/40 transition-colors p-3 disabled:opacity-50"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-sm font-medium text-foreground">{opt.expression}</p>
+                        {opt.tone && (
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 shrink-0">
+                            {opt.tone}
+                          </span>
+                        )}
+                      </div>
+                      {opt.meaning && (
+                        <p className="text-xs text-muted-foreground mt-1">{opt.meaning}</p>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {altApplying && (
+                <div className="flex items-center justify-center text-xs text-muted-foreground">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />
+                  差し替え中...
+                </div>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
