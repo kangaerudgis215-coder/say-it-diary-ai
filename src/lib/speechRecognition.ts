@@ -32,7 +32,10 @@ export function setActiveRecognition(rec: SpeechRecognitionLike | null): void {
 }
 
 export function clearActiveRecognition(rec: SpeechRecognitionLike): void {
-  if (activeRecognition === rec) activeRecognition = null;
+  if (activeRecognition === rec) {
+    activeRecognition = null;
+    markMicSessionInactive();
+  }
 }
 
 export function getActiveRecognition(): SpeechRecognitionLike | null {
