@@ -3,19 +3,20 @@
  */
 import { useState, useEffect, useCallback, useRef, type TouchEvent } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Volume2, Loader2, BookOpen, PenLine, ChevronLeft, ChevronRight, CalendarDays } from 'lucide-react';
+import { ArrowLeft, Volume2, Loader2, BookOpen, PenLine, ChevronLeft, ChevronRight, CalendarDays, Sparkles } from 'lucide-react';
 import { SandyLoader } from '@/components/lottie/SandyLoader';
 import { DotLottieReact } from '@lottiefiles/dotlottie-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { HighlightableText } from '@/components/HighlightableText';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
 import { format, parseISO } from 'date-fns';
 import { normalizeForExpression } from '@/lib/textComparison';
-import { persistDiarySentences } from '@/lib/practiceBuilder';
+import { buildPracticeSentences, persistDiarySentences, type PracticeSentence } from '@/lib/practiceBuilder';
 import { cleanupInvalidDiaryLinkedExpressions, partitionExpressionsForText } from '@/lib/expressionValidation';
 import { cn } from '@/lib/utils';
 import { speakDiary, cancelDiaryTTS } from '@/lib/diaryTTS';

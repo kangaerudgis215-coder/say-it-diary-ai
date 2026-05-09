@@ -1,3 +1,5 @@
+import { markMicSessionActive, markMicSessionInactive } from './audioSession';
+
 export interface SpeechRecognitionLike {
   start(): void;
   stop(): void;
@@ -26,10 +28,14 @@ function safelyCall(rec: SpeechRecognitionLike, method: 'stop' | 'abort'): void 
 
 export function setActiveRecognition(rec: SpeechRecognitionLike | null): void {
   activeRecognition = rec;
+  if (rec) markMicSessionActive();
 }
 
 export function clearActiveRecognition(rec: SpeechRecognitionLike): void {
-  if (activeRecognition === rec) activeRecognition = null;
+  if (activeRecognition === rec) {
+    activeRecognition = null;
+    markMicSessionInactive();
+  }
 }
 
 export function getActiveRecognition(): SpeechRecognitionLike | null {
@@ -46,6 +52,7 @@ export function forceReleaseActiveRecognition(): void {
   if (!rec) return;
   safelyCall(rec, 'abort');
   safelyCall(rec, 'stop');
+  markMicSessionInactive();
 }
 
 /**
@@ -62,6 +69,7 @@ export function releaseSpeechRecognition(
   if (activeRecognition === recognition) activeRecognition = null;
   safelyCall(recognition, mode);
   if (mode === 'abort') safelyCall(recognition, 'stop');
+  markMicSessionInactive();
 }
 
 export async function releaseSpeechRecognitionBeforeNavigation(
@@ -72,6 +80,7 @@ export async function releaseSpeechRecognitionBeforeNavigation(
   const rec = recognition ?? activeRecognition;
   activeRecognition = null;
   if (!rec) return;
+  markMicSessionInactive(1000);
 
   await new Promise<void>((resolve) => {
     let settled = false;

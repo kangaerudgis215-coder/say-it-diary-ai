@@ -108,7 +108,7 @@ serve(async (req) => {
   }
 
   try {
-    const { messages, type, diary, diaries, streak, wordCount, existingExpressions, correction, displayName } = await req.json();
+    const { messages, type, diary, diaries, streak, wordCount, existingExpressions, correction, displayName, expression } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
 
     if (!LOVABLE_API_KEY) {
@@ -322,6 +322,38 @@ serve(async (req) => {
   ]
 }`;
 
+    } else if (type === "expression_alternatives") {
+      systemPrompt = `You are an English expression coach for Japanese learners.
+
+The user will provide an English diary and one extracted expression from it.
+Suggest 2-3 replacement expressions that can directly replace the original expression in the diary sentence.
+
+【STRICT RULES】
+- Keep the user's facts and meaning unchanged.
+- Each alternative must fit the SAME grammatical slot, tense, and sentence flow as the original.
+- Do NOT rewrite the whole sentence.
+- Prefer useful reusable phrases: one natural, one slightly harder, one more formal if possible.
+- Avoid expressions that require changing surrounding words.
+
+【OUTPUT FORMAT (JSON)】
+{
+  "alternatives": [
+    {
+      "expression": "replacement phrase only",
+      "meaning": "日本語の意味",
+      "tone": "自然 / 少し難しめ / フォーマル / カジュアル"
+    }
+  ]
+}`;
+
+    } else if (type === "expression_alternatives") {
+      aiMessages = [
+        { role: "system", content: systemPrompt },
+        {
+          role: "user",
+          content: `【Diary】\n${diary}\n\n【Original expression】\n${expression}`,
+        },
+      ];
     } else if (type === "cat_comments") {
       systemPrompt = `You write short Japanese speech-bubble lines for a lazy, gentle cat companion in an English diary app.
 
@@ -421,7 +453,7 @@ serve(async (req) => {
       ];
     }
 
-    const isJsonType = ["generate_diary", "select_sentences", "generate_quiz", "conversation", "regenerate_diary", "cat_comments"].includes(type);
+    const isJsonType = ["generate_diary", "select_sentences", "generate_quiz", "conversation", "regenerate_diary", "expression_alternatives", "cat_comments"].includes(type);
 
     // Per-call timeout so we never hang until the platform's 150s idle limit.
     // Gateway typically responds in a few seconds; 45s leaves room for one retry.

@@ -62,6 +62,16 @@ function doUnlock() {
   if (unlocked) return;
   unlocked = true;
   registry.forEach(primeOne);
+  ['/sounds/tap.mp3', '/sounds/correct.mp3', '/sounds/diary-complete.mp3', '/sounds/flashcard-correct.mp3']
+    .forEach((src) => {
+      try {
+        const audio = new Audio(src);
+        audio.preload = 'auto';
+        audio.load();
+      } catch {
+        /* no-op */
+      }
+    });
   unlockSpeech();
 }
 

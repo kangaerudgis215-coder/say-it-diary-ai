@@ -1,7 +1,9 @@
 /** Shared browser TTS helpers for SO-KI assistant messages. */
 import { forceReleaseActiveRecognition } from '@/lib/speechRecognition';
+import { cancelQueuedSpeech, runSpeechWhenAudioRouteReady } from '@/lib/audioSession';
 
 export function stopAssistantSpeech(): void {
+  cancelQueuedSpeech();
   if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
     window.speechSynthesis.cancel();
   }
@@ -64,19 +66,21 @@ export function createAssistantUtterance(text = ''): SpeechSynthesisUtterance | 
 export function speakAssistantImmediately(text: string): void {
   if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
   const clean = sanitizeForSpeech(text);
-  const utterance = createAssistantUtterance(clean);
-  if (!utterance) return;
-  try {
-    // CRITICAL: any active SpeechRecognition session holds the system audio
-    // route open and can clobber TTS playback (especially over Bluetooth on
-    // mobile). Always release the mic before the assistant speaks.
-    forceReleaseActiveRecognition();
-    window.speechSynthesis.cancel();
-    window.speechSynthesis.resume();
-    window.speechSynthesis.speak(utterance);
-  } catch {
-    /* Browser may still block if this is not called from a user gesture. */
-  }
+  runSpeechWhenAudioRouteReady(() => {
+    const utterance = createAssistantUtterance(clean);
+    if (!utterance) return;
+    try {
+      // CRITICAL: any active SpeechRecognition session holds the system audio
+      // route open and can clobber TTS playback (especially over Bluetooth on
+      // mobile). Always release the mic before the assistant speaks.
+      forceReleaseActiveRecognition();
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.resume();
+      window.speechSynthesis.speak(utterance);
+    } catch {
+      /* Browser may still block if this is not called from a user gesture. */
+    }
+  });
 }
 
 export function speakAssistant(text: string, preparedUtterance?: SpeechSynthesisUtterance | null): void {
@@ -106,14 +110,16 @@ export function speakAssistant(text: string, preparedUtterance?: SpeechSynthesis
     }
   };
 
+  const scheduleSpeak = (fn: () => void) => runSpeechWhenAudioRouteReady(fn);
+
   if (preparedUtterance) {
-    doSpeak();
+    scheduleSpeak(doSpeak);
     return;
   }
 
   const voices = ss.getVoices();
   if (voices && voices.length > 0) {
-    doSpeak();
+    scheduleSpeak(doSpeak);
     return;
   }
   let fired = false;
@@ -121,7 +127,7 @@ export function speakAssistant(text: string, preparedUtterance?: SpeechSynthesis
     if (fired) return;
     fired = true;
     try { ss.removeEventListener?.('voiceschanged', onVoices); } catch { /* ignore */ }
-    doSpeak();
+    scheduleSpeak(doSpeak);
   };
   try { ss.addEventListener?.('voiceschanged', onVoices); } catch { /* ignore */ }
   window.setTimeout(onVoices, 400);
