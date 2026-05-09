@@ -8,6 +8,8 @@ export interface SpeechRecognitionLike {
   onresult?: ((...args: any[]) => void) | null;
 }
 
+import { markMicSessionActive, markMicSessionInactive } from './audioSession';
+
 /**
  * Module-level reference to the most recently started recognition session.
  * Lets global listeners (popstate, pagehide, etc.) and React-Router
@@ -26,6 +28,7 @@ function safelyCall(rec: SpeechRecognitionLike, method: 'stop' | 'abort'): void 
 
 export function setActiveRecognition(rec: SpeechRecognitionLike | null): void {
   activeRecognition = rec;
+  if (rec) markMicSessionActive();
 }
 
 export function clearActiveRecognition(rec: SpeechRecognitionLike): void {
@@ -46,6 +49,7 @@ export function forceReleaseActiveRecognition(): void {
   if (!rec) return;
   safelyCall(rec, 'abort');
   safelyCall(rec, 'stop');
+  markMicSessionInactive();
 }
 
 /**
@@ -62,6 +66,7 @@ export function releaseSpeechRecognition(
   if (activeRecognition === recognition) activeRecognition = null;
   safelyCall(recognition, mode);
   if (mode === 'abort') safelyCall(recognition, 'stop');
+  markMicSessionInactive();
 }
 
 export async function releaseSpeechRecognitionBeforeNavigation(
@@ -72,6 +77,7 @@ export async function releaseSpeechRecognitionBeforeNavigation(
   const rec = recognition ?? activeRecognition;
   activeRecognition = null;
   if (!rec) return;
+  markMicSessionInactive(1000);
 
   await new Promise<void>((resolve) => {
     let settled = false;
