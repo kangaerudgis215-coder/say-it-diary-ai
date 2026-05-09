@@ -1,3 +1,5 @@
+import { markMicSessionActive, markMicSessionInactive } from './audioSession';
+
 export interface SpeechRecognitionLike {
   start(): void;
   stop(): void;
@@ -7,8 +9,6 @@ export interface SpeechRecognitionLike {
   onerror?: ((...args: any[]) => void) | null;
   onresult?: ((...args: any[]) => void) | null;
 }
-
-import { markMicSessionActive, markMicSessionInactive } from './audioSession';
 
 /**
  * Module-level reference to the most recently started recognition session.
