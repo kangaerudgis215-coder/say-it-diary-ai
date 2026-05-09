@@ -108,7 +108,7 @@ serve(async (req) => {
   }
 
   try {
-    const { messages, type, diary, diaries, streak, wordCount, existingExpressions, correction, displayName } = await req.json();
+    const { messages, type, diary, diaries, streak, wordCount, existingExpressions, correction, displayName, expression } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
 
     if (!LOVABLE_API_KEY) {
@@ -318,6 +318,30 @@ serve(async (req) => {
       "meaning": "日本語の意味",
       "pos_or_type": "verb phrase / noun phrase / adjective phrase / adverb phrase / idiom / other (use 'idiom' for set phrases / fixed expressions)",
       "scene_or_context": "日常 / 仕事 / 学習 / 感情 / 人間関係 / その他 のいずれか1つ"
+    }
+  ]
+}`;
+
+    } else if (type === "expression_alternatives") {
+      systemPrompt = `You are an English expression coach for Japanese learners.
+
+The user will provide an English diary and one extracted expression from it.
+Suggest 2-3 replacement expressions that can directly replace the original expression in the diary sentence.
+
+【STRICT RULES】
+- Keep the user's facts and meaning unchanged.
+- Each alternative must fit the SAME grammatical slot, tense, and sentence flow as the original.
+- Do NOT rewrite the whole sentence.
+- Prefer useful reusable phrases: one natural, one slightly harder, one more formal if possible.
+- Avoid expressions that require changing surrounding words.
+
+【OUTPUT FORMAT (JSON)】
+{
+  "alternatives": [
+    {
+      "expression": "replacement phrase only",
+      "meaning": "日本語の意味",
+      "tone": "自然 / 少し難しめ / フォーマル / カジュアル"
     }
   ]
 }`;
