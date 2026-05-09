@@ -414,6 +414,14 @@ Suggest 2-3 replacement expressions that can directly replace the original expre
           content: `【現在の日記】\n${diary}\n\n【修正リクエスト】\n${correction}`,
         },
       ];
+    } else if (type === "expression_alternatives") {
+      aiMessages = [
+        { role: "system", content: systemPrompt },
+        {
+          role: "user",
+          content: `【Diary】\n${diary}\n\n【Original expression】\n${expression}`,
+        },
+      ];
     } else if (type === "cat_comments") {
       const diaryLines = Array.isArray(diaries)
         ? diaries.slice(0, 5).map((d: any, i: number) => `${i + 1}. ${String(d?.date ?? "unknown")}: ${String(d?.content ?? "").slice(0, 500)}`).join("\n")
