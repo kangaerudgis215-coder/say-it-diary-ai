@@ -110,14 +110,16 @@ export function speakAssistant(text: string, preparedUtterance?: SpeechSynthesis
     }
   };
 
+  const scheduleSpeak = (fn: () => void) => runSpeechWhenAudioRouteReady(fn);
+
   if (preparedUtterance) {
-    doSpeak();
+    scheduleSpeak(doSpeak);
     return;
   }
 
   const voices = ss.getVoices();
   if (voices && voices.length > 0) {
-    doSpeak();
+    scheduleSpeak(doSpeak);
     return;
   }
   let fired = false;
@@ -125,7 +127,7 @@ export function speakAssistant(text: string, preparedUtterance?: SpeechSynthesis
     if (fired) return;
     fired = true;
     try { ss.removeEventListener?.('voiceschanged', onVoices); } catch { /* ignore */ }
-    doSpeak();
+    scheduleSpeak(doSpeak);
   };
   try { ss.addEventListener?.('voiceschanged', onVoices); } catch { /* ignore */ }
   window.setTimeout(onVoices, 400);
