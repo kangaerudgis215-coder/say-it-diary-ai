@@ -346,6 +346,14 @@ Suggest 2-3 replacement expressions that can directly replace the original expre
   ]
 }`;
 
+    } else if (type === "expression_alternatives") {
+      aiMessages = [
+        { role: "system", content: systemPrompt },
+        {
+          role: "user",
+          content: `【Diary】\n${diary}\n\n【Original expression】\n${expression}`,
+        },
+      ];
     } else if (type === "cat_comments") {
       systemPrompt = `You write short Japanese speech-bubble lines for a lazy, gentle cat companion in an English diary app.
 
@@ -445,7 +453,7 @@ Suggest 2-3 replacement expressions that can directly replace the original expre
       ];
     }
 
-    const isJsonType = ["generate_diary", "select_sentences", "generate_quiz", "conversation", "regenerate_diary", "cat_comments"].includes(type);
+    const isJsonType = ["generate_diary", "select_sentences", "generate_quiz", "conversation", "regenerate_diary", "expression_alternatives", "cat_comments"].includes(type);
 
     // Per-call timeout so we never hang until the platform's 150s idle limit.
     // Gateway typically responds in a few seconds; 45s leaves room for one retry.
