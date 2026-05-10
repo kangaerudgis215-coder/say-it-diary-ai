@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils';
 import { StarParticles } from './StarParticles';
 import { ConfettiBurst } from '@/components/lottie/ConfettiBurst';
 import { useSuccessSound } from '@/hooks/useSuccessSound';
-import { speakDiary, cancelDiaryTTS } from '@/lib/diaryTTS';
+import { speakDiary } from '@/lib/diaryTTS';
 import { Button } from '@/components/ui/button';
 
 interface WordReorderQuizProps {
@@ -95,11 +95,10 @@ export function WordReorderQuiz({ sentence, japaneseSentence, onCorrect }: WordR
       if (userSentence === target) {
         setIsCorrect(true);
         setShowNice(true);
-        // Free the speech channel so the chime is not swallowed by an in-flight
-        // per-word TTS playback (common cause of "no success sound" on mobile).
-        cancelDiaryTTS();
-        // Tiny delay lets iOS release the audio session before the chime.
-        window.setTimeout(() => playSuccess(), 80);
+        // Don't cancel the in-flight TTS for the just-tapped word — the audio
+        // session coordinator queues the chime to fire AFTER the speech ends,
+        // so the user hears the last word fully and then the success sound.
+        playSuccess();
         if (navigator.vibrate) navigator.vibrate(100);
         setTimeout(() => {
           setShowNice(false);
