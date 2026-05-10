@@ -22,10 +22,13 @@ export function RecallCompletionScreen({ diaryDate }: RecallCompletionScreenProp
   const [showCheck, setShowCheck] = useState(false);
 
   useEffect(() => {
-    playBigSuccess();
+    // Wait briefly so the prior screen's audio fully releases the output
+    // route — without this, the celebration chord is sometimes dropped.
+    const tSound = window.setTimeout(() => playBigSuccess(), 320);
     const t1 = setTimeout(() => setShow(true), 80);
     const t2 = setTimeout(() => setShowCheck(true), 650);
     return () => {
+      clearTimeout(tSound);
       clearTimeout(t1);
       clearTimeout(t2);
     };
