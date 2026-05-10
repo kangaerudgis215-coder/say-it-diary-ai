@@ -3,9 +3,12 @@ type ScheduledKind = 'tap' | 'effect' | 'speech';
 let micActive = false;
 let mediaRouteReadyAt = 0;
 let speechTicket = 0;
+let speechActiveCount = 0;
+let speechFreeAt = 0;
 
 const EFFECT_AFTER_MIC_MS = 900;
 const SPEECH_AFTER_MIC_MS = 750;
+const EFFECT_AFTER_SPEECH_MS = 220;
 
 function now() {
   return Date.now();
@@ -13,7 +16,16 @@ function now() {
 
 function waitMs(kind: ScheduledKind) {
   const base = kind === 'speech' ? SPEECH_AFTER_MIC_MS : EFFECT_AFTER_MIC_MS;
-  return Math.max(0, mediaRouteReadyAt - now(), micActive ? base : 0);
+  const micWait = Math.max(0, mediaRouteReadyAt - now(), micActive ? base : 0);
+  // Effects/taps should also wait until any in-flight TTS has fully released
+  // the audio output, otherwise mobile/Bluetooth routes garble both streams.
+  if (kind !== 'speech') {
+    const speechWait = speechActiveCount > 0
+      ? EFFECT_AFTER_SPEECH_MS
+      : Math.max(0, speechFreeAt - now());
+    return Math.max(micWait, speechWait);
+  }
+  return micWait;
 }
 
 export function markMicSessionActive() {
@@ -30,8 +42,20 @@ export function isMicAudioSessionActive() {
   return micActive;
 }
 
+export function markSpeechStart() {
+  speechActiveCount += 1;
+}
+
+export function markSpeechEnd() {
+  speechActiveCount = Math.max(0, speechActiveCount - 1);
+  speechFreeAt = now() + EFFECT_AFTER_SPEECH_MS;
+}
+
 export function cancelQueuedSpeech() {
   speechTicket += 1;
+  // Treat any pending speech as ended so queued effects/taps can fire.
+  speechActiveCount = 0;
+  speechFreeAt = now() + EFFECT_AFTER_SPEECH_MS;
 }
 
 export function runWhenAudioRouteReady(kind: ScheduledKind, fn: () => void, options: { dropIfMicActive?: boolean } = {}) {

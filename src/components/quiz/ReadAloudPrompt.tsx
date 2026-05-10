@@ -184,7 +184,14 @@ export function ReadAloudPrompt({
         </div>
       )}
 
-      <p className="text-lg font-semibold text-primary mb-3">🎤 声に出してみよう</p>
+      <div className="flex flex-col items-center mb-3">
+        <p className="text-lg font-semibold text-primary font-japanese">
+          SOKIに伝えてみよう！
+        </p>
+        <p className="text-[11px] text-muted-foreground mt-0.5 font-japanese">
+          猫のSOKIが、今日の出来事を聞きたがっています 🐾
+        </p>
+      </div>
 
       {/* Difficulty selector */}
       <div className="flex items-center gap-1 mb-4 p-1 rounded-full bg-muted">
@@ -239,6 +246,7 @@ export function ReadAloudPrompt({
       </div>
 
       {/* Mic */}
+      <div className="relative w-full max-w-md flex items-center justify-center">
       <button
         onClick={handleMicPress}
         disabled={passed || !isSupported}
@@ -269,6 +277,30 @@ export function ReadAloudPrompt({
           </div>
         )}
       </button>
+        {/* SOKI cat — listens at the bottom-right of the mic, nodding while
+            the user speaks. Pulses subtly when actively listening. */}
+        <div
+          className={cn(
+            'absolute right-1 bottom-0 translate-y-2 w-24 h-24 pointer-events-none transition-transform duration-300',
+            isListening && 'scale-110 drop-shadow-[0_0_18px_hsl(var(--primary)/0.55)]',
+          )}
+          aria-hidden
+        >
+          <DotLottieReact
+            src="/anim/cat-playing.lottie"
+            autoplay
+            loop
+            style={{ width: '100%', height: '100%' }}
+          />
+          {isListening && (
+            <div className="absolute -top-2 left-0 right-0 flex justify-center">
+              <span className="px-2 py-0.5 rounded-full bg-card/90 border border-border/70 text-[10px] font-japanese text-foreground/90 shadow-sm">
+                聞いてるにゃ…
+              </span>
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* Done — manual completion */}
       <Button

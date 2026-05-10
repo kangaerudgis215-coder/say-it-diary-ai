@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -27,6 +27,10 @@ interface StampCalendarProps {
  */
 export function StampCalendar({ entries, onDateSelect, selectedDate }: StampCalendarProps) {
   const [currentMonth, setCurrentMonth] = useState(new Date());
+  // Bumping this triggers a fresh laser-beam animation on each Home mount /
+  // remount so the user gets the celebratory sweep when returning home.
+  const [laserNonce, setLaserNonce] = useState(0);
+  useEffect(() => { setLaserNonce((n) => n + 1); }, []);
 
   const monthStart = startOfMonth(currentMonth);
   const monthEnd = endOfMonth(currentMonth);
@@ -100,6 +104,7 @@ export function StampCalendar({ entries, onDateSelect, selectedDate }: StampCale
             currentMonth={currentMonth}
             selectedDate={selectedDate}
             onDateSelect={onDateSelect}
+            laserNonce={laserNonce}
           />
         ))}
       </div>
@@ -108,13 +113,14 @@ export function StampCalendar({ entries, onDateSelect, selectedDate }: StampCale
 }
 
 function CalendarRow({
-  row, entryFor, currentMonth, selectedDate, onDateSelect,
+  row, entryFor, currentMonth, selectedDate, onDateSelect, laserNonce,
 }: {
   row: (Date | null)[];
   entryFor: (d: Date) => StampEntry | undefined;
   currentMonth: Date;
   selectedDate?: Date;
   onDateSelect: (date: Date) => void;
+  laserNonce: number;
 }) {
   // Compute contiguous streak segments of cells with an entry within this row.
   type Seg = { start: number; end: number };
@@ -131,8 +137,19 @@ function CalendarRow({
   });
   if (cur) segs.push(cur);
 
+  // Full-week (7-day) laser: row is fully covered by entries.
+  const fullWeek = row.length === 7 && row.every((d) => d && entryFor(d));
+
   return (
     <div className="relative grid grid-cols-7 gap-1 h-11">
+      {/* Full-week laser beam — sweeps left → right when Home mounts. */}
+      {fullWeek && (
+        <span
+          key={laserNonce}
+          className="streak-laser-beam"
+          aria-hidden
+        />
+      )}
       {/* Streak pill backgrounds */}
       {segs.map((s, i) => {
         const left = (s.start / 7) * 100;

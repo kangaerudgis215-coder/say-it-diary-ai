@@ -1,6 +1,6 @@
 /** Shared browser TTS helpers for SO-KI assistant messages. */
 import { forceReleaseActiveRecognition } from '@/lib/speechRecognition';
-import { cancelQueuedSpeech, runSpeechWhenAudioRouteReady } from '@/lib/audioSession';
+import { cancelQueuedSpeech, runSpeechWhenAudioRouteReady, markSpeechStart, markSpeechEnd } from '@/lib/audioSession';
 
 export function stopAssistantSpeech(): void {
   cancelQueuedSpeech();
@@ -54,12 +54,16 @@ export function createAssistantUtterance(text = ''): SpeechSynthesisUtterance | 
   utterance.lang = 'en-US';
   utterance.rate = 1.0;
   utterance.pitch = 1.0;
-  // Keep TTS intentionally below max volume. Mobile Bluetooth devices can
-  // switch output routes abruptly when speech synthesis grabs the audio
-  // session, so max-volume utterances are the most likely to feel like blasts.
-  utterance.volume = 0.72;
+  // Full volume — the audio session coordinator now prevents mic/effect
+  // collisions, and quiet utterances were being garbled by Bluetooth AGC.
+  utterance.volume = 1.0;
   const voice = pickNaturalEnglishVoice();
   if (voice) utterance.voice = voice;
+  const stop = () => markSpeechEnd();
+  const prevEnd = utterance.onend;
+  const prevErr = utterance.onerror;
+  utterance.onend = (e) => { stop(); prevEnd?.call(utterance, e as any); };
+  utterance.onerror = (e) => { stop(); prevErr?.call(utterance, e as any); };
   return utterance;
 }
 
@@ -76,6 +80,7 @@ export function speakAssistantImmediately(text: string): void {
       forceReleaseActiveRecognition();
       window.speechSynthesis.cancel();
       window.speechSynthesis.resume();
+      markSpeechStart();
       window.speechSynthesis.speak(utterance);
     } catch {
       /* Browser may still block if this is not called from a user gesture. */
@@ -104,6 +109,7 @@ export function speakAssistant(text: string, preparedUtterance?: SpeechSynthesis
     }
     try {
       try { ss.resume(); } catch { /* ignore */ }
+      markSpeechStart();
       ss.speak(utterance);
     } catch {
       /* Browser may block speech before first user gesture. */

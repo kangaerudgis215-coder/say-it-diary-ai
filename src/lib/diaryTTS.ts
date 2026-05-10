@@ -18,7 +18,7 @@
  */
 
 import { registerUnlockable } from './audioUnlock';
-import { runSpeechWhenAudioRouteReady } from './audioSession';
+import { runSpeechWhenAudioRouteReady, markSpeechStart, markSpeechEnd } from './audioSession';
 
 // Tiny ~0.5s silent WAV (mono, 8kHz). Loops to keep the media channel hot.
 const SILENT_WAV =
@@ -96,12 +96,14 @@ export function speakDiary(text: string, opts: DiarySpeakOptions = {}) {
     utterance.lang = 'en-US';
     utterance.rate = opts.rate ?? 0.9;
     utterance.pitch = 1.0;
-    // Avoid full-scale TTS because mobile Bluetooth routes can jump between
-    // earphones / speaker while speech synthesis is active.
-    utterance.volume = 0.68;
+    // Full-volume TTS now that the audio session coordinator keeps the mic
+    // and effect channels from competing. Low volume was making Bluetooth
+    // AGC garble short utterances ("choppy/raspy" playback).
+    utterance.volume = 1.0;
 
     const cleanup = () => {
       stopSilent();
+      markSpeechEnd();
     };
     utterance.onend = () => {
       cleanup();
@@ -113,6 +115,7 @@ export function speakDiary(text: string, opts: DiarySpeakOptions = {}) {
     };
     try {
       ss.resume();
+      markSpeechStart();
       ss.speak(utterance);
     } catch {
       cleanup();
