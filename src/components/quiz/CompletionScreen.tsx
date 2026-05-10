@@ -75,8 +75,12 @@ export function CompletionScreen({ streak, expressions, expressionDetails, isPas
   const [weekDone, setWeekDone] = useState<boolean[]>(() => Array(7).fill(false));
 
   useEffect(() => {
-    playBigSuccess();
+    // Give the previous screen's audio (mic / TTS / tap) a beat to fully
+    // release the output route before the celebration chord, otherwise the
+    // chime is silently dropped on mobile / Bluetooth.
+    const t = window.setTimeout(() => playBigSuccess(), 320);
     setTimeout(() => setShow(true), 100);
+    return () => clearTimeout(t);
   }, [playBigSuccess]);
 
   useEffect(() => {
