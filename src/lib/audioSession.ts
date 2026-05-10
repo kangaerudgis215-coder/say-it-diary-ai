@@ -10,6 +10,25 @@ const EFFECT_AFTER_MIC_MS = 900;
 const SPEECH_AFTER_MIC_MS = 750;
 const EFFECT_AFTER_SPEECH_MS = 220;
 
+// Effects/taps that arrived while speech was active. They are flushed in order
+// once `markSpeechEnd` brings the active count back to zero (plus the small
+// post-speech settle delay), so the success chime never gets clipped by an
+// in-flight TTS utterance.
+const pendingAfterSpeech: Array<() => void> = [];
+
+function flushPendingAfterSpeech() {
+  if (pendingAfterSpeech.length === 0) return;
+  const wait = Math.max(0, speechFreeAt - now());
+  const drain = () => {
+    while (pendingAfterSpeech.length > 0) {
+      const fn = pendingAfterSpeech.shift();
+      try { fn?.(); } catch { /* no-op */ }
+    }
+  };
+  if (wait <= 0) drain();
+  else window.setTimeout(drain, wait);
+}
+
 function now() {
   return Date.now();
 }
@@ -49,6 +68,7 @@ export function markSpeechStart() {
 export function markSpeechEnd() {
   speechActiveCount = Math.max(0, speechActiveCount - 1);
   speechFreeAt = now() + EFFECT_AFTER_SPEECH_MS;
+  if (speechActiveCount === 0) flushPendingAfterSpeech();
 }
 
 export function cancelQueuedSpeech() {
@@ -56,10 +76,21 @@ export function cancelQueuedSpeech() {
   // Treat any pending speech as ended so queued effects/taps can fire.
   speechActiveCount = 0;
   speechFreeAt = now() + EFFECT_AFTER_SPEECH_MS;
+  flushPendingAfterSpeech();
 }
 
 export function runWhenAudioRouteReady(kind: ScheduledKind, fn: () => void, options: { dropIfMicActive?: boolean } = {}) {
   if (options.dropIfMicActive && (micActive || waitMs(kind) > 0)) return false;
+  // Effects/taps must wait for any in-flight speech to fully release the
+  // audio output. Queue them and let `markSpeechEnd` drain the queue.
+  if (kind !== 'speech' && speechActiveCount > 0) {
+    const micWait = Math.max(0, mediaRouteReadyAt - now(), micActive ? EFFECT_AFTER_MIC_MS : 0);
+    pendingAfterSpeech.push(() => {
+      if (micWait > 0) window.setTimeout(fn, micWait);
+      else fn();
+    });
+    return true;
+  }
   const delay = waitMs(kind);
   if (delay <= 0) {
     fn();
