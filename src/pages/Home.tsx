@@ -17,6 +17,7 @@ import { CatBuddy } from '@/components/home/CatBuddy';
 import { SelectedDayChatPreview } from '@/components/home/SelectedDayChatPreview';
 import { speakAssistantImmediately } from '@/lib/assistantSpeech';
 import { getChatWelcomeMessage } from '@/lib/chatWelcome';
+import { FeedbackSection } from '@/components/home/FeedbackSection';
 
 interface DiaryRow {
   id: string;
@@ -237,6 +238,7 @@ export default function Home() {
         ) : (
           <DiaryListView entries={entries} showSearch recallCompletedIds={recallCompletedIds} />
         )}
+        <FeedbackSection />
       </main>
 
       <ComposeFAB
