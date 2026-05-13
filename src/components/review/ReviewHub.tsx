@@ -3,7 +3,7 @@
  */
 import { useState, useEffect, useCallback, useRef, type TouchEvent } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Volume2, Loader2, BookOpen, PenLine, ChevronLeft, ChevronRight, CalendarDays, Sparkles, Shuffle } from 'lucide-react';
+import { ArrowLeft, Volume2, Loader2, BookOpen, PenLine, ChevronLeft, ChevronRight, CalendarDays, Sparkles, Shuffle, Trash2 } from 'lucide-react';
 import { SandyLoader } from '@/components/lottie/SandyLoader';
 import { DotLottieReact } from '@lottiefiles/dotlottie-react';
 import { Button } from '@/components/ui/button';
@@ -51,6 +51,7 @@ export function ReviewHub() {
   const [altLoading, setAltLoading] = useState(false);
   const [altOptions, setAltOptions] = useState<Array<{ expression: string; meaning?: string; tone?: string }>>([]);
   const [altApplying, setAltApplying] = useState(false);
+  const [deletingExpressionId, setDeletingExpressionId] = useState<string | null>(null);
 
   useEffect(() => {
     if (user && diaryId) {
@@ -245,6 +246,52 @@ export function ReviewHub() {
       toast({ variant: 'destructive', title: 'エラー', description: e?.message || '差し替えに失敗しました' });
     } finally {
       setAltApplying(false);
+    }
+  };
+
+  const deleteExpression = async (exp: any) => {
+    if (!user || !diaryEntry || !exp?.id) return;
+    const expressionText = String(exp.expression ?? '').trim();
+    setDeletingExpressionId(exp.id);
+    try {
+      const { error } = await supabase
+        .from('expressions')
+        .delete()
+        .eq('id', exp.id)
+        .eq('user_id', user.id);
+      if (error) throw error;
+
+      const oldImportant = Array.isArray(diaryEntry.important_sentences) ? diaryEntry.important_sentences : [];
+      const newImportant = oldImportant.map((s: any) => ({
+        ...s,
+        expressions: Array.isArray(s?.expressions)
+          ? s.expressions.filter((x: string) => String(x).toLowerCase() !== expressionText.toLowerCase())
+          : [],
+      }));
+
+      await supabase
+        .from('diary_entries')
+        .update({ important_sentences: newImportant })
+        .eq('id', diaryEntry.id)
+        .eq('user_id', user.id);
+
+      const remaining = expressions
+        .filter((item) => item.id !== exp.id)
+        .map((item) => item.expression);
+      const practice = buildPracticeSentences(
+        diaryEntry.content,
+        diaryEntry.japanese_summary,
+        remaining,
+        newImportant,
+      );
+      await persistDiarySentences(supabase, user.id, diaryEntry.id, practice);
+
+      toast({ title: '表現を削除しました', description: 'この日記の練習リストから外しました。' });
+      await loadDiary();
+    } catch (e: any) {
+      toast({ variant: 'destructive', title: 'エラー', description: e?.message || '表現の削除に失敗しました' });
+    } finally {
+      setDeletingExpressionId(null);
     }
   };
 
@@ -578,7 +625,21 @@ export function ReviewHub() {
                         <p className="text-xs text-muted-foreground/70 mt-1 italic">e.g. {exp.example_sentence}</p>
                       )}
                     </button>
-                    <div className="mt-2 flex justify-end">
+                    <div className="mt-2 flex justify-end gap-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2 text-xs gap-1 text-destructive hover:text-destructive hover:bg-destructive/10"
+                        disabled={deletingExpressionId === exp.id}
+                        onClick={() => deleteExpression(exp)}
+                      >
+                        {deletingExpressionId === exp.id ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Trash2 className="w-3.5 h-3.5" />
+                        )}
+                        削除
+                      </Button>
                       <Button
                         variant="ghost"
                         size="sm"
