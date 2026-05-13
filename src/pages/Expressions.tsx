@@ -53,6 +53,21 @@ export default function Expressions() {
     fetchExpressions();
   }, [user]);
 
+  // Auto-purge expressions that have been archived for more than 30 days.
+  // Keeps the collection lean so the swipe-to-archive flow doesn't accumulate forever.
+  useEffect(() => {
+    if (!user) return;
+    (async () => {
+      const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+      await supabase
+        .from('expressions')
+        .delete()
+        .eq('user_id', user.id)
+        .eq('status', 'archived')
+        .lt('archived_at', cutoff);
+    })();
+  }, [user]);
+
   const fetchExpressions = async () => {
     if (!user) return;
     const { data } = await supabase
@@ -206,7 +221,9 @@ export default function Expressions() {
       toast({
         title: newStatus === 'archived' ? 'Expression archived' : 'Expression restored',
         description:
-          newStatus === 'archived' ? 'Removed from practice queue.' : 'Back in your practice queue.',
+          newStatus === 'archived'
+            ? '練習キューから外しました。30日後に自動削除されます。'
+            : '練習キューに戻しました。',
       });
     },
     [toast]
