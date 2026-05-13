@@ -238,6 +238,7 @@ export default function Home() {
         ) : (
           <DiaryListView entries={entries} showSearch recallCompletedIds={recallCompletedIds} />
         )}
+        <FeedbackSection />
       </main>
 
       <ComposeFAB
