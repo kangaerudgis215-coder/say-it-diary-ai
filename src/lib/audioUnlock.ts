@@ -20,6 +20,36 @@
 const registry = new Set<HTMLAudioElement>();
 let unlocked = false;
 let installed = false;
+let sharedAudioContext: AudioContext | null = null;
+
+function getAudioContext(): AudioContext | null {
+  if (typeof window === 'undefined') return null;
+  const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+  if (!AudioContextClass) return null;
+  if (!sharedAudioContext) {
+    try {
+      sharedAudioContext = new AudioContextClass();
+    } catch {
+      return null;
+    }
+  }
+  return sharedAudioContext;
+}
+
+function unlockWebAudio() {
+  const ctx = getAudioContext();
+  if (!ctx) return;
+  try {
+    void ctx.resume();
+    const buffer = ctx.createBuffer(1, 1, 22050);
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.connect(ctx.destination);
+    source.start(0);
+  } catch {
+    /* ignore */
+  }
+}
 
 function primeOne(a: HTMLAudioElement) {
   try {
@@ -72,6 +102,7 @@ function doUnlock() {
         /* no-op */
       }
     });
+  unlockWebAudio();
   unlockSpeech();
 }
 
@@ -83,6 +114,10 @@ export function registerUnlockable(audio: HTMLAudioElement | null | undefined) {
 
 export function isAudioUnlocked() {
   return unlocked;
+}
+
+export function getUnlockedAudioContext() {
+  return getAudioContext();
 }
 
 export function installAudioUnlock() {
