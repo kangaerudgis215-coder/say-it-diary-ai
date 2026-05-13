@@ -625,7 +625,21 @@ export function ReviewHub() {
                         <p className="text-xs text-muted-foreground/70 mt-1 italic">e.g. {exp.example_sentence}</p>
                       )}
                     </button>
-                    <div className="mt-2 flex justify-end">
+                    <div className="mt-2 flex justify-end gap-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2 text-xs gap-1 text-destructive hover:text-destructive hover:bg-destructive/10"
+                        disabled={deletingExpressionId === exp.id}
+                        onClick={() => deleteExpression(exp)}
+                      >
+                        {deletingExpressionId === exp.id ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Trash2 className="w-3.5 h-3.5" />
+                        )}
+                        削除
+                      </Button>
                       <Button
                         variant="ghost"
                         size="sm"
