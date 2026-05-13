@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { DotLottieReact } from '@lottiefiles/dot-lottie-react';
+import { DotLottieReact } from '@lottiefiles/dotlottie-react';
 import { MessageSquareHeart } from 'lucide-react';
 import { useUISound } from '@/hooks/useUISound';
 
