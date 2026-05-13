@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Sparkles, RefreshCw, Loader2, ChevronLeft, Search } from 'lucide-react';
+import { ArrowLeft, Sparkles, RefreshCw, Loader2, ChevronLeft, Search, Trash2, ArchiveRestore } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
@@ -84,6 +84,13 @@ export default function Expressions() {
 
   // Active = not archived. Total expressions encountered.
   const active = useMemo(() => expressions.filter(e => e.status !== 'archived'), [expressions]);
+  const archivedList = useMemo(
+    () =>
+      expressions
+        .filter(e => e.status === 'archived')
+        .sort((a, b) => (b.created_at || '').localeCompare(a.created_at || '')),
+    [expressions]
+  );
   const totalEncountered = active.length;
   const masteredCount = useMemo(
     () => active.filter(e => bucketOf(e.mastery_level) === 'mastered').length,
@@ -187,9 +194,11 @@ export default function Expressions() {
     return map;
   }, [active, groupBy]);
 
+  const isArchiveView = activeCategory === '__archived__';
+
   const categoryList = useMemo(() => {
     if (!activeCategory) return [];
-    let list = active.filter(e => keyOf(e) === activeCategory);
+    let list = isArchiveView ? archivedList : active.filter(e => keyOf(e) === activeCategory);
     if (search.trim()) {
       const q = search.trim().toLowerCase();
       list = list.filter(
@@ -198,11 +207,12 @@ export default function Expressions() {
           (e.meaning ?? '').toLowerCase().includes(q)
       );
     }
+    if (isArchiveView) return list; // show every archived item individually
     // Collapse similar expressions into a single representative card so the list
     // doesn't grow noisy. The newest occurrence wins (list is already sorted desc).
     const groups = groupSimilarExpressions(list);
     return groups.map((g) => g.representative);
-  }, [active, activeCategory, search, groupBy]);
+  }, [active, archivedList, activeCategory, isArchiveView, search, groupBy]);
 
   const visible = categoryList.slice(0, visibleCount);
   const hasMore = visibleCount < categoryList.length;
@@ -265,14 +275,18 @@ export default function Expressions() {
         <div className="flex-1">
           <h1 className="text-lg font-semibold tracking-tight text-foreground/90">
             {view === 'category'
-              ? (groupBy === 'pos'
+              ? (isArchiveView
+                  ? '🗑 アーカイブ'
+                  : groupBy === 'pos'
                   ? (POS_LABELS_JA[activeCategory as PosCategory] ?? activeCategory)
                   : activeCategory)
               : 'Phrases'}
           </h1>
           <p className="text-xs text-muted-foreground">
             {view === 'category'
-              ? `${categoryList.length} phrases`
+              ? (isArchiveView
+                  ? `${categoryList.length} 件 ・ 30日後に自動削除`
+                  : `${categoryList.length} phrases`)
               : `${totalEncountered} encountered · ${masteredCount} mastered`}
           </p>
         </div>
@@ -400,6 +414,31 @@ export default function Expressions() {
               );
             })}
           </div>
+
+          {/* Archive folder — like a trash bin. Items here are auto-deleted after 30 days. */}
+          <button
+            onClick={() => { setActiveCategory('__archived__'); setView('category'); }}
+            className={cn(
+              'mt-4 w-full text-left rounded-2xl border border-dashed p-4 transition-all',
+              'border-muted-foreground/25 bg-muted/20 hover:bg-muted/30 hover:border-muted-foreground/40',
+              archivedList.length === 0 && 'opacity-60'
+            )}
+          >
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-muted text-muted-foreground">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-semibold text-foreground">アーカイブ</span>
+                  <span className="text-xs text-muted-foreground tabular-nums">{archivedList.length}</span>
+                </div>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  右にスワイプで復元 ・ 30日後に自動削除
+                </p>
+              </div>
+            </div>
+          </button>
 
           {totalEncountered === 0 && (
             <div className="flex flex-col items-center justify-center text-center py-12">
