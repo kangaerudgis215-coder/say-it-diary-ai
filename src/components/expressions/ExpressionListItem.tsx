@@ -1,6 +1,6 @@
+import { useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { Calendar, Star, Archive, ArchiveRestore, Repeat2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { ExpressionDetail } from '@/components/ExpressionDetail';
@@ -49,16 +49,105 @@ export function ExpressionListItem({
     return format(new Date(dateStr), 'MMM d, yyyy');
   };
 
+  // Swipe-to-archive (left for active → archive, right for archived → restore).
+  const [dx, setDx] = useState(0);
+  const startRef = useRef<{ x: number; y: number } | null>(null);
+  const lockedRef = useRef<'h' | 'v' | null>(null);
+  const movedRef = useRef(false);
+  const isArchived = exp.status === 'archived';
+  // Active rows: only allow left swipe. Archived rows: only right swipe.
+  const SWIPE_THRESHOLD = 96;
+
+  const onPointerDown = (e: ReactPointerEvent) => {
+    startRef.current = { x: e.clientX, y: e.clientY };
+    lockedRef.current = null;
+    movedRef.current = false;
+  };
+  const onPointerMove = (e: ReactPointerEvent) => {
+    const s = startRef.current;
+    if (!s) return;
+    const ddx = e.clientX - s.x;
+    const ddy = e.clientY - s.y;
+    if (lockedRef.current === null && (Math.abs(ddx) > 8 || Math.abs(ddy) > 8)) {
+      lockedRef.current = Math.abs(ddx) > Math.abs(ddy) * 1.2 ? 'h' : 'v';
+    }
+    if (lockedRef.current !== 'h') return;
+    movedRef.current = true;
+    // Clamp to one direction depending on archived state
+    const clamped = isArchived ? Math.max(0, ddx) : Math.min(0, ddx);
+    setDx(Math.max(-160, Math.min(160, clamped)));
+  };
+  const onPointerUp = (e: ReactPointerEvent) => {
+    const final = dx;
+    startRef.current = null;
+    lockedRef.current = null;
+    setDx(0);
+    if (Math.abs(final) >= SWIPE_THRESHOLD) {
+      if (!isArchived && final < 0) {
+        e.preventDefault();
+        onArchiveToggle(exp.id, 'archived');
+        return;
+      }
+      if (isArchived && final > 0) {
+        e.preventDefault();
+        onArchiveToggle(exp.id, 'active');
+        return;
+      }
+    }
+  };
+  const onClickGuard = (e: React.MouseEvent) => {
+    if (movedRef.current) {
+      e.preventDefault();
+      e.stopPropagation();
+      movedRef.current = false;
+      return;
+    }
+    onSelect();
+  };
+
+  const swipeProgress = Math.min(1, Math.abs(dx) / SWIPE_THRESHOLD);
+
   return (
-    <button
-      onClick={onSelect}
-      className={cn(
-        "w-full text-left bg-card rounded-xl p-4 border border-border transition-all",
-        "hover:border-primary/30",
-        isSelected && "border-primary ring-1 ring-primary/20",
-        exp.status === 'archived' && "opacity-60"
+    <div className="relative w-full overflow-hidden rounded-xl">
+      {/* Action background revealed during swipe */}
+      {!isArchived && (
+        <div
+          className="absolute inset-y-0 right-0 flex items-center justify-end pr-5 bg-destructive/15 text-destructive transition-opacity"
+          style={{ opacity: swipeProgress }}
+          aria-hidden
+        >
+          <Archive className="w-5 h-5 mr-1.5" />
+          <span className="text-xs font-semibold">アーカイブ</span>
+        </div>
       )}
-    >
+      {isArchived && (
+        <div
+          className="absolute inset-y-0 left-0 flex items-center justify-start pl-5 bg-emerald-500/15 text-emerald-500 transition-opacity"
+          style={{ opacity: swipeProgress }}
+          aria-hidden
+        >
+          <ArchiveRestore className="w-5 h-5 mr-1.5" />
+          <span className="text-xs font-semibold">復元</span>
+        </div>
+      )}
+      <button
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
+        onClick={onClickGuard}
+        style={{
+          transform: `translateX(${dx}px)`,
+          transition: dx === 0 ? 'transform 0.2s ease-out' : 'none',
+          touchAction: 'pan-y',
+        }}
+        className={cn(
+          "relative w-full text-left bg-card rounded-xl p-4 border border-border transition-colors",
+          "hover:border-primary/30",
+          isSelected && "border-primary ring-1 ring-primary/20",
+          isArchived && "opacity-60"
+        )}
+      >
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1 min-w-0">
           <span className="font-medium text-primary block truncate">{exp.expression}</span>
@@ -103,21 +192,9 @@ export function ExpressionListItem({
               <span>{formatDiaryDate(exp.diary_date)}</span>
             </div>
           )}
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-6 px-2 text-xs"
-            onClick={(e) => {
-              e.stopPropagation();
-              onArchiveToggle(exp.id, exp.status === 'archived' ? 'active' : 'archived');
-            }}
-          >
-            {exp.status === 'archived' ? (
-              <><ArchiveRestore className="w-3 h-3 mr-1" />Restore</>
-            ) : (
-              <><Archive className="w-3 h-3 mr-1" />Archive</>
-            )}
-          </Button>
+          <span className="text-[10px] text-muted-foreground/70 italic">
+            {isArchived ? '右にスワイプで復元' : '左にスワイプでアーカイブ'}
+          </span>
         </div>
       </div>
 
@@ -133,6 +210,7 @@ export function ExpressionListItem({
           />
         </div>
       )}
-    </button>
+      </button>
+    </div>
   );
 }
