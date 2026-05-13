@@ -138,6 +138,7 @@ export type Database = {
       }
       expressions: {
         Row: {
+          archived_at: string | null
           correct_streak: number
           created_at: string
           diary_entry_id: string | null
@@ -155,6 +156,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          archived_at?: string | null
           correct_streak?: number
           created_at?: string
           diary_entry_id?: string | null
@@ -172,6 +174,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          archived_at?: string | null
           correct_streak?: number
           created_at?: string
           diary_entry_id?: string | null
