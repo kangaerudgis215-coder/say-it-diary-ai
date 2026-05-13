@@ -1,5 +1,7 @@
 type ScheduledKind = 'tap' | 'effect' | 'speech';
 
+import { getUnlockedAudioContext, registerUnlockable } from './audioUnlock';
+
 let micActive = false;
 let mediaRouteReadyAt = 0;
 let speechTicket = 0;
@@ -9,12 +11,15 @@ let speechFreeAt = 0;
 const EFFECT_AFTER_MIC_MS = 900;
 const SPEECH_AFTER_MIC_MS = 750;
 const EFFECT_AFTER_SPEECH_MS = 220;
+const SPEECH_WATCHDOG_MS = 12000;
+const MAX_PENDING_AFTER_SPEECH = 6;
 
 // Effects/taps that arrived while speech was active. They are flushed in order
 // once `markSpeechEnd` brings the active count back to zero (plus the small
 // post-speech settle delay), so the success chime never gets clipped by an
 // in-flight TTS utterance.
 const pendingAfterSpeech: Array<() => void> = [];
+let lastSpeechStartedAt = 0;
 
 function flushPendingAfterSpeech() {
   if (pendingAfterSpeech.length === 0) return;
@@ -63,6 +68,16 @@ export function isMicAudioSessionActive() {
 
 export function markSpeechStart() {
   speechActiveCount += 1;
+  lastSpeechStartedAt = now();
+  if (typeof window !== 'undefined') {
+    window.setTimeout(() => {
+      if (speechActiveCount > 0 && now() - lastSpeechStartedAt >= SPEECH_WATCHDOG_MS) {
+        speechActiveCount = 0;
+        speechFreeAt = now() + EFFECT_AFTER_SPEECH_MS;
+        flushPendingAfterSpeech();
+      }
+    }, SPEECH_WATCHDOG_MS + 100);
+  }
 }
 
 export function markSpeechEnd() {
@@ -80,11 +95,12 @@ export function cancelQueuedSpeech() {
 }
 
 export function runWhenAudioRouteReady(kind: ScheduledKind, fn: () => void, options: { dropIfMicActive?: boolean } = {}) {
-  if (options.dropIfMicActive && (micActive || waitMs(kind) > 0)) return false;
+  if (options.dropIfMicActive && micActive) return false;
   // Effects/taps must wait for any in-flight speech to fully release the
   // audio output. Queue them and let `markSpeechEnd` drain the queue.
   if (kind !== 'speech' && speechActiveCount > 0) {
     const micWait = Math.max(0, mediaRouteReadyAt - now(), micActive ? EFFECT_AFTER_MIC_MS : 0);
+    if (pendingAfterSpeech.length >= MAX_PENDING_AFTER_SPEECH) pendingAfterSpeech.shift();
     pendingAfterSpeech.push(() => {
       if (micWait > 0) window.setTimeout(fn, micWait);
       else fn();
@@ -109,6 +125,7 @@ export function runSpeechWhenAudioRouteReady(fn: () => void) {
 }
 
 const audioCache = new Map<string, HTMLAudioElement>();
+const audioBufferCache = new Map<string, Promise<AudioBuffer | null>>();
 
 export function getManagedAudio(src: string, volume: number) {
   if (typeof window === 'undefined') return null;
@@ -116,15 +133,55 @@ export function getManagedAudio(src: string, volume: number) {
   if (!audio) {
     audio = new Audio(src);
     audio.preload = 'auto';
+    registerUnlockable(audio);
     audioCache.set(src, audio);
   }
   audio.volume = volume;
   return audio;
 }
 
+function getAudioBuffer(src: string) {
+  if (audioBufferCache.has(src)) return audioBufferCache.get(src)!;
+  const promise = (async () => {
+    const ctx = getUnlockedAudioContext();
+    if (!ctx) return null;
+    try {
+      const res = await fetch(src);
+      const data = await res.arrayBuffer();
+      return await ctx.decodeAudioData(data.slice(0));
+    } catch {
+      return null;
+    }
+  })();
+  audioBufferCache.set(src, promise);
+  return promise;
+}
+
+function playViaWebAudio(src: string, volume: number) {
+  const ctx = getUnlockedAudioContext();
+  if (!ctx) return false;
+  void ctx.resume().catch(() => {});
+  void getAudioBuffer(src).then((buffer) => {
+    if (!buffer) return;
+    try {
+      const source = ctx.createBufferSource();
+      const gain = ctx.createGain();
+      gain.gain.value = volume;
+      source.buffer = buffer;
+      source.connect(gain);
+      gain.connect(ctx.destination);
+      source.start(0);
+    } catch {
+      /* no-op */
+    }
+  });
+  return true;
+}
+
 export function playManagedEffect(src: string, volume: number, kind: 'tap' | 'effect' = 'effect') {
   runWhenAudioRouteReady(kind, () => {
     try {
+      if (playViaWebAudio(src, volume)) return;
       const audio = getManagedAudio(src, volume);
       if (!audio) return;
       audio.pause();
@@ -133,5 +190,5 @@ export function playManagedEffect(src: string, volume: number, kind: 'tap' | 'ef
     } catch {
       /* no-op */
     }
-  }, { dropIfMicActive: kind === 'tap' });
+  }, { dropIfMicActive: false });
 }
