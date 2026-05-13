@@ -415,6 +415,31 @@ export default function Expressions() {
             })}
           </div>
 
+          {/* Archive folder — like a trash bin. Items here are auto-deleted after 30 days. */}
+          <button
+            onClick={() => { setActiveCategory('__archived__'); setView('category'); }}
+            className={cn(
+              'mt-4 w-full text-left rounded-2xl border border-dashed p-4 transition-all',
+              'border-muted-foreground/25 bg-muted/20 hover:bg-muted/30 hover:border-muted-foreground/40',
+              archivedList.length === 0 && 'opacity-60'
+            )}
+          >
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-muted text-muted-foreground">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-semibold text-foreground">アーカイブ</span>
+                  <span className="text-xs text-muted-foreground tabular-nums">{archivedList.length}</span>
+                </div>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  右にスワイプで復元 ・ 30日後に自動削除
+                </p>
+              </div>
+            </div>
+          </button>
+
           {totalEncountered === 0 && (
             <div className="flex flex-col items-center justify-center text-center py-12">
               <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
