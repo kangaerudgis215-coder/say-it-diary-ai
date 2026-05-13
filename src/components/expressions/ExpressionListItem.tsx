@@ -1,4 +1,4 @@
-import { useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { useRef, type PointerEvent as ReactPointerEvent } from 'react';
 import { Calendar, Star, Archive, ArchiveRestore, Repeat2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
@@ -50,51 +50,113 @@ export function ExpressionListItem({
   };
 
   // Swipe-to-archive (left for active → archive, right for archived → restore).
-  const [dx, setDx] = useState(0);
-  const startRef = useRef<{ x: number; y: number } | null>(null);
-  const lockedRef = useRef<'h' | 'v' | null>(null);
-  const movedRef = useRef(false);
   const isArchived = exp.status === 'archived';
-  // Active rows: only allow left swipe. Archived rows: only right swipe.
-  const SWIPE_THRESHOLD = 96;
+  const SWIPE_THRESHOLD = 84;
+  const cardRef = useRef<HTMLButtonElement | null>(null);
+  const overlayRef = useRef<HTMLDivElement | null>(null);
+  const startRef = useRef<{ x: number; y: number; t: number } | null>(null);
+  const lockedRef = useRef<'h' | 'v' | null>(null);
+  const dxRef = useRef(0);
+  const movedRef = useRef(false);
+  const rafRef = useRef<number | null>(null);
 
-  const onPointerDown = (e: ReactPointerEvent) => {
-    startRef.current = { x: e.clientX, y: e.clientY };
+  const applyTransform = (val: number) => {
+    if (cardRef.current) {
+      cardRef.current.style.transform = `translate3d(${val}px,0,0)`;
+    }
+    if (overlayRef.current) {
+      overlayRef.current.style.opacity = String(Math.min(1, Math.abs(val) / SWIPE_THRESHOLD));
+    }
+  };
+
+  const resetCard = (animate: boolean) => {
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    if (cardRef.current) {
+      cardRef.current.style.transition = animate ? 'transform 0.22s ease-out' : 'none';
+      cardRef.current.style.transform = 'translate3d(0,0,0)';
+    }
+    if (overlayRef.current) {
+      overlayRef.current.style.transition = animate ? 'opacity 0.22s ease-out' : 'none';
+      overlayRef.current.style.opacity = '0';
+    }
+    dxRef.current = 0;
+  };
+
+  const onPointerDown = (e: ReactPointerEvent<HTMLButtonElement>) => {
+    // Only handle primary pointer / touches
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    startRef.current = { x: e.clientX, y: e.clientY, t: performance.now() };
     lockedRef.current = null;
     movedRef.current = false;
+    dxRef.current = 0;
+    if (cardRef.current) {
+      cardRef.current.style.transition = 'none';
+      try {
+        cardRef.current.setPointerCapture(e.pointerId);
+      } catch {}
+    }
+    if (overlayRef.current) overlayRef.current.style.transition = 'none';
   };
-  const onPointerMove = (e: ReactPointerEvent) => {
+
+  const onPointerMove = (e: ReactPointerEvent<HTMLButtonElement>) => {
     const s = startRef.current;
     if (!s) return;
     const ddx = e.clientX - s.x;
     const ddy = e.clientY - s.y;
-    if (lockedRef.current === null && (Math.abs(ddx) > 8 || Math.abs(ddy) > 8)) {
-      lockedRef.current = Math.abs(ddx) > Math.abs(ddy) * 1.2 ? 'h' : 'v';
+    if (lockedRef.current === null) {
+      if (Math.abs(ddx) < 6 && Math.abs(ddy) < 6) return;
+      lockedRef.current = Math.abs(ddx) > Math.abs(ddy) ? 'h' : 'v';
     }
     if (lockedRef.current !== 'h') return;
     movedRef.current = true;
     // Clamp to one direction depending on archived state
     const clamped = isArchived ? Math.max(0, ddx) : Math.min(0, ddx);
-    setDx(Math.max(-160, Math.min(160, clamped)));
+    const next = Math.max(-180, Math.min(180, clamped));
+    dxRef.current = next;
+    if (rafRef.current == null) {
+      rafRef.current = requestAnimationFrame(() => {
+        rafRef.current = null;
+        applyTransform(dxRef.current);
+      });
+    }
   };
-  const onPointerUp = (e: ReactPointerEvent) => {
-    const final = dx;
+
+  const onPointerUp = (e: ReactPointerEvent<HTMLButtonElement>) => {
+    const final = dxRef.current;
+    const s = startRef.current;
+    const elapsed = s ? performance.now() - s.t : 0;
+    const velocity = elapsed > 0 ? Math.abs(final) / elapsed : 0; // px/ms
     startRef.current = null;
     lockedRef.current = null;
-    setDx(0);
-    if (Math.abs(final) >= SWIPE_THRESHOLD) {
+    try {
+      cardRef.current?.releasePointerCapture(e.pointerId);
+    } catch {}
+    const passed =
+      Math.abs(final) >= SWIPE_THRESHOLD || (Math.abs(final) > 36 && velocity > 0.6);
+    if (passed) {
       if (!isArchived && final < 0) {
-        e.preventDefault();
-        onArchiveToggle(exp.id, 'archived');
+        // Slide off then commit
+        if (cardRef.current) {
+          cardRef.current.style.transition = 'transform 0.18s ease-out';
+          cardRef.current.style.transform = 'translate3d(-110%,0,0)';
+        }
+        if (overlayRef.current) overlayRef.current.style.opacity = '1';
+        setTimeout(() => onArchiveToggle(exp.id, 'archived'), 140);
         return;
       }
       if (isArchived && final > 0) {
-        e.preventDefault();
-        onArchiveToggle(exp.id, 'active');
+        if (cardRef.current) {
+          cardRef.current.style.transition = 'transform 0.18s ease-out';
+          cardRef.current.style.transform = 'translate3d(110%,0,0)';
+        }
+        if (overlayRef.current) overlayRef.current.style.opacity = '1';
+        setTimeout(() => onArchiveToggle(exp.id, 'active'), 140);
         return;
       }
     }
+    resetCard(true);
   };
+
   const onClickGuard = (e: React.MouseEvent) => {
     if (movedRef.current) {
       e.preventDefault();
@@ -105,25 +167,24 @@ export function ExpressionListItem({
     onSelect();
   };
 
-  const swipeProgress = Math.min(1, Math.abs(dx) / SWIPE_THRESHOLD);
-
   return (
     <div className="relative w-full overflow-hidden rounded-xl">
       {/* Action background revealed during swipe */}
-      {!isArchived && (
+      {!isArchived ? (
         <div
-          className="absolute inset-y-0 right-0 flex items-center justify-end pr-5 bg-destructive/15 text-destructive transition-opacity"
-          style={{ opacity: swipeProgress }}
+          ref={overlayRef}
+          className="absolute inset-y-0 right-0 left-0 flex items-center justify-end pr-5 bg-destructive/15 text-destructive rounded-xl pointer-events-none"
+          style={{ opacity: 0, willChange: 'opacity' }}
           aria-hidden
         >
           <Archive className="w-5 h-5 mr-1.5" />
           <span className="text-xs font-semibold">アーカイブ</span>
         </div>
-      )}
-      {isArchived && (
+      ) : (
         <div
-          className="absolute inset-y-0 left-0 flex items-center justify-start pl-5 bg-emerald-500/15 text-emerald-500 transition-opacity"
-          style={{ opacity: swipeProgress }}
+          ref={overlayRef}
+          className="absolute inset-y-0 right-0 left-0 flex items-center justify-start pl-5 bg-emerald-500/15 text-emerald-500 rounded-xl pointer-events-none"
+          style={{ opacity: 0, willChange: 'opacity' }}
           aria-hidden
         >
           <ArchiveRestore className="w-5 h-5 mr-1.5" />
@@ -131,15 +192,15 @@ export function ExpressionListItem({
         </div>
       )}
       <button
+        ref={cardRef}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
         onClick={onClickGuard}
         style={{
-          transform: `translateX(${dx}px)`,
-          transition: dx === 0 ? 'transform 0.2s ease-out' : 'none',
           touchAction: 'pan-y',
+          willChange: 'transform',
         }}
         className={cn(
           "relative w-full text-left bg-card rounded-xl p-4 border border-border transition-colors",
