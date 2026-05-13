@@ -1,6 +1,6 @@
-type ScheduledKind = 'tap' | 'effect' | 'speech';
-
 import { getUnlockedAudioContext, registerUnlockable } from './audioUnlock';
+
+type ScheduledKind = 'tap' | 'effect' | 'speech';
 
 let micActive = false;
 let mediaRouteReadyAt = 0;
