@@ -99,7 +99,7 @@ export function StreakCelebrationOverlay({ streak, onClose }: Props) {
   const handleShare = async () => {
     const shareUrl =
       typeof window !== 'undefined' ? window.location.origin : 'https://say-it-diary-ai.lovable.app';
-    const text = `AI英語日記 SO-KI で${streak}日連続学習中！🔥\n今日も英語日記を完了しました ✨\n${shareUrl}`;
+    const text = `AI英語日記 SO-KI で${streak}日連続学習中！🔥\n今日も英語日記を完了しました ✨\n#SO-KI #英語学習 #英語日記\n${shareUrl}`;
     setSharing(true);
     let file: File | null = null;
     try {
