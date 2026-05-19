@@ -195,13 +195,13 @@ export default function Calendar() {
             variant="glow"
             className="w-full mt-2 gap-2"
             onClick={() => navigate(
-              `/quiz?diaryId=${selectedEntry.id}&date=${selectedEntry.date}${selectedEntry.sentences_review_completed && recallHistory.length === 0 ? '&recall=1' : ''}`,
+              `/quiz?diaryId=${selectedEntry.id}&date=${selectedEntry.date}`,
             )}
           >
             <Brain className="w-4 h-4" />
-            {selectedEntry.sentences_review_completed && recallHistory.length === 0
-              ? '並び替え問題を解いて復習を完了する'
-              : '並び替え問題へ'}
+            {selectedEntry.sentences_review_completed
+              ? 'もう一度並び替え問題に挑戦'
+              : '並び替え問題を解いて復習を完了する'}
           </Button>
 
           {/* Recall History */}

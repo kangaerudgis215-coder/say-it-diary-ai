@@ -456,7 +456,7 @@ export function ReviewHub() {
   const dayLabel = format(parsedDate, 'd');
   const yearLabel = format(parsedDate, 'yyyy');
   const weekdayLabel = format(parsedDate, 'EEEE');
-  const needsRecallCompletion = Boolean(diaryEntry?.sentences_review_completed && !recallCompleted);
+  const reorderDone = Boolean(diaryEntry?.sentences_review_completed);
 
   if (isLoading) {
     return <SandyLoader fullscreen label="Loading diary..." />;
@@ -675,9 +675,9 @@ export function ReviewHub() {
         <Button
           className="w-full gap-2"
           size="lg"
-          onClick={() => navigate(`/quiz?diaryId=${diaryId}&date=${diaryDateParam}${needsRecallCompletion ? '&recall=1' : ''}`)}
+          onClick={() => navigate(`/quiz?diaryId=${diaryId}&date=${diaryDateParam ?? ''}`)}
         >
-          🏋️ {needsRecallCompletion ? '並び替え問題を解いて復習を完了する' : '並び替え問題に挑戦'}
+          🏋️ {reorderDone ? 'もう一度並び替え問題に挑戦' : '並び替え問題を解いて復習を完了する'}
         </Button>
       </div>
 
