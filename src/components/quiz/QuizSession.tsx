@@ -8,21 +8,16 @@ import { supabase } from '@/lib/supabase';
 import { buildPracticeSentences, loadDiarySentences, PracticeSentence } from '@/lib/practiceBuilder';
 import { ProgressDots } from './ProgressDots';
 import { WordReorderQuiz } from './WordReorderQuiz';
-import { ReadAloudPrompt } from './ReadAloudPrompt';
 import { CompletionScreen } from './CompletionScreen';
-import { RecallCompletionScreen } from './RecallCompletionScreen';
 import { format } from 'date-fns';
 
-type Phase = 'loading' | 'reorder' | 'readAloud' | 'complete';
+type Phase = 'loading' | 'reorder' | 'complete' | 'notfound';
 
 export function QuizSession() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const diaryId = searchParams.get('diaryId');
-  // When `recall=1`, also mark recall_sessions.completed on finish so the
-  // diary disappears from the recall queue and the kira-kira badge appears.
-  const isRecallMode = searchParams.get('recall') === '1';
 
   const [phase, setPhase] = useState<Phase>('loading');
   const [sentences, setSentences] = useState<PracticeSentence[]>([]);
@@ -36,10 +31,6 @@ export function QuizSession() {
   const [fullJapanese, setFullJapanese] = useState('');
   const [diaryDate, setDiaryDate] = useState<string>('');
   const [isPastDiary, setIsPastDiary] = useState(false);
-  // True if this diary had NOT had its reorder review completed before this
-  // session started. Drives whether we show the celebratory streak screen
-  // (first time only) or the calmer recall-completion screen (subsequent runs).
-  const [isFirstCompletion, setIsFirstCompletion] = useState(false);
 
   useEffect(() => {
     if (user && diaryId) loadData();
@@ -56,7 +47,8 @@ export function QuizSession() {
       .maybeSingle();
 
     if (!entry) {
-      navigate('/');
+      // Don't bounce the user back home — surface a friendly message instead.
+      setPhase('notfound');
       return;
     }
 
@@ -65,8 +57,6 @@ export function QuizSession() {
     setDiaryDate(entry.date || '');
     const today = format(new Date(), 'yyyy-MM-dd');
     setIsPastDiary(Boolean(entry.date) && entry.date < today);
-    // Capture first-completion state BEFORE we mark it completed at the end.
-    setIsFirstCompletion(!entry.sentences_review_completed);
 
     // Get expressions
     const { data: exprs } = await supabase
@@ -125,15 +115,12 @@ export function QuizSession() {
 
   const handleReorderCorrect = () => {
     if (currentIdx < sentences.length - 1) {
-      // Move to next sentence
       setTimeout(() => {
         setCurrentIdx((prev) => prev + 1);
       }, 300);
     } else {
-      // All reorder done → read aloud
-      setTimeout(() => {
-        setPhase('readAloud');
-      }, 300);
+      // All reorder done → mark complete & celebrate.
+      finishReview();
     }
   };
 
@@ -146,42 +133,9 @@ export function QuizSession() {
       .eq('user_id', user.id);
   };
 
-  const markRecallCompleted = async () => {
-    if (!user || !diaryId) return;
-    // Use upsert-style insert; the unique index on (user_id, diary_entry_id)
-    // where completed=true makes this idempotent.
-    await supabase
-      .from('recall_sessions')
-      .insert({
-        user_id: user.id,
-        diary_entry_id: diaryId,
-        completed: true,
-      } as any)
-      // Ignore duplicate-key errors if already recalled.
-      .then(({ error }) => {
-        if (error && !/duplicate key|unique/i.test(error.message)) {
-          console.warn('[recall_sessions] insert failed:', error.message);
-        }
-      });
-  };
-
-  const finishToRecall = async () => {
+  const finishReview = async () => {
     await markReviewCompleted();
-    if (isRecallMode) {
-      await markRecallCompleted();
-    }
-    // Reorder + read-aloud are NOT recall. Recall is a separate manual step
-    // the user kicks off from the bottom-tab badge or the recall page itself.
-    // Just show the local celebration screen and let them choose what's next.
     setPhase('complete');
-  };
-
-  const handleReadAloudComplete = () => {
-    finishToRecall();
-  };
-
-  const handleReadAloudSkip = () => {
-    finishToRecall();
   };
 
   if (phase === 'loading') {
@@ -190,44 +144,26 @@ export function QuizSession() {
     );
   }
 
-  if (phase === 'complete') {
-    // First-ever reorder completion for this diary → celebratory streak screen,
-    // even if the diary itself is from a past date (back-filling streaks).
-    // Any subsequent run (including recall mode) shows the calmer "review done"
-    // screen.
-    if (isFirstCompletion) {
-      return (
-        <CompletionScreen
-          streak={streak}
-          expressions={expressions}
-          expressionDetails={expressionDetails}
-          isPastDiary={isPastDiary}
-          diaryDate={diaryDate}
-        />
-      );
-    }
-    return <RecallCompletionScreen diaryDate={diaryDate} />;
+  if (phase === 'notfound') {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center gap-4">
+        <p className="text-muted-foreground">この日記は見つかりませんでした。</p>
+        <Button variant="outline" onClick={() => navigate('/quiz')}>
+          復習リストに戻る
+        </Button>
+      </div>
+    );
   }
 
-  if (phase === 'readAloud') {
+  if (phase === 'complete') {
     return (
-      <div className="min-h-screen flex flex-col p-6 safe-bottom">
-        <header className="flex items-center gap-4 mb-6">
-          <Button variant="ghost" size="icon" onClick={() => navigate('/')}>
-            <ArrowLeft className="w-5 h-5" />
-          </Button>
-          <h1 className="font-bold text-lg">音読チャレンジ</h1>
-        </header>
-        <div className="flex-1">
-          <ReadAloudPrompt
-            englishText={fullEnglish}
-            japaneseText={fullJapanese}
-            expressions={expressions}
-            onComplete={handleReadAloudComplete}
-            onSkip={handleReadAloudSkip}
-          />
-        </div>
-      </div>
+      <CompletionScreen
+        streak={streak}
+        expressions={expressions}
+        expressionDetails={expressionDetails}
+        isPastDiary={isPastDiary}
+        diaryDate={diaryDate}
+      />
     );
   }
 
