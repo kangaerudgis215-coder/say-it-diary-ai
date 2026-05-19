@@ -19,6 +19,10 @@ import { speakAssistantImmediately } from '@/lib/assistantSpeech';
 import { getChatWelcomeMessage } from '@/lib/chatWelcome';
 import { FeedbackSection } from '@/components/home/FeedbackSection';
 import { ComposeModeSheet, getDefaultComposeMode } from '@/components/home/ComposeModeSheet';
+import {
+  StreakCelebrationOverlay,
+  DIARY_CELEBRATION_FLAG,
+} from '@/components/home/StreakCelebrationOverlay';
 
 interface DiaryRow {
   id: string;
@@ -43,6 +47,7 @@ export default function Home() {
     open: false,
     date: format(new Date(), 'yyyy-MM-dd'),
   });
+  const [celebrate, setCelebrate] = useState(false);
 
   useEffect(() => {
     if (user) fetchEntries();
@@ -138,6 +143,28 @@ export default function Home() {
     return count;
   }, [entries]);
 
+  // After diary generation, Chat/Speak set a localStorage flag. When the
+  // user lands back on Home, show the streak celebration once.
+  useEffect(() => {
+    if (!entriesLoaded) return;
+    try {
+      if (localStorage.getItem(DIARY_CELEBRATION_FLAG)) {
+        setCelebrate(true);
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [entriesLoaded]);
+
+  const closeCelebration = () => {
+    try {
+      localStorage.removeItem(DIARY_CELEBRATION_FLAG);
+    } catch {
+      /* ignore */
+    }
+    setCelebrate(false);
+  };
+
   // Diary entry (if any) for the currently-selected calendar day.
   const selectedDayEntry = useMemo(
     () => entries.find((e) => isSameDay(parseISO(e.date), selectedDate)),
@@ -146,6 +173,9 @@ export default function Home() {
 
   return (
     <div className="min-h-screen flex flex-col bg-background pb-24">
+      {celebrate && (
+        <StreakCelebrationOverlay streak={streak} onClose={closeCelebration} />
+      )}
       {/* Header */}
       <header className="flex items-center justify-between px-5 pt-5 pb-3">
         <h1 className="text-lg font-semibold tracking-tight text-foreground/90">

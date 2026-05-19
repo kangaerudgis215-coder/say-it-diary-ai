@@ -568,10 +568,13 @@ export default function Chat() {
         description: "Now let's review and memorize it!",
       });
 
-      // Celebratory chime — the big "diary complete" sound was previously
-      // only triggered inside CompletionScreen (post-quiz). Play it here so
-      // the user hears confirmation the moment generation succeeds.
-      try { playBigSuccess(); } catch { /* no-op */ }
+      // Flag the streak celebration to play on Home (next mount).
+      try {
+        localStorage.setItem(
+          'soki:celebrateDiary',
+          JSON.stringify({ date: diaryDate, ts: Date.now() }),
+        );
+      } catch { /* no-op */ }
 
       // Get the diary entry ID and navigate to review page
       const { data: savedEntry } = await supabase
