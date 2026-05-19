@@ -8,10 +8,11 @@ import { supabase } from '@/lib/supabase';
 import { buildPracticeSentences, loadDiarySentences, PracticeSentence } from '@/lib/practiceBuilder';
 import { ProgressDots } from './ProgressDots';
 import { WordReorderQuiz } from './WordReorderQuiz';
+import { ReadAloudPrompt } from './ReadAloudPrompt';
 import { CompletionScreen } from './CompletionScreen';
 import { format } from 'date-fns';
 
-type Phase = 'loading' | 'reorder' | 'complete' | 'notfound';
+type Phase = 'loading' | 'reorder' | 'readaloud' | 'complete' | 'notfound';
 
 export function QuizSession() {
   const { user } = useAuth();
@@ -119,8 +120,8 @@ export function QuizSession() {
         setCurrentIdx((prev) => prev + 1);
       }, 300);
     } else {
-      // All reorder done → mark complete & celebrate.
-      finishReview();
+      // All reorder done → move to read-aloud (SOKIに話してみよう！)
+      setTimeout(() => setPhase('readaloud'), 300);
     }
   };
 
@@ -164,6 +165,28 @@ export function QuizSession() {
         isPastDiary={isPastDiary}
         diaryDate={diaryDate}
       />
+    );
+  }
+
+  if (phase === 'readaloud') {
+    return (
+      <div className="min-h-screen flex flex-col p-6 safe-bottom">
+        <header className="flex items-center gap-4 mb-4">
+          <Button variant="ghost" size="icon" onClick={() => navigate('/')}>
+            <ArrowLeft className="w-5 h-5" />
+          </Button>
+          <h1 className="font-bold text-lg">音読・暗唱</h1>
+        </header>
+        <div className="flex-1">
+          <ReadAloudPrompt
+            englishText={fullEnglish}
+            japaneseText={fullJapanese}
+            expressions={expressions}
+            onComplete={finishReview}
+            onSkip={finishReview}
+          />
+        </div>
+      </div>
     );
   }
 

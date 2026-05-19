@@ -269,7 +269,7 @@ export default function Recall() {
           onClick={handleStartRecallQuiz}
         >
           <Sparkles className="w-4 h-4" />
-          問題を解いて復習を完了する
+          日記を解いて復習を完了する
         </Button>
       </div>
     </div>
