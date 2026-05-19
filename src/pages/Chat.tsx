@@ -146,6 +146,7 @@ export default function Chat() {
       .select('*, messages(*)')
       .eq('user_id', user.id)
       .eq('date', diaryDate)
+      .eq('mode', 'chat')
       .maybeSingle();
 
     if (existing) {
@@ -179,7 +180,7 @@ export default function Chat() {
       // Create new conversation for this diary date
       const { data: newConv, error } = await supabase
         .from('conversations')
-        .insert({ user_id: user.id, date: diaryDate })
+        .insert({ user_id: user.id, date: diaryDate, mode: 'chat' })
         .select()
         .single();
 
