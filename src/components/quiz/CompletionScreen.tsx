@@ -39,7 +39,7 @@ export function CompletionScreen({ streak, expressions, expressionDetails, isPas
     const exprLine = expressions.length > 0
       ? `\n今日の表現: ${expressions.slice(0, 3).join(' / ')}`
       : '';
-    const text = `AI英語日記 SO-KI で復習を完了しました ✨${exprLine}\n#SOKI #SayItDiary #英語学習`;
+    const text = `AI英語日記 SO-KI で復習を完了しました ✨${exprLine}\n#SO-KI #英語学習 #英語日記`;
     const shareData: ShareData = {
       title: 'AI英語日記 SO-KI',
       text,

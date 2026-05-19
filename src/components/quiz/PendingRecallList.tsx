@@ -82,7 +82,7 @@ export function PendingRecallList() {
               return (
                 <li key={d.id}>
                   <button
-                    onClick={() => navigate(`/quiz?diaryId=${d.id}`)}
+                    onClick={() => navigate(`/recall?diaryId=${d.id}`)}
                     className={cn(
                       'w-full text-left bg-card/70 hover:bg-card transition-colors',
                       'rounded-2xl border border-border/60 p-4 flex gap-4 items-center',
