@@ -99,7 +99,8 @@ export function StreakCelebrationOverlay({ streak, onClose }: Props) {
   const handleShare = async () => {
     const shareUrl =
       typeof window !== 'undefined' ? window.location.origin : 'https://say-it-diary-ai.lovable.app';
-    const text = `AI英語日記 SO-KI で${streak}日連続学習中！🔥\n今日も英語日記を完了しました ✨\n#SO-KI #英語学習 #英語日記\n${shareUrl}`;
+    const text = `AI英語日記 SO-KI で${streak}日連続学習中！🔥\n今日も英語日記を完了しました ✨\n#SO-KI #英語学習 #英語日記`;
+    const textWithUrl = `${text}\n${shareUrl}`;
     setSharing(true);
     let file: File | null = null;
     try {
@@ -117,20 +118,27 @@ export function StreakCelebrationOverlay({ streak, onClose }: Props) {
     }
 
     const nav: any = typeof navigator !== 'undefined' ? navigator : null;
-    const shareData: ShareData & { files?: File[] } = { title: 'AI英語日記 SO-KI', text, url: shareUrl };
-    if (file && nav?.canShare?.({ files: [file] })) {
-      shareData.files = [file];
-    }
-    if (nav?.share) {
+
+    // 1) Try sharing image + text together (best result)
+    if (nav?.share && file && nav.canShare?.({ files: [file], text, title: 'AI英語日記 SO-KI' })) {
       try {
-        await nav.share(shareData);
+        await nav.share({ files: [file], text: textWithUrl, title: 'AI英語日記 SO-KI' });
         setSharing(false);
         return;
       } catch (err: any) {
-        if (err && (err.name === 'AbortError' || /aborted/i.test(err.message || ''))) {
-          setSharing(false);
-          return;
-        }
+        if (err?.name === 'AbortError') { setSharing(false); return; }
+        console.warn('share with file failed, retrying text only', err);
+      }
+    }
+    // 2) Try text-only share (most reliable across platforms)
+    if (nav?.share) {
+      try {
+        await nav.share({ title: 'AI英語日記 SO-KI', text, url: shareUrl });
+        setSharing(false);
+        return;
+      } catch (err: any) {
+        if (err?.name === 'AbortError') { setSharing(false); return; }
+        console.warn('text share failed', err);
       }
     }
     // Fallback: download the image + copy text
@@ -145,8 +153,11 @@ export function StreakCelebrationOverlay({ streak, onClose }: Props) {
         a.remove();
         URL.revokeObjectURL(url);
       }
-      await navigator.clipboard.writeText(text);
-      toast({ title: '画像を保存しました', description: 'テキストもコピー済み。SNSに貼り付けてね ✨' });
+      await navigator.clipboard.writeText(textWithUrl);
+      toast({
+        title: file ? '画像を保存しました' : 'テキストをコピーしました',
+        description: 'SNSに貼り付けてシェアしてね ✨',
+      });
     } catch {
       toast({ variant: 'destructive', title: 'シェアに失敗しました' });
     }
