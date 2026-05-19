@@ -9,6 +9,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
 import { format, subDays } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
+import { toPng } from 'html-to-image';
 
 interface Props {
   streak: number;
@@ -63,6 +64,8 @@ export function StreakCelebrationOverlay({ streak, onClose }: Props) {
   const display = useCountUp(streak);
   const todayDow = (new Date().getDay() + 6) % 7;
   const [weekDone, setWeekDone] = useState<boolean[]>(() => Array(7).fill(false));
+  const captureRef = useRef<HTMLDivElement>(null);
+  const [sharing, setSharing] = useState(false);
 
   useEffect(() => {
     const t = window.setTimeout(() => playBigSuccess(), 320);
@@ -96,22 +99,58 @@ export function StreakCelebrationOverlay({ streak, onClose }: Props) {
   const handleShare = async () => {
     const shareUrl =
       typeof window !== 'undefined' ? window.location.origin : 'https://say-it-diary-ai.lovable.app';
-    const text = `AI英語日記 SO-KI で${streak}日連続学習中！🔥\n今日も英語日記を完了しました ✨\n#SOKI #SayItDiary #英語学習`;
-    const shareData: ShareData = { title: 'AI英語日記 SO-KI', text, url: shareUrl };
-    if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
+    const text = `AI英語日記 SO-KI で${streak}日連続学習中！🔥\n今日も英語日記を完了しました ✨\n${shareUrl}`;
+    setSharing(true);
+    let file: File | null = null;
+    try {
+      if (captureRef.current) {
+        const dataUrl = await toPng(captureRef.current, {
+          cacheBust: true,
+          pixelRatio: 2,
+          backgroundColor: getComputedStyle(document.body).backgroundColor || '#0b1020',
+        });
+        const blob = await (await fetch(dataUrl)).blob();
+        file = new File([blob], `soki-streak-${streak}.png`, { type: 'image/png' });
+      }
+    } catch (err) {
+      console.warn('streak capture failed', err);
+    }
+
+    const nav: any = typeof navigator !== 'undefined' ? navigator : null;
+    const shareData: ShareData & { files?: File[] } = { title: 'AI英語日記 SO-KI', text, url: shareUrl };
+    if (file && nav?.canShare?.({ files: [file] })) {
+      shareData.files = [file];
+    }
+    if (nav?.share) {
       try {
-        await navigator.share(shareData);
+        await nav.share(shareData);
+        setSharing(false);
         return;
       } catch (err: any) {
-        if (err && (err.name === 'AbortError' || /aborted/i.test(err.message || ''))) return;
+        if (err && (err.name === 'AbortError' || /aborted/i.test(err.message || ''))) {
+          setSharing(false);
+          return;
+        }
       }
     }
+    // Fallback: download the image + copy text
     try {
-      await navigator.clipboard.writeText(`${text}\n${shareUrl}`);
-      toast({ title: 'シェア用テキストをコピーしました', description: 'SNSに貼り付けてね ✨' });
+      if (file) {
+        const url = URL.createObjectURL(file);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = file.name;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      }
+      await navigator.clipboard.writeText(text);
+      toast({ title: '画像を保存しました', description: 'テキストもコピー済み。SNSに貼り付けてね ✨' });
     } catch {
       toast({ variant: 'destructive', title: 'シェアに失敗しました' });
     }
+    setSharing(false);
   };
 
   return (
@@ -136,6 +175,7 @@ export function StreakCelebrationOverlay({ streak, onClose }: Props) {
       <div className="flex-1" />
 
       <div
+        ref={captureRef}
         className={`relative z-10 flex flex-col items-center text-center transition-all duration-700 ${
           show ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-6 scale-95'
         }`}
@@ -197,9 +237,9 @@ export function StreakCelebrationOverlay({ streak, onClose }: Props) {
           show ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'
         }`}
       >
-        <Button variant="outline" className="w-full" onClick={handleShare}>
+        <Button variant="outline" className="w-full" onClick={handleShare} disabled={sharing}>
           <Share2 className="w-4 h-4 mr-2" />
-          シェアする
+          {sharing ? '準備中…' : 'シェアする'}
         </Button>
         <Button className="w-full" onClick={onClose}>
           ホームを見る

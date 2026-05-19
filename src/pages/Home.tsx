@@ -119,8 +119,9 @@ export default function Home() {
     () =>
       entries.map((e) => ({
         date: e.date,
-        // キラキラ光る日 = リコール（翌日以降の復習）まで完了した日記
-        mastered: recallCompletedIds.has(e.id),
+        // 濃い色 = 並び替えクイズを1回以上クリア（復習完了）した日記
+        // 薄い色 = 日記を書いただけ
+        mastered: e.sentences_review_completed,
         reviewed: e.sentences_review_completed,
       })),
     [entries, recallCompletedIds],
