@@ -18,6 +18,7 @@ import { SelectedDayChatPreview } from '@/components/home/SelectedDayChatPreview
 import { speakAssistantImmediately } from '@/lib/assistantSpeech';
 import { getChatWelcomeMessage } from '@/lib/chatWelcome';
 import { FeedbackSection } from '@/components/home/FeedbackSection';
+import { ComposeModeSheet, getDefaultComposeMode } from '@/components/home/ComposeModeSheet';
 
 interface DiaryRow {
   id: string;
@@ -38,6 +39,10 @@ export default function Home() {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [entriesLoaded, setEntriesLoaded] = useState(false);
   const [showCoachMark, setShowCoachMark] = useState(false);
+  const [composeSheet, setComposeSheet] = useState<{ open: boolean; date: string }>({
+    open: false,
+    date: format(new Date(), 'yyyy-MM-dd'),
+  });
 
   useEffect(() => {
     if (user) fetchEntries();
@@ -89,13 +94,20 @@ export default function Home() {
 
   const startDiaryChat = (date: Date) => {
     const diaryDate = format(date, 'yyyy-MM-dd');
-    // Skip the welcome voice when a diary already exists for this date —
-    // reopening a finished day shouldn't replay the greeting.
     const hasEntry = entries.some((e) => e.date === diaryDate);
-    if (!hasEntry) {
-      speakAssistantImmediately(getChatWelcomeMessage(diaryDate).content);
+    const defaultMode = getDefaultComposeMode();
+    if (defaultMode === 'speak') {
+      navigate(`/speak?date=${diaryDate}`);
+      return;
     }
-    navigate(`/chat?date=${diaryDate}&welcomeSpoken=1`);
+    if (defaultMode === 'chat') {
+      if (!hasEntry) {
+        speakAssistantImmediately(getChatWelcomeMessage(diaryDate).content);
+      }
+      navigate(`/chat?date=${diaryDate}&welcomeSpoken=1`);
+      return;
+    }
+    setComposeSheet({ open: true, date: diaryDate });
   };
 
   const stamps = useMemo(
@@ -247,6 +259,12 @@ export default function Home() {
         )}
       />
       <BottomTabBar homeTab={tab} onHomeTabChange={setTab} />
+      <ComposeModeSheet
+        open={composeSheet.open}
+        onOpenChange={(o) => setComposeSheet((s) => ({ ...s, open: o }))}
+        date={composeSheet.date}
+        skipWelcomeVoice={entries.some((e) => e.date === composeSheet.date)}
+      />
       {showCoachMark && user && (
         <FirstTimeCoachMark
           onDismiss={() => {
