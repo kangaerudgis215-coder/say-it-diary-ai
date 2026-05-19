@@ -33,24 +33,14 @@ export function PendingRecallList() {
   const load = async () => {
     if (!user) return;
 
-    // All diaries that have finished reorder (ready for recall)
-    const { data: ready } = await supabase
+    // Diaries that haven't had the reorder quiz completed yet.
+    const { data } = await supabase
       .from('diary_entries')
       .select('id, date, content')
       .eq('user_id', user.id)
-      .eq('sentences_review_completed', true)
+      .eq('sentences_review_completed', false)
       .order('date', { ascending: true });
-    const readyDiaries = (ready || []) as PendingDiary[];
-
-    // Those that already have a completed recall session
-    const { data: completed } = await supabase
-      .from('recall_sessions')
-      .select('diary_entry_id')
-      .eq('user_id', user.id)
-      .eq('completed', true);
-    const completedSet = new Set((completed || []).map((r: any) => r.diary_entry_id));
-
-    setPending(readyDiaries.filter((d) => !completedSet.has(d.id)));
+    setPending((data || []) as PendingDiary[]);
     setLoading(false);
   };
 
@@ -92,7 +82,7 @@ export function PendingRecallList() {
               return (
                 <li key={d.id}>
                   <button
-                    onClick={() => navigate(`/recall?diaryId=${d.id}`)}
+                    onClick={() => navigate(`/quiz?diaryId=${d.id}`)}
                     className={cn(
                       'w-full text-left bg-card/70 hover:bg-card transition-colors',
                       'rounded-2xl border border-border/60 p-4 flex gap-4 items-center',
