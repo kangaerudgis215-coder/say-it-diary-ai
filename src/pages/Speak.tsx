@@ -371,7 +371,10 @@ export default function Speak() {
         .eq('id', conversationId);
 
       try {
-        playBigSuccess();
+        localStorage.setItem(
+          'soki:celebrateDiary',
+          JSON.stringify({ date: diaryDate, ts: Date.now() }),
+        );
       } catch {
         /* no-op */
       }
