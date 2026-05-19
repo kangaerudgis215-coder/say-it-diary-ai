@@ -11,6 +11,7 @@ import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Onboarding from "./pages/Onboarding";
 import Chat from "./pages/Chat";
+import Speak from "./pages/Speak";
 import Recall from "./pages/Recall";
 import Calendar from "./pages/Calendar";
 import Expressions from "./pages/Expressions";
@@ -39,6 +40,7 @@ const App = () => {
               <Route path="/auth" element={<Auth />} />
               <Route path="/onboarding" element={<Onboarding />} />
               <Route path="/chat" element={<Chat />} />
+              <Route path="/speak" element={<Speak />} />
               <Route path="/recall" element={<Recall />} />
               <Route path="/calendar" element={<Calendar />} />
               <Route path="/expressions" element={<Expressions />} />
