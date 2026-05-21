@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Volume2, VolumeX } from 'lucide-react';
+import { RefreshCw, Volume2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { resetAudioPipeline } from '@/lib/audioUnlock';
 import { clearManagedAudioCaches, playManagedEffect } from '@/lib/audioSession';
@@ -8,10 +8,11 @@ import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 
 /**
- * One-tap audio recovery for the rare iOS Safari / Bluetooth route case
- * where sound effects go silent (TTS still works). Drops cached audio,
- * resumes AudioContext, re-primes unlock, then plays a tiny confirmation
- * chime so the user can hear that output is back.
+ * One-tap recovery button. Combines:
+ *  - Audio pipeline reset (for "effects went silent" cases)
+ *  - Soft reload signal ('soki:soft-reload' CustomEvent) so the current
+ *    page (Chat/Speak) can re-trigger welcome message / re-fetch data
+ *    without a hard page refresh.
  */
 export function AudioResetButton() {
   const [busy, setBusy] = useState(false);
@@ -29,9 +30,14 @@ export function AudioResetButton() {
       // Short delay so AudioContext.resume actually settles before play.
       await new Promise((r) => setTimeout(r, 120));
       try { playManagedEffect('/sounds/tap.mp3', 0.6); } catch { /* no-op */ }
+      // Tell the current page to refresh its own state (welcome message,
+      // data fetch, etc.) without a full page reload.
+      try {
+        window.dispatchEvent(new CustomEvent('soki:soft-reload'));
+      } catch { /* no-op */ }
       toast({
         title: ok ? '音声をリセットしました' : 'リセットを試みました',
-        description: 'ポンと音が鳴れば復旧成功です。',
+        description: 'ポンと音が鳴れば復旧成功です。表示も更新しました。',
       });
     } finally {
       setTimeout(() => setBusy(false), 400);
@@ -42,11 +48,11 @@ export function AudioResetButton() {
     <Button
       variant="ghost"
       size="icon"
-      aria-label="音声をリセット"
+      aria-label="音声・表示をリセット"
       onClick={onClick}
       className={cn(busy && 'opacity-60')}
     >
-      {busy ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
+      {busy ? <RefreshCw className="w-5 h-5 animate-spin" /> : <Volume2 className="w-5 h-5" />}
     </Button>
   );
 }
