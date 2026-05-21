@@ -53,7 +53,10 @@ export function WordReorderQuiz({ sentence, japaneseSentence, onCorrect }: WordR
   // queue up and lag behind.
   const speak = useCallback((text: string) => {
     const cleaned = text.replace(/[.,!?;:]+$/, '');
-    const spoken = /^[A-Za-z]$/.test(cleaned) ? cleaned.toLowerCase() : cleaned;
+    // Keep "I" as-is so TTS pronounces the pronoun /aɪ/ cleanly.
+    // Lowercasing it produced a garbled/scratchy "i" on Chrome / Edge.
+    // For any other lone letter (a, e, …) we still let the engine spell it.
+    const spoken = cleaned === 'I' ? 'I' : cleaned;
     speakDiary(spoken, { rate: 0.95 });
   }, []);
 
