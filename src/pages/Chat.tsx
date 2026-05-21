@@ -163,7 +163,7 @@ export default function Chat() {
       .eq('mode', 'chat')
       .maybeSingle();
 
-    if (existing) {
+    if (existing && (existing.messages || []).length > 0) {
       setConversationId(existing.id);
       // CRITICAL: Postgres does NOT preserve insertion order on related
       // selects. Without an explicit sort, returning to a conversation can
@@ -191,15 +191,21 @@ export default function Chat() {
         window.setTimeout(() => speakAssistant(restoredMessages[0].content), 250);
       }
     } else {
-      // Create new conversation for this diary date
-      const { data: newConv, error } = await supabase
-        .from('conversations')
-        .insert({ user_id: user.id, date: diaryDate, mode: 'chat' })
-        .select()
-        .single();
-
-      if (newConv) {
-        setConversationId(newConv.id);
+      // Either no conversation exists yet, OR we have an empty conversation
+      // row (created by a prior init that failed before inserting the welcome
+      // message). Reuse the existing row if present so we don't keep
+      // accumulating empty rows; otherwise create a new one.
+      let convId = existing?.id ?? null;
+      if (!convId) {
+        const { data: newConv } = await supabase
+          .from('conversations')
+          .insert({ user_id: user.id, date: diaryDate, mode: 'chat' })
+          .select()
+          .single();
+        convId = newConv?.id ?? null;
+      }
+      if (convId) {
+        setConversationId(convId);
         // Add welcome message
         const welcome = getChatWelcomeMessage(diaryDate);
         const welcomeMessage = {
@@ -209,11 +215,11 @@ export default function Chat() {
           japanese: welcome.japanese,
         };
         setMessages([welcomeMessage]);
-        if (!welcomeSpoken) speakAssistant(welcomeMessage.content);
+        if (!welcomeSpoken && !existingDiary?.id) speakAssistant(welcomeMessage.content);
         
         // Save welcome message
         await supabase.from('messages').insert({
-          conversation_id: newConv.id,
+          conversation_id: convId,
           user_id: user.id,
           role: 'assistant',
           content: welcomeMessage.content,
