@@ -135,3 +135,31 @@ export function installAudioUnlock() {
   };
   events.forEach((e) => window.addEventListener(e, wrapped, opts));
 }
+
+/**
+ * Manual audio recovery — for when sound effects silently stop working
+ * (typical iOS Safari / Bluetooth route bugs) while TTS keeps playing.
+ * Called from a user gesture (the 🔊 reset button in Home header).
+ *
+ * Resumes the shared AudioContext, drops cached audio elements, re-primes
+ * the unlock pipeline, then plays a short confirmation chime so the user
+ * can hear that output is back.
+ */
+export async function resetAudioPipeline(): Promise<boolean> {
+  try {
+    // 1. Resume / re-create AudioContext if it's suspended.
+    const ctx = getAudioContext();
+    if (ctx) {
+      try { await ctx.resume(); } catch { /* no-op */ }
+    }
+    // 2. Forget any cached <audio> elements — they can wedge after
+    //    route switches on iOS.
+    registry.clear();
+    // 3. Re-prime unlock so future plays from any context work.
+    unlocked = false;
+    doUnlock();
+    return true;
+  } catch {
+    return false;
+  }
+}
