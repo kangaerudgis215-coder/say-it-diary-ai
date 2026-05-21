@@ -380,6 +380,12 @@ export default function Speak() {
       }
       toast({ title: 'Diary saved! ✨', description: "Now let's review it!" });
 
+      // Make sure mic is closed and audio session is free, then play the
+      // big success chime and give it time to start before navigating away.
+      try { stopMic(); } catch { /* no-op */ }
+      try { playBigSuccess(); } catch { /* no-op */ }
+      await new Promise((r) => setTimeout(r, 1400));
+
       if (diaryEntry) {
         navigate(`/review?diaryId=${diaryEntry.id}&date=${diaryDate}`);
       } else {

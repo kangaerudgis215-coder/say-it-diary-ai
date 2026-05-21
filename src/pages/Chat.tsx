@@ -576,6 +576,20 @@ export default function Chat() {
         );
       } catch { /* no-op */ }
 
+      // Close the mic first so the success chime isn't suppressed by the
+      // audio session, then play the big success sound and wait briefly so
+      // the chime can actually start before we unmount the page.
+      try {
+        const rec = recognitionRef.current;
+        recognitionRef.current = null;
+        isStartingMicRef.current = false;
+        setIsListening(false);
+        stopAssistantSpeech();
+        await releaseSpeechRecognitionBeforeNavigation(rec);
+      } catch { /* no-op */ }
+      try { playBigSuccess(); } catch { /* no-op */ }
+      await new Promise((r) => setTimeout(r, 1400));
+
       // Get the diary entry ID and navigate to review page
       const { data: savedEntry } = await supabase
         .from('diary_entries')
@@ -586,9 +600,9 @@ export default function Chat() {
 
       if (savedEntry) {
         setExistingDiaryId(savedEntry.id);
-        navigateAfterClosingMic(`/review?diaryId=${savedEntry.id}&date=${diaryDate}`);
+        navigate(`/review?diaryId=${savedEntry.id}&date=${diaryDate}`);
       } else {
-        navigateAfterClosingMic('/');
+        navigate('/');
       }
     } catch (error: any) {
       toast({
