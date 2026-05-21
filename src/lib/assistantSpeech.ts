@@ -54,9 +54,10 @@ export function createAssistantUtterance(text = ''): SpeechSynthesisUtterance | 
   utterance.lang = 'en-US';
   utterance.rate = 1.0;
   utterance.pitch = 1.0;
-  // Full volume — the audio session coordinator now prevents mic/effect
-  // collisions, and quiet utterances were being garbled by Bluetooth AGC.
-  utterance.volume = 1.0;
+  // Balanced volume — TTS at 1.0 was much louder than effect chimes,
+  // forcing users to raise OS volume just for TTS and making chimes
+  // tiny. 0.6 puts speech roughly on parity with managed effects.
+  utterance.volume = 0.6;
   const voice = pickNaturalEnglishVoice();
   if (voice) utterance.voice = voice;
   const stop = () => markSpeechEnd();
