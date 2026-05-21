@@ -127,6 +127,24 @@ export function runSpeechWhenAudioRouteReady(fn: () => void) {
 const audioCache = new Map<string, HTMLAudioElement>();
 const audioBufferCache = new Map<string, Promise<AudioBuffer | null>>();
 
+/**
+ * Clear cached audio elements and decoded buffers. Combined with
+ * `resetAudioPipeline`, this gives the user a one-tap recovery from
+ * "effects suddenly silent" bugs on iOS Safari / Bluetooth devices.
+ */
+export function clearManagedAudioCaches() {
+  audioCache.forEach((a) => { try { a.pause(); } catch { /* no-op */ } });
+  audioCache.clear();
+  audioBufferCache.clear();
+  // Also fully reset mic/speech gating so a stale state doesn't keep
+  // suppressing effects forever.
+  micActive = false;
+  mediaRouteReadyAt = 0;
+  speechActiveCount = 0;
+  speechFreeAt = 0;
+  pendingAfterSpeech.length = 0;
+}
+
 export function getManagedAudio(src: string, volume: number) {
   if (typeof window === 'undefined') return null;
   let audio = audioCache.get(src);
