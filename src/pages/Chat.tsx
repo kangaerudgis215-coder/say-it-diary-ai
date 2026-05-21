@@ -107,6 +107,19 @@ export default function Chat() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  // Soft-reload: triggered by the 🔊 reset button in the header. Re-runs
+  // the conversation init so the welcome message reappears if it failed
+  // to render, and re-speaks it if the conversation is brand-new.
+  useEffect(() => {
+    const onSoftReload = () => {
+      stopAssistantSpeech();
+      if (user) void initConversation();
+    };
+    window.addEventListener('soki:soft-reload', onSoftReload);
+    return () => window.removeEventListener('soki:soft-reload', onSoftReload);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, diaryDate]);
+
   // Warm up the speech-synthesis voice list. Some browsers (Chrome, Edge)
   // load voices asynchronously, so the first utterance can fall back to the
   // robotic default voice if we don't trigger a load early.
