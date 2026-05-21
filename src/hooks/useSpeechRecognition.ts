@@ -91,6 +91,13 @@ export function useSpeechRecognition(
   const listeningRef = useRef(false);
   const shouldRestartRef = useRef(false);
   const hasSpeechRef = useRef(false);
+  // Throttle restart loop. The Web Speech API on desktop Chrome often emits
+  // `network` / `no-speech` / `aborted` errors several times per minute even
+  // on a healthy connection. Unbounded auto-restart turns that into a
+  // visible "マイクが切れた" / "ネットワークエラー" loop.
+  const consecutiveErrorsRef = useRef(0);
+  const lastErrorAtRef = useRef(0);
+  const micWarmedRef = useRef(false);
   
   // Check for browser support
   const isSupported = typeof window !== 'undefined' && 
@@ -165,9 +172,29 @@ export function useSpeechRecognition(
     };
 
     recognition.onerror = (event) => {
-      console.error('Speech recognition error:', event.error);
-      if (event.error === 'not-allowed' || event.error === 'service-not-allowed' || event.error === 'audio-capture') {
+      const err = event.error;
+      // Permission / hardware: stop trying.
+      if (err === 'not-allowed' || err === 'service-not-allowed' || err === 'audio-capture') {
         shouldRestartRef.current = false;
+      }
+      // Transient: count consecutive failures and back off. After 3 fast
+      // failures in a row we stop auto-restarting so the user gets a calm
+      // idle mic instead of a flashing error.
+      if (err === 'network' || err === 'no-speech' || err === 'aborted') {
+        const now = Date.now();
+        if (now - lastErrorAtRef.current < 4000) {
+          consecutiveErrorsRef.current += 1;
+        } else {
+          consecutiveErrorsRef.current = 1;
+        }
+        lastErrorAtRef.current = now;
+        if (consecutiveErrorsRef.current >= 3) {
+          shouldRestartRef.current = false;
+        }
+      } else {
+        // Real error worth surfacing once in the console.
+        // eslint-disable-next-line no-console
+        console.error('Speech recognition error:', err);
       }
       listeningRef.current = false;
       clearActiveRecognition(recognition);
@@ -197,10 +224,14 @@ export function useSpeechRecognition(
 
       if (finalTranscript) {
         hasSpeechRef.current = true;
+        consecutiveErrorsRef.current = 0;
         setTranscript(prev => prev + (prev ? ' ' : '') + finalTranscript.trim());
         setInterimTranscript('');
       } else {
-        if (currentInterim.trim().length > 0) hasSpeechRef.current = true;
+        if (currentInterim.trim().length > 0) {
+          hasSpeechRef.current = true;
+          consecutiveErrorsRef.current = 0;
+        }
         setInterimTranscript(currentInterim);
       }
       // Any speech activity resets the silence timer.
@@ -217,10 +248,32 @@ export function useSpeechRecognition(
     };
   }, [continuous, interimResults, lang, isSupported, autoStopSilenceMs, hardStopMs, autoRestart]);
 
-  const startListening = useCallback(() => {
+  const startListening = useCallback(async () => {
     if (recognitionRef.current && !isListening) {
       setTranscript('');
       setInterimTranscript('');
+      consecutiveErrorsRef.current = 0;
+      lastErrorAtRef.current = 0;
+      // Warm the audio capture stack with proper constraints. This gives
+      // the OS a chance to enable AGC / noise suppression before the Web
+      // Speech API grabs the mic — noticeably improves desktop sensitivity
+      // and reduces spurious `no-speech` events.
+      if (!micWarmedRef.current && typeof navigator !== 'undefined' && navigator.mediaDevices?.getUserMedia) {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({
+            audio: {
+              echoCancellation: true,
+              noiseSuppression: true,
+              autoGainControl: true,
+            },
+          });
+          // Release immediately — we only wanted the OS-level warm-up.
+          stream.getTracks().forEach((t) => t.stop());
+          micWarmedRef.current = true;
+        } catch {
+          /* permission denied or unsupported — fall through */
+        }
+      }
       try {
         shouldRestartRef.current = autoRestart;
         setActiveRecognition(recognitionRef.current);
