@@ -780,6 +780,7 @@ export default function Chat() {
             <Button variant="ghost" size="icon" silent onClick={() => navigateAfterClosingMic('/')}>
               <ArrowLeft className="w-5 h-5" />
             </Button>
+            <AudioResetButton />
             
             {/* Help button */}
             <Dialog open={showHelp} onOpenChange={setShowHelp}>
