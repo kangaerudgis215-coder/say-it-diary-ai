@@ -279,7 +279,13 @@ export default function Home() {
             )}
           </>
         ) : (
-          <DiaryListView entries={entries} showSearch recallCompletedIds={recallCompletedIds} />
+          <DiaryListView
+            entries={entries}
+            showSearch
+            recallCompletedIds={
+              new Set(entries.filter((e) => e.sentences_review_completed).map((e) => e.id))
+            }
+          />
         )}
         <FeedbackSection />
       </main>
