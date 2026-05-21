@@ -4,6 +4,7 @@ import { LogOut, Search, CalendarDays } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
 import { ThemeToggleLottie } from '@/components/ThemeToggleLottie';
+import { AudioResetButton } from '@/components/home/AudioResetButton';
 import { supabase } from '@/lib/supabase';
 import { format, parseISO, isSameDay, differenceInCalendarDays, isFuture, isToday } from 'date-fns';
 import { Plus } from 'lucide-react';
@@ -188,6 +189,7 @@ export default function Home() {
               <Search className="w-5 h-5" />
             </Button>
           )}
+          <AudioResetButton />
           <ThemeToggleLottie />
           <Button
             variant="ghost"
