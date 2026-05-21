@@ -96,10 +96,9 @@ export function speakDiary(text: string, opts: DiarySpeakOptions = {}) {
     utterance.lang = 'en-US';
     utterance.rate = opts.rate ?? 0.9;
     utterance.pitch = 1.0;
-    // Full-volume TTS now that the audio session coordinator keeps the mic
-    // and effect channels from competing. Low volume was making Bluetooth
-    // AGC garble short utterances ("choppy/raspy" playback).
-    utterance.volume = 1.0;
+    // Balanced volume so diary playback matches effect chimes — users
+    // shouldn't have to raise the OS volume just for TTS.
+    utterance.volume = 0.6;
 
     const cleanup = () => {
       stopSilent();
