@@ -34,6 +34,7 @@ import { normalizeForExpression } from '@/lib/textComparison';
 import { persistDiarySentences } from '@/lib/practiceBuilder';
 import { createAssistantUtterance, speakAssistant, stopAssistantSpeech } from '@/lib/assistantSpeech';
 import { getChatWelcomeMessage } from '@/lib/chatWelcome';
+import { AudioResetButton } from '@/components/home/AudioResetButton';
 import {
   releaseSpeechRecognition,
   releaseSpeechRecognitionBeforeNavigation,
