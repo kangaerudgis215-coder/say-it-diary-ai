@@ -34,6 +34,7 @@ import { normalizeForExpression } from '@/lib/textComparison';
 import { persistDiarySentences } from '@/lib/practiceBuilder';
 import { createAssistantUtterance, speakAssistant, stopAssistantSpeech } from '@/lib/assistantSpeech';
 import { getChatWelcomeMessage } from '@/lib/chatWelcome';
+import { AudioResetButton } from '@/components/home/AudioResetButton';
 import {
   releaseSpeechRecognition,
   releaseSpeechRecognitionBeforeNavigation,
@@ -106,6 +107,19 @@ export default function Chat() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  // Soft-reload: triggered by the 🔊 reset button in the header. Re-runs
+  // the conversation init so the welcome message reappears if it failed
+  // to render, and re-speaks it if the conversation is brand-new.
+  useEffect(() => {
+    const onSoftReload = () => {
+      stopAssistantSpeech();
+      if (user) void initConversation();
+    };
+    window.addEventListener('soki:soft-reload', onSoftReload);
+    return () => window.removeEventListener('soki:soft-reload', onSoftReload);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, diaryDate]);
 
   // Warm up the speech-synthesis voice list. Some browsers (Chrome, Edge)
   // load voices asynchronously, so the first utterance can fall back to the
@@ -767,6 +781,7 @@ export default function Chat() {
             <Button variant="ghost" size="icon" silent onClick={() => navigateAfterClosingMic('/')}>
               <ArrowLeft className="w-5 h-5" />
             </Button>
+            <AudioResetButton />
             
             {/* Help button */}
             <Dialog open={showHelp} onOpenChange={setShowHelp}>
