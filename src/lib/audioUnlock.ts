@@ -22,6 +22,16 @@ let unlocked = false;
 let installed = false;
 let sharedAudioContext: AudioContext | null = null;
 
+// Sounds to eagerly decode at unlock time. Pre-decoding lets the very
+// first tap play with zero perceived latency (otherwise the first press
+// of the session lagged by ~1 frame while the buffer was being decoded).
+const EAGER_BUFFER_SOURCES = [
+  '/sounds/tap.mp3',
+  '/sounds/correct.mp3',
+  '/sounds/diary-complete.mp3',
+  '/sounds/flashcard-correct.mp3',
+];
+
 function getAudioContext(): AudioContext | null {
   if (typeof window === 'undefined') return null;
   const AudioContextClass = globalThis.AudioContext || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
@@ -104,6 +114,11 @@ function doUnlock() {
     });
   unlockWebAudio();
   unlockSpeech();
+  // Pre-decode commonly-used effect buffers so the first plays are snappy.
+  // Imported lazily to avoid a circular dep at module load.
+  import('./audioSession').then(({ preloadEffectBuffer }) => {
+    EAGER_BUFFER_SOURCES.forEach((src) => preloadEffectBuffer(src));
+  }).catch(() => { /* no-op */ });
 }
 
 export function registerUnlockable(audio: HTMLAudioElement | null | undefined) {
