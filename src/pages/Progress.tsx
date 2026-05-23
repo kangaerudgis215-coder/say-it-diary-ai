@@ -248,8 +248,8 @@
                return (
                  <div key={day.date} className="flex-1 flex flex-col items-center h-full">
                    <span className={cn(
-                     "text-sm font-medium mb-2 transition-all duration-500",
-                     isToday ? "text-primary" : "text-muted-foreground",
+                      "text-xs font-bold mb-2 px-1.5 py-0.5 rounded-md bg-card/90 border border-border/60 shadow-sm transition-all duration-500 tabular-nums",
+                      isToday ? "text-primary border-primary/40" : "text-foreground/90",
                      animationStarted ? "opacity-100" : "opacity-0"
                    )}>
                      {day.count > 0 ? day.count : '–'}

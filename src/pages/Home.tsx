@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { LogOut, Search, CalendarDays } from 'lucide-react';
+import { LogOut, Search, CalendarDays, HelpCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
 import { ThemeToggleLottie } from '@/components/ThemeToggleLottie';
@@ -189,6 +189,14 @@ export default function Home() {
               <Search className="w-5 h-5" />
             </Button>
           )}
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="ヘルプ"
+            onClick={() => navigate('/help')}
+          >
+            <HelpCircle className="w-5 h-5" />
+          </Button>
           <AudioResetButton />
           <ThemeToggleLottie />
           <Button

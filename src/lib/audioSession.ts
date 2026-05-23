@@ -175,12 +175,27 @@ function getAudioBuffer(src: string) {
   return promise;
 }
 
+/**
+ * Eagerly fetch + decode a sound effect so the first play has zero
+ * audible latency. Used for the universal tap sound which otherwise
+ * lagged by ~1 frame on the very first interaction of the session.
+ */
+export function preloadEffectBuffer(src: string) {
+  void getAudioBuffer(src);
+}
+
 function playViaWebAudio(src: string, volume: number) {
   const ctx = getUnlockedAudioContext();
   if (!ctx) return false;
   void ctx.resume().catch(() => {});
-  void getAudioBuffer(src).then((buffer) => {
-    if (!buffer) return;
+  const pending = getAudioBuffer(src);
+  // If the buffer is already decoded, play synchronously inside this
+  // microtask so taps land on the exact frame the user pressed the button.
+  // The promise resolution would otherwise add ~1 frame of latency even
+  // when the buffer is already cached.
+  let resolved: AudioBuffer | null | undefined = undefined;
+  pending.then((b) => { resolved = b; });
+  const playBuffer = (buffer: AudioBuffer) => {
     try {
       const source = ctx.createBufferSource();
       const gain = ctx.createGain();
@@ -192,11 +207,33 @@ function playViaWebAudio(src: string, volume: number) {
     } catch {
       /* no-op */
     }
+  };
+  if (resolved) {
+    playBuffer(resolved);
+    return true;
+  }
+  void pending.then((buffer) => {
+    if (!buffer) return;
+    playBuffer(buffer);
   });
   return true;
 }
 
 export function playManagedEffect(src: string, volume: number, kind: 'tap' | 'effect' = 'effect') {
+  // Fast path for taps: skip the audio-route gating entirely so UI feedback
+  // lands on the exact same frame as the press. Taps are tiny and short, so
+  // they can't clobber TTS or chimes in practice.
+  if (kind === 'tap') {
+    try {
+      if (playViaWebAudio(src, volume)) return;
+      const audio = getManagedAudio(src, volume);
+      if (!audio) return;
+      audio.pause();
+      audio.currentTime = 0;
+      void audio.play().catch(() => {});
+    } catch { /* no-op */ }
+    return;
+  }
   runWhenAudioRouteReady(kind, () => {
     try {
       if (playViaWebAudio(src, volume)) return;

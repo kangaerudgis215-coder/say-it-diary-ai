@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Volume2, Loader2, BookOpen, PenLine, ChevronLeft, ChevronRight, Sparkles } from 'lucide-react';
+import { Volume2, Loader2, BookOpen, PenLine, ChevronLeft, ChevronRight, Sparkles, CheckCircle2 } from 'lucide-react';
 import { SandyLoader } from '@/components/lottie/SandyLoader';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -370,6 +370,12 @@ export default function DiaryReview() {
             <p className="mt-1 text-[11px] text-muted-foreground tracking-widest">
               {format(d, 'yyyy')}
             </p>
+            {diaryEntry?.sentences_review_completed && (
+              <div className="mt-2 inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full border border-amber-400/50 bg-amber-400/15 text-amber-300 shadow-[0_0_12px_hsl(38_92%_55%/0.25)]">
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span className="text-[10px] font-bold tracking-wider uppercase">復習済み</span>
+              </div>
+            )}
           </div>
 
           <button
