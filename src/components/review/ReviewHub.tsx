@@ -185,7 +185,8 @@ export function ReviewHub() {
       // Case-insensitive substring replacement (first occurrence) preserving surrounding text
       const escaped = original.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const re = new RegExp(escaped, 'i');
-      const newContent: string = String(diaryEntry.content ?? '').replace(re, repl);
+      const rawContent: string = String(diaryEntry.content ?? '').replace(re, repl);
+      const newContent = normalizeArticlesAround(rawContent, repl);
       if (newContent === diaryEntry.content) {
         toast({ variant: 'destructive', title: '差し替えできません', description: '元の表現が本文に見つかりませんでした' });
         setAltApplying(false);
@@ -197,10 +198,11 @@ export function ReviewHub() {
       const newImportant = oldImportant.map((s: any) => {
         const eng = String(s?.english ?? '');
         const newEng = eng.replace(re, repl);
+        const fixedEng = normalizeArticlesAround(newEng, repl);
         const exprs = Array.isArray(s?.expressions)
           ? s.expressions.map((x: string) => (String(x).toLowerCase() === original.toLowerCase() ? repl : x))
           : [];
-        return { ...s, english: newEng, expressions: exprs };
+        return { ...s, english: fixedEng, expressions: exprs };
       });
 
       await supabase

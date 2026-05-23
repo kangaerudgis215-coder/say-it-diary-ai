@@ -72,9 +72,13 @@ export function ExpressionMasteryStats() {
 
         {/* Progress bar */}
         <div className="mb-4">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-muted-foreground">{stats.mastered} / {activeTotal} mastered</span>
-            <span className="text-sm font-bold text-primary">{masteryPercent}%</span>
+          <div className="flex items-center justify-between mb-2 gap-2">
+            <span className="text-xs sm:text-sm text-muted-foreground tabular-nums">
+              {stats.mastered} / {activeTotal} mastered
+            </span>
+            <span className="text-sm font-bold text-primary px-2 py-0.5 rounded-md bg-primary/10 border border-primary/20 tabular-nums">
+              {masteryPercent}%
+            </span>
           </div>
           <Progress value={masteryPercent} className="h-3" />
         </div>
