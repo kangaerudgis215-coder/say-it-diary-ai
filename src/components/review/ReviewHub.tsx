@@ -21,6 +21,29 @@ import { cleanupInvalidDiaryLinkedExpressions, partitionExpressionsForText } fro
 import { cn } from '@/lib/utils';
 import { speakDiary, cancelDiaryTTS } from '@/lib/diaryTTS';
 
+/**
+ * Clean up article duplication and a/an agreement after substituting a
+ * phrase into a sentence. Prevents "some a person" / "a an apple" / etc.
+ * Only operates on adjacent article tokens — leaves the rest untouched.
+ */
+function normalizeArticlesAround(text: string, _repl: string): string {
+  let out = text;
+  // Collapse stacked determiners: "a the", "the a", "some a", "a some",
+  // "an a", "a an", "the some", "some the" → keep the LAST (closer to noun).
+  const dups = /\b(a|an|the|some)\s+(a|an|the|some)\b/gi;
+  for (let i = 0; i < 3 && dups.test(out); i++) {
+    out = out.replace(/\b(a|an|the|some)\s+(a|an|the|some)\b/gi, (_m, _w1, w2) => w2);
+  }
+  // a/an agreement with following word.
+  out = out.replace(/\b([Aa])n?\s+([A-Za-z])/g, (_m, art: string, ch: string) => {
+    const vowel = /[aeiouAEIOU]/.test(ch);
+    const upper = art === art.toUpperCase();
+    const fixed = vowel ? (upper ? 'An' : 'an') : (upper ? 'A' : 'a');
+    return `${fixed} ${ch}`;
+  });
+  return out;
+}
+
 export function ReviewHub() {
   const { user } = useAuth();
   const navigate = useNavigate();
