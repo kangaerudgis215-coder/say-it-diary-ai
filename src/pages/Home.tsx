@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { LogOut, Search, CalendarDays, HelpCircle } from 'lucide-react';
+import { Search, CalendarDays, HelpCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
 import { ThemeToggleLottie } from '@/components/ThemeToggleLottie';
@@ -35,7 +35,7 @@ interface DiaryRow {
 }
 
 export default function Home() {
-  const { user, signOut } = useAuth();
+  const { user } = useAuth();
   const navigate = useNavigate();
 
   const [tab, setTab] = useState<'calendar' | 'list'>('calendar');
@@ -199,17 +199,6 @@ export default function Home() {
           </Button>
           <AudioResetButton />
           <ThemeToggleLottie />
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label="Sign out"
-            onClick={async () => {
-              await signOut();
-              navigate('/auth');
-            }}
-          >
-            <LogOut className="w-5 h-5" />
-          </Button>
         </div>
       </header>
 

@@ -9,7 +9,6 @@
  import { cn } from '@/lib/utils';
   import { useToast } from '@/hooks/use-toast';
   import { ExpressionMasteryStats } from '@/components/progress/ExpressionMasteryStats';
-  import { DailyEncouragement } from '@/components/progress/DailyEncouragement';
   import { speakAssistantImmediately } from '@/lib/assistantSpeech';
   import { getChatWelcomeMessage } from '@/lib/chatWelcome';
  
@@ -322,7 +321,7 @@
         <ExpressionMasteryStats />
 
         {/* Daily AI Encouragement */}
-        <DailyEncouragement />
+        {null}
 
         {!isLoading && logs.length === 0 && (
           <Card className="bg-muted/30 border-dashed">

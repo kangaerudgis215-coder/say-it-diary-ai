@@ -1,26 +1,17 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '@/hooks/useAuth';
 import Home from './Home';
-import { SandyLoader } from '@/components/lottie/SandyLoader';
 
 export default function Index() {
-  const { user, loading } = useAuth();
   const navigate = useNavigate();
 
+  // First-launch redirect to onboarding intro. Once the user finishes the
+  // intro we stamp `soki_onboarded=1` so subsequent visits go straight Home.
   useEffect(() => {
-    if (!loading && !user) {
+    if (!localStorage.getItem('soki_onboarded')) {
       navigate('/onboarding', { replace: true });
     }
-  }, [user, loading, navigate]);
-
-  if (loading) {
-    return <SandyLoader fullscreen />;
-  }
-
-  if (!user) {
-    return null;
-  }
+  }, [navigate]);
 
   return <Home />;
 }
