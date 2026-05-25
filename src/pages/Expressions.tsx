@@ -322,28 +322,7 @@ export default function Expressions() {
             </div>
           </div>
 
-          {/* Auto-tag — always visible so users can rebalance categories anytime */}
-          <div className="flex items-center justify-between p-3 bg-primary/10 rounded-xl mb-4">
-            <span className="text-xs text-muted-foreground">
-              {untaggedCount > 0
-                ? `${untaggedCount} 個の表現を再分類できます`
-                : 'カテゴリをいつでも整理できます'}
-            </span>
-            <Button
-              size="sm"
-              variant="default"
-              onClick={handleTagExpressions}
-              disabled={isTagging}
-              className="gap-1"
-            >
-              {isTagging ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <RefreshCw className="w-4 h-4" />
-              )}
-              {isTagging ? 'Tagging…' : 'Auto-tag'}
-            </Button>
-          </div>
+          {/* Auto-tag removed: data is stored locally on this device. */}
 
           {/* Group-by switch — flip between scene and POS classification. */}
           <div className="flex items-center justify-between mb-3">
