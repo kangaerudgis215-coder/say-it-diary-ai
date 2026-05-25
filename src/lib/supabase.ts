@@ -1,6 +1,11 @@
-import { supabase } from "@/integrations/supabase/client";
+import { localSupabase } from "./localDb";
 
-export { supabase };
+// The app now runs entirely on local storage (no auth, no remote DB).
+// `supabase` is a compatibility shim that mimics the small slice of the
+// Supabase JS client surface the codebase uses, while still passing
+// edge-function calls through to the real client so AI features keep
+// working.
+export const supabase = localSupabase;
 
 // Helper types for database operations
 export type Profile = {
