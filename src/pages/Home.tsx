@@ -18,6 +18,7 @@ import { CatBuddy } from '@/components/home/CatBuddy';
 import { SelectedDayChatPreview } from '@/components/home/SelectedDayChatPreview';
 import { speakAssistantImmediately } from '@/lib/assistantSpeech';
 import { getChatWelcomeMessage } from '@/lib/chatWelcome';
+import { FeedbackSection } from '@/components/home/FeedbackSection';
 import { ComposeModeSheet, getDefaultComposeMode } from '@/components/home/ComposeModeSheet';
 import {
   StreakCelebrationOverlay,
@@ -224,8 +225,6 @@ export default function Home() {
               onDateSelect={setSelectedDate}
               selectedDate={selectedDate}
             />
-
-            <HomeAIFeedback />
 
             {/* Selected day header */}
             <div className="px-1 pt-2 text-sm text-muted-foreground">
