@@ -1,5 +1,5 @@
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Brain, Sparkles, Shuffle, TrendingUp, List, CalendarDays } from 'lucide-react';
+import { Brain, Sparkles, Shuffle, List, CalendarDays } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useUISound } from '@/hooks/useUISound';
 import { usePendingRecallCount } from '@/hooks/usePendingRecallCount';
@@ -77,13 +77,6 @@ export function BottomTabBar({ homeTab, onHomeTabChange }: BottomTabBarProps) {
       icon: Shuffle,
       onClick: () => go('/instant'),
       active: location.pathname.startsWith('/instant'),
-    },
-    {
-      key: 'progress',
-      label: 'Progress',
-      icon: TrendingUp,
-      onClick: () => go('/progress'),
-      active: location.pathname.startsWith('/progress'),
     },
   ];
 
