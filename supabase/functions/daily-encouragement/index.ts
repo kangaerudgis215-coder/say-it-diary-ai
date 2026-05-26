@@ -12,20 +12,27 @@ serve(async (req) => {
   }
 
   try {
-    const { userId } = await req.json();
+    const { userId, stats } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
-
-    // Fetch user stats for context
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
 
     let streakInfo = "";
     let expressionInfo = "";
     let displayName = "";
 
-    if (userId) {
+    // Prefer client-supplied stats (local-storage data). Fall back to DB lookup.
+    if (stats) {
+      displayName = (stats.displayName || "").trim();
+      streakInfo = `current_streak=${stats.currentStreak || 0} ; total_diary_entries=${stats.totalDiaryEntries || 0}`;
+      const total = stats.totalExpressions || 0;
+      const mastered = stats.masteredExpressions || 0;
+      const learning = stats.learningExpressions || 0;
+      const pct = total > 0 ? Math.round((mastered / total) * 100) : 0;
+      expressionInfo = `total_expressions=${total} ; mastered=${mastered} ; in_progress=${learning} ; mastery_rate=${pct}%`;
+    } else if (userId) {
+      const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+      const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+      const supabase = createClient(supabaseUrl, supabaseKey);
       const { data: profile } = await supabase
         .from("profiles")
         .select("current_streak, total_diary_entries, display_name")
