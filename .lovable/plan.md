@@ -1,97 +1,87 @@
-## ゴール
 
-- Googleログイン削除。アプリ起動 → 即使える
-- 日記/会話/表現/復習データを **localStorage** に保存（Supabase DBは使わない）
-- AI機能（チャット、日記生成、表現抽出、評価、励まし）はそのまま **匿名でEdge Functionを呼ぶ**
-- 「ダッシュボード（Mastered Diaries / DailyEncouragement の Pro系UI）」は隠す
-- Pro課金/Stripe導線は当面隠す（コードは残置）
+# 新生SO-KI 実装プラン
 
-## アプローチ（最小侵襲）
+「英語日記アプリ」から「AI英会話習慣化アプリ」への刷新です。既存画面・コンポーネントの大半を削除し、3画面（ホーム / 会話 / 復習）にスリム化します。
 
-DB呼び出しを全部書き換えると影響範囲が大きすぎるため、**互換シム（compat shim）** を1枚かぶせて既存コードを温存する。
+## ⚠️ 最重要：APIキーの安全管理
 
-### 1. ローカルアイデンティティ
+メッセージに記載いただいた `sk-proj-...` のOpenAIキーは、チャット履歴に残るため**公開済みとして扱う必要があります**。
+1. **今すぐ** [OpenAIダッシュボード](https://platform.openai.com/api-keys) で該当キーをRevoke
+2. 新しいキーを発行し、Lovableの**Secrets管理**（`OPENAI_API_KEY`）に登録 — コードには絶対書きません
+3. クライアントから直接OpenAIを呼ばず、Edge Function経由でのみ呼び出します（キー漏洩防止）
 
-- 初回起動時に `crypto.randomUUID()` で `local_user_id` を発行 → localStorage 保存
-- `useAuth()` を書き換え、Supabase Authを呼ばずに固定ユーザ `{ id: localUserId }` を返す（loading即false / user常にtruthy）
-- これで `useAuth().user.id` を参照している全コンポーネントは無修正で動く
+実装は新キーがSecretsに登録された後に進めます。
 
-### 2. データ層シム（`src/lib/supabase.ts` を差し替え）
+## アーキテクチャ
 
-`supabase`オブジェクトをラップし、`.from('table')` をlocalStorageドライバへ橋渡し：
+```
+ローカルストレージ（既存 localDb.ts を流用）
+  ├─ conversations: { id, started_at, ended_at, messages[], photo_urls[],
+  │                    summary, expressions[], reviewed_at, date }
+  └─ profile: { streak, longest_streak, total_words, last_chat_date,
+                recovery_days[] }
 
-```text
-localStorage keys:
-  soki_local_db_v1:diary_entries        → DiaryEntry[]
-  soki_local_db_v1:diary_sentences      → DiarySentence[]
-  soki_local_db_v1:expressions          → Expression[]
-  soki_local_db_v1:conversations        → Conversation[]
-  soki_local_db_v1:messages             → Message[]
-  soki_local_db_v1:recall_sessions      → RecallSession[]
-  soki_local_db_v1:full_diary_attempts  → ...
-  soki_local_db_v1:instant_attempts     → ...
-  soki_local_db_v1:spoken_vocab         → ...
-  soki_local_db_v1:profile              → Profile
+Edge Functions（OpenAI直結 / OPENAI_API_KEY使用）
+  ├─ chat              : GPT-4o ストリーミング（自由会話）
+  ├─ summarize         : 会話終了時にサマリー+汎用表現を構造化抽出
+  ├─ transcribe        : Whisper（音声→テキスト）
+  ├─ tts               : OpenAI TTS（AI返答の読み上げ）
+  └─ evaluate-recall   : 復習回答の寛大判定（GPT-4o-mini）
 ```
 
-提供するメソッドチェーン（既存コードで使われているものだけ）:
-- `.select(cols).eq().neq().in().gte().lte().order().limit().maybeSingle().single()`
-- `.insert(row).select().single()`
-- `.update(patch).eq()`
-- `.upsert(row, {onConflict})`
-- `.delete().eq()`
-- ストリーク等は `.rpc()` 不使用箇所のみ。RPCは廃止して、ストリーク計算をTSで実装（`src/lib/localStreak.ts`）してprofileに反映
+写真はlocalStorageに圧縮Base64で保存（PWA / ログインなし前提）。
 
-`supabase.functions.invoke('chat'|'tag-expressions'|'evaluate-recall'|'daily-encouragement', ...)` は **本物の supabase クライアント**へパススルー（AIは引き続きEdge Function経由で動く）。Edge Functions は匿名キーで呼べる前提（既に verify_jwt=false ）。
+## 削除する画面・機能
 
-`supabase.auth.*` は noop に。
+- `/expressions`, `/instant` (Flashcard), `/quiz`, `/recall`, `/progress`, `/speak`, `/calendar`, `/auth`, `/onboarding`
+- 神経衰弱、並び替えクイズ、強制終了、文数制限、Google認証
+- 関連コンポーネント（`expressions/`, `quiz/`, `game/`, `review/ReviewHub` 等）と Edge Function `tag-expressions`, `daily-encouragement`
+- ボトムタブバー（3画面構成なのでホーム集約）
 
-### 3. オンボーディング/ルーティング
+## 新規・改修する画面
 
-- `Onboarding.tsx`: フッターを「**はじめる**」ボタンに置換（Google削除）。タップで `local_user_id` を確実に作って `/` へ
-- `Index.tsx`: 未onboardedなら `/onboarding` へ、それ以外は `<Home />`
-- `Auth.tsx`: `/` へリダイレクト
+### ホーム `/`
+- 上部: ストリーク日数 + 累計単語数
+- 中央: 大きな波紋アニメーション付き○ボタン → タップで `/chat/new`
+- 「復習する」ボタン（未復習件数バッジ）→ `/review`
+- 下部: ログ一覧へのリンク `/logs`
+- 猫キャラ（既存CatBuddy流用、セリフはログ件数で出し分け）
 
-### 4. ダッシュボード非表示
+### 会話 `/chat/:id`
+- ChatGPT風のシームレスUI、白背景、ミニマル
+- 入力: テキスト + マイク（Whisper）+ 写真添付（カメラロール / 撮影）
+- AI返答は自動でTTS再生（ミュート切替あり）
+- 「終了」ボタン → サマリー＋汎用表現生成 → 「練習する / あとで」
 
-- `Home.tsx` / `Progress.tsx` から下記を非表示（コンポーネントは残す）:
-  - `<MasteredDiariesBadge />`
-  - `<DailyEncouragement />`（AI呼び出しもしない）
-- Pro課金UI（PaywallSheetなど）があればフラグでoff
+### 復習 `/review`
+- 未復習ログをキューで順次出題
+- 各ログのサマリーを文単位に分割し、各文の日本語訳を表示 → ユーザーが英語で発話（Whisper）
+- GPT-4o-miniで寛大判定（伝わればOK、沈黙/全く違う内容のみ❌）
+- 正解=褒める / 不正解=正解文表示してそのまま次へ
+- 全問終了で完了演出、ログに `reviewed_at` を記録
 
-### 5. Edge Function側
+### ログ一覧 `/logs` + 詳細 `/logs/:id`
+- 一覧: 日付順、写真サムネイル付き白背景カード、未復習バッジ、削除（警告ダイアログ付き）
+- 詳細: 写真 → AIサマリー → 汎用表現リスト（添付の辞書風スタイリッシュレイアウト）→ 会話全文（折りたたみ）
 
-- `chat`, `tag-expressions`, `evaluate-recall`, `daily-encouragement` の `userId` は body から受け取って使うのみ（auth.uidに依存しない）。既にそうなっているか確認、依存していれば修正
+## 技術詳細
 
-### 6. 後片付け
+- **写真**: `<input type="file" accept="image/*" capture>`、Canvas で長辺1280pxにリサイズ→JPEG Base64
+- **Whisper**: MediaRecorder で webm/opus 録音 → FormDataでEdge Function送信 → OpenAI Whisper
+- **TTS**: Edge FunctionでOpenAI TTS呼び出し → 音声バイナリをBlobで返却 → `Audio` 要素で再生
+- **会話保存**: 終了ボタンで一括保存（途中保存はメッセージ単位でlocalStorageへ）
+- **ストリーク**: 「○ボタン経由で1メッセージ以上送信して終了」した日のみ加算。リカバリーは既存ロジック流用
+- **既存データ**: 個人利用のため破棄（初回起動時にマイグレーションで `soki_local_db_v1:*` をクリア、新スキーマ `soki_v2:*` を使用）
 
-- `src/integrations/lovable/index.ts` への参照を `Onboarding.tsx` から削除
-- `useAuth` の signUp/signIn/signOut は no-op で残す（呼び出し元エラー回避）
+## 実装ステップ
 
-## 影響範囲（概算）
+1. 新キーをSecretsに登録（ユーザー作業 → 私がSecrets追加）
+2. Edge Functions 4本作成（chat / summarize / transcribe / tts / evaluate-recall）
+3. データ層 `src/lib/conversationStore.ts` 新規作成（localDb の上に新スキーマ）
+4. 画面5つ実装（Home / Chat / Review / Logs / LogDetail）
+5. ルーティング刷新（App.tsx）、不要ページ・コンポーネント削除
+6. 動作確認（マイク権限、TTS再生、写真保存、ストリーク加算）
 
-新規/書き換え:
-- `src/lib/localDb.ts`（新規）── localStorageドライバ＋クエリビルダ
-- `src/lib/localStreak.ts`（新規）
-- `src/lib/supabase.ts`（差し替え）── localDb と本物クライアントを合成
-- `src/hooks/useAuth.tsx`（差し替え）
-- `src/pages/Onboarding.tsx`（Google削除）
-- `src/pages/Index.tsx`（loading不要に）
-- `src/pages/Home.tsx`（ダッシュボードUI非表示）
-- `src/pages/Progress.tsx`（DailyEncouragement非表示）
+---
 
-その他コンポーネントは無修正で動く想定（インターフェースを温存するため）。
-
-## トレードオフ
-
-- **Pro**: 既存コードへの侵襲ゼロに近い。ロールバック簡単（localDbシムを外して本物clientに戻すだけ）
-- **Con**: シム経由なのでクエリの一部（複雑なjoinやfilter）が未対応の可能性 → 動作確認しながらシム側に追加
-
-## 検証
-
-- 起動 → ログイン画面出ない
-- チャット送信 → SO-KIから返信（AI動作）
-- 日記生成 → 表示・保存される
-- リロード → データ残っている
-- 並び替えクイズ → 正常動作
-- 進捗タブ → ストリーク計算される
+進めてよろしければ、まず **古いOpenAIキーをRevoke → 新キーを発行** してお知らせください。新キーは次のメッセージに貼っていただければ私がSecretsに登録します（コードには出しません）。
