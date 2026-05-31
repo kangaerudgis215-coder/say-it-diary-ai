@@ -5,177 +5,63 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Normalize text for comparison (handle hyphens, spaces, punctuation)
-function normalizeText(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/-/g, ' ')       // Replace hyphens with spaces (e.g., "part-time" -> "part time")
-    .replace(/[.,!?;:'"()]/g, '') // Remove punctuation
-    .replace(/\s+/g, ' ')     // Collapse multiple spaces
-    .trim();
-}
-
-// Simple word-based similarity calculation
-function calculateSimilarity(originalText: string, recallText: string): number {
-  if (!recallText || recallText.trim().length === 0) return 0;
-  if (!originalText || originalText.trim().length === 0) return 0;
-
-  // Use improved normalization (handles hyphens vs spaces)
-  const originalWords = normalizeText(originalText).split(' ').filter(word => word.length > 2);
-  const recallWords = normalizeText(recallText).split(' ').filter(word => word.length > 2);
-
-  if (originalWords.length === 0) return 0;
-
-  // Count matching words (with some fuzzy matching for typos)
-  const matchedWords = new Set<string>();
-  
-  for (const recallWord of recallWords) {
-    for (const originalWord of originalWords) {
-      // Exact match or substring match (for conjugations, etc.)
-      if (recallWord === originalWord || 
-          originalWord.includes(recallWord) || 
-          recallWord.includes(originalWord)) {
-        matchedWords.add(originalWord);
-        break;
-      }
-    }
-  }
-
-  // Calculate coverage of original content
-  const coverage = matchedWords.size / originalWords.length;
-  
-  // Also factor in recall length relative to original
-  const lengthRatio = Math.min(recallWords.length / originalWords.length, 1.5);
-  
-  // Weighted score: 70% content coverage, 30% effort (length)
-  // Made more generous for the new 3-axis system
-  const score = Math.round((coverage * 0.75 + (lengthRatio / 1.5) * 0.25) * 100);
-  
-  return Math.min(Math.max(score, 0), 100);
-}
-
-// Check which expressions the user used
-function checkExpressions(recallText: string, expressions: string[]): { used: string[], missed: string[] } {
-  if (!recallText || expressions.length === 0) {
-    return { used: [], missed: expressions };
-  }
-
-  const normalizedRecall = normalizeText(recallText);
-  const used: string[] = [];
-  const missed: string[] = [];
-
-  for (const expression of expressions) {
-    const normalizedExpr = normalizeText(expression);
-    const expressionWords = normalizedExpr.split(' ').filter(w => w.length > 3);
-    
-    // Expression is "used" if at least 50% of its significant words appear (more generous)
-    const matchedWords = expressionWords.filter(word => normalizedRecall.includes(word));
-    const matchRatio = expressionWords.length > 0 ? matchedWords.length / expressionWords.length : 0;
-    
-    if (matchRatio >= 0.5 || normalizedRecall.includes(normalizedExpr)) {
-      used.push(expression);
-    } else {
-      missed.push(expression);
-    }
-  }
-
-  return { used, missed };
-}
-
-// Map score to grade
-function mapToGrade(score: number): 'excellent' | 'good' | 'needs_work' {
-  if (score >= 85) return 'excellent';
-  if (score >= 60) return 'good';
-  return 'needs_work';
-}
-
-// Calculate three-axis scores
-function calculateThreeAxis(
-  originalText: string,
-  recallText: string,
-  baseScore: number
-): { meaning: string; structure: string; fluency: string } {
-  const originalWords = normalizeText(originalText).split(' ').filter(w => w.length > 0);
-  const recallWords = normalizeText(recallText).split(' ').filter(w => w.length > 0);
-  
-  // Meaning: based on overall similarity
-  const meaningScore = baseScore;
-  
-  // Structure: based on word count ratio and key structure words
-  const wordCountRatio = Math.min(recallWords.length / Math.max(originalWords.length, 1), 1.3);
-  const structureBase = baseScore * 0.7 + (wordCountRatio > 0.6 && wordCountRatio < 1.4 ? 30 : 10);
-  const structureScore = Math.min(structureBase, 100);
-  
-  // Fluency: based on common patterns, bonus for natural flow
-  const fluencyPenalty = recallText.includes('...') ? 10 : 0;
-  const fluencyScore = Math.max(0, baseScore - fluencyPenalty + 5); // Small bonus for completing
-
-  return {
-    meaning: mapToGrade(meaningScore),
-    structure: mapToGrade(structureScore),
-    fluency: mapToGrade(fluencyScore),
-  };
-}
-
-// Check if passed based on 70% rule
-function checkPassed(grades: { meaning: string; structure: string; fluency: string }): boolean {
-  const values = [grades.meaning, grades.structure, grades.fluency];
-  const goodCount = values.filter(v => v === 'excellent' || v === 'good').length;
-  return (goodCount / values.length) >= 0.7;
-}
-
 serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
-  }
+  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
-    const { originalText, recallText, expressions } = await req.json();
-
-    if (!originalText || !recallText) {
-      return new Response(
-        JSON.stringify({ error: "Missing originalText or recallText" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+    const { target_en, target_jp, user_answer } = await req.json();
+    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+    if (!OPENAI_API_KEY) {
+      return new Response(JSON.stringify({ error: "OPENAI_API_KEY not configured" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
-    const score = calculateSimilarity(originalText, recallText);
-    const expressionCheck = checkExpressions(recallText, expressions || []);
-    const threeAxis = calculateThreeAxis(originalText, recallText, score);
-    const passed = checkPassed(threeAxis);
+    const sys = `You judge a Japanese→English quick-composition answer with GENEROUS scoring.
+Return JSON: { "correct": boolean, "praise": string (Japanese, 1 short cheerful sentence) }.
+Mark correct=true unless:
+- the user said nothing / gave up,
+- the answer is clearly about something completely different,
+- the meaning is unrecognizable.
+Small grammar/vocab mistakes, paraphrasing, missing minor details → correct=true.
+If correct, praise should be a warm Japanese cheer (e.g. "ナイス！自然な英語！").
+If incorrect, praise is a gentle encouragement (e.g. "惜しい！正解文を見てみよう").`;
 
-    // Generate feedback message based on pass/fail and grades
-    let feedback: string;
-    if (passed) {
-      if (threeAxis.meaning === 'excellent' && threeAxis.structure === 'excellent') {
-        feedback = "Excellent! You captured the meaning and structure brilliantly. 🌟";
-      } else {
-        feedback = "Great job! You conveyed the main ideas well. Keep practicing! 💪";
-      }
-    } else {
-      if (threeAxis.meaning === 'needs_work') {
-        feedback = "Try to include more of the key ideas. Review the original and try again! 📚";
-      } else {
-        feedback = "Good effort! Focus on the sentence structure and flow. You're getting there! 🌱";
-      }
-    }
+    const user = `Target English: ${target_en}\nTarget Japanese: ${target_jp}\nUser said: ${user_answer || "(no answer)"}`;
 
-    return new Response(
-      JSON.stringify({
-        score,
-        feedback,
-        usedExpressions: expressionCheck.used,
-        missedExpressions: expressionCheck.missed,
-        threeAxis,
-        passed,
+    const resp = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${OPENAI_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        messages: [{ role: "system", content: sys }, { role: "user", content: user }],
+        response_format: { type: "json_object" },
+        temperature: 0.3,
       }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
-  } catch (error) {
-    console.error("Evaluation error:", error);
-    return new Response(
-      JSON.stringify({ error: "Failed to evaluate recall" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    });
+
+    if (!resp.ok) {
+      const t = await resp.text();
+      return new Response(JSON.stringify({ error: "AI error", detail: t }), {
+        status: resp.status,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const data = await resp.json();
+    const content = data.choices?.[0]?.message?.content || "{}";
+    let parsed: any = { correct: false, praise: "" };
+    try { parsed = JSON.parse(content); } catch {}
+    return new Response(JSON.stringify(parsed), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  } catch (e) {
+    return new Response(JSON.stringify({ error: String(e) }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 });
