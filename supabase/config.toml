@@ -8,3 +8,12 @@ verify_jwt = false
 
 [functions.tag-expressions]
 verify_jwt = false
+
+[functions.summarize-conversation]
+verify_jwt = false
+
+[functions.transcribe]
+verify_jwt = false
+
+[functions.tts]
+verify_jwt = false
